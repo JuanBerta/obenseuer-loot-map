@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obenseuer Loot Map</title>
+<meta name="description" content="Find every loot container and pickup spot in Obenseuer on the in-game map, searchable by item.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menuBtn" class="icon-btn" aria-label="Places">☰</button>
+  <div class="brand"><b>OBENSEUER</b><span>loot map</span></div>
+  <nav class="tabs" id="regionTabs" aria-label="Regions"></nav>
+  <div class="search">
+    <input id="q" type="search" placeholder="Find an item or container… e.g. duct tape, Locker" autocomplete="off" aria-label="Search">
+    <span id="catChip" class="chip hidden"></span>
+  </div>
+  <button id="infoBtn" class="icon-btn" aria-label="Details">ⓘ</button>
+</header>
+<main>
+  <aside id="side">
+    <div id="sideHead"></div>
+    <div id="sideBody"></div>
+  </aside>
+  <section id="frame">
+    <div id="mapWrap">
+      <canvas id="map"></canvas>
+      <div id="crumb"></div>
+      <div id="floors"></div>
+      <div class="tools">
+        <button id="layersBtn" class="tool" aria-expanded="false">Layers ▾</button>
+        <button id="fitBtn" class="tool" title="Fit to view">⤢</button>
+        <div id="layers" class="pop hidden">
+          <h4>Loot</h4>
+          <label><input type="checkbox" id="lyLoot" checked><i class="mk c"></i> Containers with loot</label>
+          <label><input type="checkbox" id="lyPickups" checked><i class="mk p"></i> Pickup spots</label>
+          <label><input type="checkbox" id="lyNoLoot"><i class="mk n"></i> Empty containers</label>
+          <label><input type="checkbox" id="lyInactive"> Appear after an event</label>
+          <h4>Places</h4>
+          <label><input type="checkbox" id="lyLandmarks" checked> Landmarks</label>
+          <label><input type="checkbox" id="lyDoors" checked><i class="mk d"></i> Doors &amp; entrances</label>
+          <label><input type="checkbox" id="lyServices" checked><i class="mk s"></i> Beds, toilets, shops</label>
+          <h4>Background</h4>
+          <label><input type="checkbox" id="lyArt" checked> In-game map</label>
+          <label><input type="checkbox" id="lyPlan" checked> Floor plan</label>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i class="mk c"></i>loot</span><span><i class="mk l"></i>locked</span><span><i class="mk p"></i>pickup</span><span><i class="mk d"></i>door</span>
+      </div>
+      <div id="hint" class="hidden"><b>How to use</b> Search for an item above · click a <i class="mk d"></i> door to go inside · click a <i class="mk c"></i> box to see what it can drop. <button id="hintClose">Got it</button></div>
+      <div id="tip" class="hidden"></div>
+      <div id="loading" class="hidden">Unfolding the map…</div>
+    </div>
+  </section>
+  <aside id="detail"></aside>
+</main>
+<footer>
+  Unofficial fan project, not affiliated with Loiste Interactive. Map art, icons and data come from the game files<span id="ver"></span>.
+  Loot tables link to the <a href="https://obenseuer-viewer.pages.dev/" target="_blank" rel="noopener">Obenseuer viewer</a>.
+</footer>
+<script src="data/index.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
