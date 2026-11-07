@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 <header class="top">
@@ -40,17 +40,22 @@
           <label><input type="checkbox" id="lyPickups" checked><i class="mk p"></i> Pickup spots</label>
           <label><input type="checkbox" id="lyNoLoot"><i class="mk n"></i> Empty containers</label>
           <label><input type="checkbox" id="lyInactive"> Appear after an event</label>
+          <h4>Ownership</h4>
+          <label><input type="radio" name="own" value="all" checked> Everything</label>
+          <label><input type="radio" name="own" value="safe"><i class="mk c"></i> Only free to take</label>
+          <label><input type="radio" name="own" value="steal"><i class="mk st"></i> Only stealing</label>
           <h4>Places</h4>
           <label><input type="checkbox" id="lyLandmarks" checked> Landmarks</label>
           <label><input type="checkbox" id="lyDoors" checked><i class="mk d"></i> Doors &amp; entrances</label>
           <label><input type="checkbox" id="lyServices" checked><i class="mk s"></i> Beds, toilets, shops</label>
+          <label><input type="checkbox" id="lyFurniture" checked><i class="mk f"></i> Workstations &amp; furniture</label>
           <h4>Background</h4>
           <label><input type="checkbox" id="lyArt" checked> In-game map</label>
           <label><input type="checkbox" id="lyPlan" checked> Floor plan</label>
         </div>
       </div>
       <div class="legend">
-        <span><i class="mk c"></i>loot</span><span><i class="mk l"></i>locked</span><span><i class="mk p"></i>pickup</span><span><i class="mk d"></i>door</span>
+        <span><i class="mk c"></i>free to take</span><span><i class="mk st"></i>stealing</span><span><i class="mk l"></i>locked</span><span><i class="mk p"></i>pickup</span><span><i class="mk f"></i>workstation</span><span><i class="mk d"></i>door</span>
       </div>
       <div id="hint" class="hidden"><b>How to use</b> Search for an item above · click a <i class="mk d"></i> door to go inside · click a <i class="mk c"></i> box to see what it can drop. <button id="hintClose">Got it</button></div>
       <div id="tip" class="hidden"></div>
@@ -63,7 +68,7 @@
   Unofficial fan project, not affiliated with Loiste Interactive. Map art, icons and data come from the game files<span id="ver"></span>.
   Loot tables link to the <a href="https://obenseuer-viewer.pages.dev/" target="_blank" rel="noopener">Obenseuer viewer</a>.
 </footer>
-<script src="data/index.js"></script>
-<script src="app.js"></script>
+<script src="data/index.js?v=3"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>

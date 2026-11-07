@@ -48,6 +48,11 @@ def scene(sf):
 def own(o):
     x=o.get('StorageOwner') or o.get('owner') or {}
     return x.get('name') or None
+def steal(o):
+    # Same rule the game uses for its "steal" use-text: an owner ID is set and taking is not permitted.
+    x=o.get('StorageOwner') or o.get('owner') or {}
+    perm=o.get('PermissionToTake', o.get('permissionToTake', False))
+    return (x.get('ID') or 0) > 1 and not perm   # Storage.UpdateUseMessage: owner.ID > 1 && !PermissionToTake
 
 def items_of(lst):
     out=[]
@@ -82,7 +87,7 @@ def process(data_dir, idx, scenes):
         yaw=math.degrees(math.atan2(M[0][2],M[2][2]))
         e=dict(kind='container' if sn[2]=='Storage' else 'pickup', name=g.get('name',''), path=path, active=act,
                x=round(P[0],2), y=round(P[1],2), z=round(P[2],2), yaw=round(yaw),
-               category=d.get('itemSpawnCategory') or None, owner=own(d))
+               category=d.get('itemSpawnCategory') or None, owner=own(d), steal=steal(d))
         if sn[2]=='Storage':
             lk=d.get('_Lock') or {}
             e.update(type=d.get('StorageSettings') or None, title=d.get('title') or None,
@@ -95,7 +100,7 @@ def process(data_dir, idx, scenes):
             if not e['fromCategory']: e['category']=None
         else:
             e.update(customItems=items_of(d.get('customItemsToSpawn')), rareChance=d.get('rareItemSpawnChance'))
-        pts.append({k:v for k,v in e.items() if v not in (None,[],'')})
+        pts.append({k:v for k,v in e.items() if v not in (None,[],'') and not (k=='steal' and v is False)})
     return pts, errs
 
 _meshbb={}
@@ -161,8 +166,22 @@ def colliders(sf):
     return out
 
 OUT='.'
-FEATURE_SCRIPTS={'DoorChangelevel':'door','Changelevel':'door','Sleep':'bed','Toilet':'toilet',
-                 'VendingMachine':'vending','Phone':'phone','Mailbox':'mailbox'}
+FEATURE_SCRIPTS={'DoorChangelevel':'door','Changelevel':'door','Sleep':'bed','Toilet':'toilet','ToiletBucket':'toilet',
+                 'VendingMachine':'vending','Phone':'phone','Mailbox':'mailbox',
+                 'manufacturing':'station','Generator':'generator','GrowingSpot':'grow','Autofarm':'grow',
+                 'AnimalBreeder':'breeder','LiquidStorage':'water','InteractableShower':'shower','SaunaCooling':'sauna',
+                 'BottleRecyclingDrop':'recycling','Radio':'radio'}
+RECIPE_TYPES={}
+PLACEHOLDER_OWNERS={'','name','default male','default female','none'}
+def _recipe_types():
+    if not RECIPE_TYPES:
+        a=ser.asm('Assembly-CSharp'); ti=a.find_type('RecipeType'); consts={}
+        for i in range(1,a.rows[0xb]+1):
+            typ,par,val=a.row(0xb,i)
+            if par&3==0: consts[par>>2]=a.blob(val)
+        for j,f,nm,sig in a.fields(ti):
+            if j in consts: RECIPE_TYPES[struct.unpack('<i',consts[j][:4])[0]]=a.str(nm)
+    return RECIPE_TYPES
 def features(sf):
     gos,trs,go2tr,W,path_of=scene(sf)
     out=[]; mapinfo=None
@@ -181,15 +200,33 @@ def features(sf):
             mapinfo=dict(sprite=spn,cx=P[0],cz=P[2],radius=d['mapRadius'],sx=M[0][0],sz=M[2][2])
             continue
         if cls not in FEATURE_SCRIPTS: continue
-        upto='OtherEntrypoint' if FEATURE_SCRIPTS[cls]=='door' else 'm_useMessage'
+        kind=FEATURE_SCRIPTS[cls]
+        upto={'door':'OtherEntrypoint','station':'Recipes','bed':'owner','water':'PermissionToTake'}.get(kind,'m_useMessage')
         try: _,d,_=ser.read_mb(sf,pid,'Assembly-CSharp',cls,upto=upto)
-        except Exception: continue
+        except Exception:
+            if kind=='door': continue
+            d={}
         tp=go2tr.get(go[1])
         if tp is None: continue
         path,act=path_of(go[1])
         M,P=W(tp)
-        e=dict(kind=FEATURE_SCRIPTS[cls],title=(d.get('title') or '').strip() or None,
+        e=dict(kind=kind,title=(d.get('title') or '').strip() or None,
                x=round(P[0],2),y=round(P[1],2),z=round(P[2],2),active=act)
+        if kind=='station':
+            e['title']=(d.get('ManuName') or d.get('title') or '').strip() or None
+            e['types']=[_recipe_types().get(x,str(x)) for x in (d.get('Recipes') or [])]
+        if kind=='station':
+            try: _,d2,_=ser.read_mb(sf,pid,'Assembly-CSharp',cls,upto='PermissionToTake'); d.update(d2)
+            except Exception: pass
+        if kind=='bed':
+            if d.get('safe'): e['safe']=True
+            if d.get('canBeArrested'): e['arrest']=True
+        if kind in ('station','bed','water'):
+            o=d.get('owner') or d.get('StorageOwner') or {}
+            ow=(o.get('name') or '').strip()
+            if (o.get('ID') or 0) > 1 and not d.get('PermissionToTake'):
+                e['owned']=True
+                if ow.lower() not in PLACEHOLDER_OWNERS: e['owner']=ow
         if e['kind']=='door':
             e['to']=d.get('OtherLevel') or None
             if not e['to']: continue

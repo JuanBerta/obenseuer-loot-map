@@ -33,7 +33,11 @@ const LM_GROUPS = (() => {
   return [...g.values()];
 })();
 const S = { scene: null, data: null, q: '', cat: null, sel: null, floor: -1, floors: [], region: 'Bazaar',
-  view: { cx: 0, cz: 0, s: 4 }, layers: {}, hover: null, autoFit: true, userPlan: null };
+  view: { cx: 0, cz: 0, s: 4 }, layers: {}, hover: null, autoFit: true, userPlan: null, own: 'all', selF: null };
+const RECIPES = IDX.recipes || {}, STYPES = IDX.stationTypes || {};
+function stationText(title) { const t = STYPES[title] || []; return (title + '\n' + t.join('\n') + '\n' + t.flatMap(x => RECIPES[x] || []).join('\n')).toLowerCase(); }
+const STEXT = {}; for (const t of Object.keys(STYPES)) STEXT[t] = stationText(t);
+const stationMatches = f => f.kind === 'station' && f.title && !S.cat && qTerm() && (STEXT[f.title] || f.title.toLowerCase()).includes(qTerm());
 const cache = {};
 
 // ---------- search ----------
@@ -87,14 +91,21 @@ function renderSide() {
         return `<div class="row" data-cat="${esc(c)}"><span class="ico blank"></span><span class="nm">${esc(c)}<small>${how}</small></span><span class="ct">${TOTALS[c]}</span></div>`;
       }).join('') : '';
     }
+    let wsec = '';
+    if (!S.cat && q) {
+      const titles = Object.keys(STYPES).filter(t => STEXT[t].includes(q));
+      const rows = IDX.scenes.map(s => [s, titles.reduce((a, t) => a + ((s.stations || {})[t] || 0), 0), titles.filter(t => (s.stations || {})[t])]).filter(x => x[1]).sort((a, b) => b[1] - a[1]);
+      if (rows.length) wsec = '<div class="sec">Workstations that match</div>' + rows.slice(0, 25).map(([s, k, ts]) =>
+        `<div class="row" data-slug="${s.slug}"><span class="ico blank"></span><span class="nm">${esc(ts.slice(0, 3).join(', '))}<small>in ${esc(s.name)}</small></span><span class="ct">${k}</span></div>`).join('');
+    }
     const n = ranked.reduce((a, x) => a + x[1], 0);
     $('#sideHead').innerHTML = `<h2>Search results</h2><p>${n ? `${n} containers for ${esc(label)} in ${ranked.length} places` : esc(label)}</p>`;
     $('#sideBody').innerHTML =
       (placeHits.length ? '<div class="sec">Places</div>' + placeHits.map(s => row(s, s.lootContainers)).join('') : '') +
       (lmHits.length ? '<div class="sec">On the in-game map</div>' + lmHits.map(l => `<div class="row" data-lm="${LM_GROUPS.indexOf(l)}">${l.icon ? `<img class="ico" src="${l.icon}" alt="">` : '<span class="ico blank"></span>'}<span class="nm">${esc(l.titles.join(', '))}<small>${l.map === 'mines' ? 'Mines map' : 'Tenement & Bazaar map'}</small></span></div>`).join('') : '') +
-      tables +
+      tables + wsec +
       (ranked.length ? '<div class="sec">Best places to look</div>' + ranked.slice(0, 60).map(([s, k]) => row(s, k, 'hit')).join('') :
-        (!placeHits.length && !lmHits.length ? `<p class="empty">Nothing matches ${esc(label)}. Try a shorter word, like “tape” or “battery”.</p>` : ''));
+        (!placeHits.length && !lmHits.length && !wsec ? `<p class="empty">Nothing matches ${esc(label)}. Try a shorter word, like “tape” or “battery”.</p>` : ''));
     return;
   }
   const reg = REGIONS.find(r => r.id === S.region);
@@ -154,6 +165,7 @@ function computeFloors(d) {
 }
 async function openScene(slug, keepView) {
   const meta = SC[slug] || SC['open-sewer-bazaar'];
+  if (S.scene !== meta.slug) S.selF = null;
   if (S.scene !== meta.slug && !keepView) { S.sel = null; S.floor = -1; }
   S.scene = meta.slug;
   if (!searching()) { S.region = meta.group; renderTabs(); }
@@ -213,6 +225,8 @@ function visiblePoints() {
   return d.points.filter(p => {
     if (!p.active && !L.inactive) return false;
     if (p.kind === 'pickup' ? !L.pickups : (p.loot ? !L.loot : !L.noloot)) return false;
+    if (S.own === 'safe' && p.steal) return false;
+    if (S.own === 'steal' && !p.steal) return false;
     if (S.floor >= 0) { const f = S.floors[S.floor]; if (p.y < f.lo || p.y > f.hi) return false; }
     return true;
   });
@@ -233,11 +247,11 @@ function fit() {
   const d = S.data; if (!d) return;
   S.autoFit = true; if (W < 10 || H < 10) return;
   let pts = visiblePoints(); if (!pts.length) pts = d.points;
-  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-  const add = (x, z) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); };
-  pts.forEach(p => add(p.x, p.z));
-  for (const t of d.tri) if (inFloor(t[6], t[6])) add(t[0] / 10, t[1] / 10);
-  if (!isFinite(x0)) { x0 = -10; x1 = 10; z0 = -10; z1 = 10; }
+  pts = pts.filter(p => p.active);
+  const xs = pts.map(p => p.x).sort((a, b) => a - b), zs = pts.map(p => p.z).sort((a, b) => a - b);
+  const trim = xs.length > 30 ? Math.floor(xs.length * 0.02) : 0;
+  let x0 = xs[trim], x1 = xs[xs.length - 1 - trim], z0 = zs[trim], z1 = zs[zs.length - 1 - trim];
+  if (!xs.length) { x0 = -10; x1 = 10; z0 = -10; z1 = 10; }
   const pad = SC[S.scene].outdoor ? 4 : 6; x0 -= pad; x1 += pad; z0 -= pad; z1 += pad;
   S.view.cx = (x0 + x1) / 2; S.view.cz = (z0 + z1) / 2;
   S.view.s = Math.max(0.3, Math.min(60, Math.min((W - 40) / (x1 - x0), (H - 40) / (z1 - z0))));
@@ -251,7 +265,10 @@ function label(text, x, y, o = {}) {
   ctx.fillStyle = o.bg || 'rgba(27,25,22,0.88)'; ctx.fillRect(bx, y - h / 2, w + 8, h);
   ctx.fillStyle = o.color || '#ece4d4'; ctx.textBaseline = 'middle'; ctx.fillText(text, bx + 4, y + 0.5);
 }
-const SVC = { bed: ['Bed', 'Bed — you can sleep here'], toilet: ['WC', 'Toilet'], vending: ['$', 'Shop counter'], phone: ['☎', 'Phone'], mailbox: ['✉', 'Mailbox'] };
+const SVC = { bed: ['Bed', 'Bed — you can sleep here'], toilet: ['WC', 'Toilet'], vending: ['$', 'Shop counter'], phone: ['☎', 'Phone'], mailbox: ['✉', 'Mailbox'],
+  station: ['⚒', 'Workstation'], grow: ['✿', 'Planter / growing spot'], water: ['≈', 'Water source'], shower: ['Sh', 'Shower'], sauna: ['Sa', 'Sauna stove'],
+  generator: ['⚡', 'Generator'], breeder: ['Br', 'Animal breeder'], recycling: ['♻', 'Bottle recycling drop'], radio: ['♪', 'Radio'] };
+const FURN = new Set(['station', 'grow', 'water', 'shower', 'sauna', 'generator', 'breeder', 'recycling', 'radio']);
 function drawNow() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = '#d8cfb9'; ctx.fillRect(0, 0, W, H);
@@ -287,14 +304,21 @@ function drawNow() {
   ctx.fillStyle = '#241d14'; ctx.fillRect(W - 24 - m * s, H - 22, m * s, 3);
   ctx.font = '13px "Special Elite", monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.fillText(m + ' m', W - 24, H - 28); ctx.textAlign = 'left';
   S._hits = [];
-  if (L.services) for (const f of d.services) {
-    if (!f.active || !onFloor(f)) continue;
+  for (const f of d.services) {
+    const furn = FURN.has(f.kind);
+    if (!f.active || !onFloor(f) || (furn ? !L.furniture : !L.services)) continue;
     const [x, y] = toScreen(f.x, f.z); if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
     const g = SVC[f.kind][0];
     ctx.font = '600 9.5px "IBM Plex Sans", sans-serif'; const w = Math.max(15, ctx.measureText(g).width + 7);
-    ctx.fillStyle = '#fffaf0'; ctx.strokeStyle = '#241d14'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.roundRect(x - w / 2, y - 7.5, w, 15, 7.5); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#241d14'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g, x, y + 0.5); ctx.textAlign = 'left';
+    const sm = stationMatches(f), dim = searching() && !sm;
+    ctx.globalAlpha = dim ? 0.35 : 1;
+    if (sm) { ctx.fillStyle = 'rgba(47,93,58,0.35)'; ctx.beginPath(); ctx.arc(x, y, 16, 0, 7); ctx.fill(); }
+    ctx.fillStyle = furn ? '#2f5d3a' : '#fffaf0'; ctx.strokeStyle = f.owned ? '#b3261e' : (furn ? '#fffaf0' : '#241d14'); ctx.lineWidth = f.owned ? 2 : 1.2;
+    if (furn) { ctx.beginPath(); ctx.roundRect(x - w / 2, y - 7.5, w, 15, 3); ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.roundRect(x - w / 2, y - 7.5, w, 15, 7.5); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = furn ? '#fffaf0' : '#241d14'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g, x, y + 0.5); ctx.textAlign = 'left';
+    ctx.globalAlpha = 1;
+    if (f.kind === 'station' && f.title && (sm || s > 16 || (S.hover && S.hover.f === f))) label(f.title, x + w / 2 + 3, y, { font: '600 11px "IBM Plex Sans", sans-serif', bg: 'rgba(47,93,58,0.92)' });
     S._hits.push({ x, y, r: 10, f });
   }
   if (L.doors) for (const f of d.doors) {
@@ -329,7 +353,12 @@ function drawNow() {
     ctx.fillStyle = p.kind === 'pickup' ? '#1f7a8c' : p.loot ? '#d98e04' : '#8c8577';
     if (p.kind === 'pickup') { ctx.beginPath(); ctx.arc(x, y, rr * 0.9, 0, 7); ctx.fill(); ctx.stroke(); }
     else { ctx.fillRect(x - rr, y - rr, rr * 2, rr * 2); ctx.strokeRect(x - rr, y - rr, rr * 2, rr * 2); }
-    if (p.locked) { ctx.strokeStyle = '#b3261e'; ctx.lineWidth = 2.2; ctx.strokeRect(x - rr - 2.5, y - rr - 2.5, rr * 2 + 5, rr * 2 + 5); }
+    if (p.steal && p.loot) {
+      ctx.fillStyle = '#b3261e';
+      if (p.kind === 'pickup') { ctx.beginPath(); ctx.arc(x + rr * 0.7, y - rr * 0.7, Math.max(2.5, rr * 0.45), 0, 7); ctx.fill(); }
+      else { ctx.beginPath(); ctx.moveTo(x - rr * 0.1, y - rr); ctx.lineTo(x + rr, y - rr); ctx.lineTo(x + rr, y + rr * 0.1); ctx.closePath(); ctx.fill(); }
+    }
+    if (p.locked) { ctx.strokeStyle = '#6b3fa0'; ctx.lineWidth = 2.2; ctx.strokeRect(x - rr - 2.5, y - rr - 2.5, rr * 2 + 5, rr * 2 + 5); }
     if (!p.active) { ctx.setLineDash([2, 2]); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(x - rr, y - rr, rr * 2, rr * 2); ctx.setLineDash([]); }
   }
   ctx.globalAlpha = 1;
@@ -400,15 +429,20 @@ function hoverAt(x, y) {
   let html;
   if (h.p) { const p = h.p; html = `<b>${esc(hasTable(p.category) ? p.category : (p.title || p.type || p.name))}</b><br><small>${p.kind === 'pickup' ? 'Pickup spot' : esc(p.title || p.type || 'Container')}${p.locked ? ' · locked' : ''}${p.owner ? ' · owned by ' + esc(p.owner) : ''} — click for loot</small>`; }
   else if (h.f && h.f.kind === 'door') html = h.f.toSlug ? `<b>Door → ${esc(h.f.toName)}</b><br><small>${SC[h.f.toSlug].lootContainers} loot containers inside · click to enter</small>` : `<b>${esc(h.f.toName)}</b><br><small>Not open in this version of the game</small>`;
-  else if (h.f) html = `<b>${esc(h.f.title || SVC[h.f.kind][1])}</b><br><small>${SVC[h.f.kind][1]}</small>`;
+  else if (h.f) {
+    const f = h.f, own = f.owned ? `<br><small style="color:#f39a88">Owned${f.owner ? ' by ' + esc(f.owner) : ''} — taking its items counts as stealing</small>` : '';
+    const extra = f.kind === 'station' ? esc((f.types || []).join(', ')) + ' · click for recipes' : f.kind === 'bed' ? (f.safe ? 'Safe place to sleep' : 'You can sleep here') + (f.arrest ? ' · you can be arrested here' : '') : SVC[f.kind][1];
+    html = `<b>${esc(f.title || SVC[f.kind][1])}</b><br><small>${extra}</small>${own}`;
+  }
   else html = `<b>${esc(h.l.titles.join(', '))}</b><br><small>Landmark on the in-game map</small>`;
   tip.innerHTML = html; tip.style.left = Math.min(x + 16, W - 290) + 'px'; tip.style.top = Math.min(y + 16, H - 60) + 'px'; tip.classList.remove('hidden');
 }
 function clickAt(x, y) {
   const h = pick(x, y);
   if (h && h.f && h.f.kind === 'door') { if (h.f.toSlug) openScene(h.f.toSlug); return; }
+  if (h && h.f) { S.sel = null; S.selF = h.f; renderDetail(); draw(); $('#detail').classList.add('open'); return; }
   if (h && h.l) { S.view.cx = h.l.x; S.view.cz = h.l.z; S.view.s = Math.max(S.view.s * 1.6, 9); S.autoFit = false; draw(); saveHash(); return; }
-  S.sel = h && h.p ? h.p.i : null; renderDetail(); draw(); saveHash();
+  S.selF = null; S.sel = h && h.p ? h.p.i : null; renderDetail(); draw(); saveHash();
   if (h && h.p) $('#detail').classList.add('open');
 }
 
@@ -424,6 +458,22 @@ function lootList(ids, label, q) {
 function renderDetail() {
   const el = $('#detail'), d = S.data; if (!d) { el.innerHTML = ''; return; }
   const meta = SC[S.scene], q = S.cat ? '' : qTerm();
+  if (S.selF && d.services.includes(S.selF)) {
+    const f = S.selF, types = f.types || [];
+    let h = `<button class="back" id="backBtn">← ${esc(meta.name)}</button><div class="card"><h2>${esc(f.title || SVC[f.kind][1])}</h2><div class="sub">${esc(SVC[f.kind][1])} · ${esc(meta.name)}</div>`;
+    h += f.owned ? `<div class="own steal">Owned${f.owner ? ' by ' + esc(f.owner) : ''}<small>Taking items out of it counts as stealing.</small></div>`
+                 : (f.kind === 'station' || f.kind === 'water' || f.kind === 'bed' ? `<div class="own safe">Free to use<small>Not owned by anyone.</small></div>` : '');
+    if (f.kind === 'bed') h += `<p>${f.safe ? 'A safe place to sleep.' : 'You can sleep here.'}${f.arrest ? ' You can be arrested if caught sleeping here.' : ''}</p>`;
+    if (f.kind === 'station') {
+      for (const t of types) {
+        const r = RECIPES[t] || [];
+        h += `<h3>${esc(t)} · ${r.length} recipes</h3>` + (r.length ? `<ul class="recipes">${r.map(n => `<li${q && n.toLowerCase().includes(q) ? ' style="background:#f0cf86"' : ''}>${esc(n)}</li>`).join('')}</ul>` : '<p class="muted">No recipes listed.</p>');
+      }
+    }
+    el.innerHTML = h + '</div>';
+    $('#backBtn').onclick = () => { S.selF = null; renderDetail(); draw(); };
+    return;
+  }
   if (S.sel != null && d.points[S.sel]) {
     const p = d.points[S.sel], t = LOOT[p.category];
     const title = p.title || (p.type !== 'Custom' && p.type) || p.name;
@@ -432,10 +482,13 @@ function renderDetail() {
     if (t) h += `<span class="tag loot" data-cat="${esc(p.category)}" title="Highlight every ${esc(p.category)}">${esc(p.category)}</span>`;
     else if (p.kind === 'container') h += `<span class="tag">No random loot</span>`;
     if (p.locked) h += `<span class="tag red">Locked${p.lockpickable ? ' · lockpick ' + (p.difficulty ?? '') : ' · needs a key'}</span>`;
-    if (p.owner) h += `<span class="tag red" title="Taking from it counts as stealing">Owned by ${esc(p.owner)}</span>`;
+
     if (p.respawn) h += `<span class="tag teal">Restocks</span>`;
     if (!p.active) h += `<span class="tag">Appears after an event</span>`;
-    h += '</div><div class="facts">';
+    h += '</div>';
+    if (p.loot) h += p.steal ? `<div class="own steal">Taking from it counts as stealing<small>Owned by ${esc(p.owner && !/^(name|default (male|female))$/i.test(p.owner) ? p.owner : 'a local resident')}. If someone sees you, it's a crime.</small></div>`
+                             : `<div class="own safe">Free to take<small>Nobody owns it, so it isn't stealing.</small></div>`;
+    h += '<div class="facts">';
     if (t && p.common != null) h += `<span>Common roll</span><span>${p.common}%</span>`;
     if (t && p.rare != null) h += `<span>Rare roll</span><span>${p.rare}%</span>`;
     if (S.floors.length) { const fi = S.floors.findIndex(f => p.y >= f.lo && p.y <= f.hi); if (fi >= 0) h += `<span>Floor</span><span>${fi + 1} of ${S.floors.length}</span>`; }
@@ -453,18 +506,22 @@ function renderDetail() {
   const list = o => '<ul class="list">' + Object.entries(o).sort((a, b) => b[1] - a[1]).map(([c, n]) =>
     `<li class="${S.cat === c ? 'on' : ''}${!S.cat && qTerm() && hasTable(c) && !tableMatches(c) ? ' dim' : ''}" data-cat="${esc(c)}"><span>${esc(c)}</span><b>${n}</b></li>`).join('') + '</ul>';
   const inside = [...new Map(d.doors.filter(f => f.toSlug && !SC[f.toSlug].outdoor).map(f => [f.toSlug, f])).values()].sort((a, b) => a.toName.localeCompare(b.toName));
-  const svc = d.services.filter(f => f.active), n = k => svc.filter(f => f.kind === k).length;
+  const svc = d.services.filter(f => f.active && !FURN.has(f.kind)), n = k => svc.filter(f => f.kind === k).length;
   const fac = [['bed', 'beds'], ['toilet', 'toilets'], ['vending', 'shop counters'], ['phone', 'phones'], ['mailbox', 'mailboxes']].filter(([k]) => n(k)).map(([k, w]) => n(k) + ' ' + w).join(' · ');
   el.innerHTML = `<div class="card"><h2>${esc(meta.name)}</h2><div class="sub">${esc(meta.scene)}</div>
     <p class="muted">Click a container type to light it up on the map, or click any box on the map for its loot.</p>
+    <div class="split"><span class="a"><b>${meta.safe}</b>free to take</span><span class="b"><b>${meta.steal}</b>stealing</span></div>
     <h3>Containers</h3>${Object.keys(cats).length ? list(cats) : '<p class="muted">No loot containers here.</p>'}
     <h3>Pickup spots</h3>${Object.keys(pk).length ? list(pk) : '<p class="muted">None.</p>'}
     ${fac ? `<h3>Facilities</h3><p>${fac}</p>` : ''}
+    ${Object.keys(meta.stations || {}).length ? `<h3>Workstations</h3><ul class="list">${Object.entries(meta.stations).sort((a, b) => a[0].localeCompare(b[0])).map(([t, n]) => `<li data-station="${esc(t)}"><span>${esc(t)}</span><b>${n}</b></li>`).join('')}</ul>` : ''}
     ${inside.length ? `<h3>Go inside</h3><ul class="list">${inside.map(f => `<li data-slug="${f.toSlug}"><span>${esc(f.toName)}</span><b>${SC[f.toSlug].lootContainers}</b></li>`).join('')}</ul>` : ''}
   </div>`;
 }
 $('#detail').addEventListener('click', e => {
   const s = e.target.closest('[data-slug]'); if (s) { openScene(s.dataset.slug); $('#detail').classList.remove('open'); return; }
+  const st = e.target.closest('[data-station]');
+  if (st) { const f = S.data.services.find(f => f.title === st.dataset.station); if (f) { S.selF = f; S.view.cx = f.x; S.view.cz = f.z; S.view.s = Math.max(S.view.s, 14); S.autoFit = false; renderDetail(); draw(); } return; }
   const c = e.target.closest('[data-cat]');
   if (c && hasTable(c.dataset.cat)) { S.sel = null; setCat(S.cat === c.dataset.cat ? null : c.dataset.cat); }
 });
@@ -486,7 +543,8 @@ function setCat(c) {
 function refresh() { renderSide(); renderDetail(); draw(); saveHash(); }
 let qt; $('#q').addEventListener('input', e => { S.q = e.target.value; clearTimeout(qt); qt = setTimeout(() => { if (S.cat) setCat(null); else refresh(); }, 120); });
 $('#catChip').onclick = () => setCat(null);
-const LAYERS = { loot: 'lyLoot', pickups: 'lyPickups', noloot: 'lyNoLoot', inactive: 'lyInactive', landmarks: 'lyLandmarks', doors: 'lyDoors', services: 'lyServices', art: 'lyArt', plan: 'lyPlan' };
+document.querySelectorAll('input[name=own]').forEach(r => r.addEventListener('change', () => { S.own = r.value; refresh(); }));
+const LAYERS = { furniture: 'lyFurniture', loot: 'lyLoot', pickups: 'lyPickups', noloot: 'lyNoLoot', inactive: 'lyInactive', landmarks: 'lyLandmarks', doors: 'lyDoors', services: 'lyServices', art: 'lyArt', plan: 'lyPlan' };
 for (const [k, id] of Object.entries(LAYERS)) {
   const el = document.getElementById(id); S.layers[k] = el.checked;
   el.addEventListener('change', () => { S.layers[k] = el.checked; if (k === 'plan') S.userPlan = el.checked; draw(); });

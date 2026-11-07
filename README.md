@@ -13,6 +13,8 @@ scene list and map light up wherever it can be found.
   icons and hand-drawn circles (Hotel Korso, Sewerview Inn, Kolhola, Deekula A/B/C…)
 - Doors labeled with their in-game signs: click one to walk inside, and "Back outside" to return
 - Beds, toilets, shop counters, phones and mailboxes
+- Workstations and usable furniture (Drill, Lathe, 3D Printer, stoves, ovens, Sewing Machine, Chemical lab…) with every recipe they can make, plus planters, water sources, showers, saunas, generators and recycling drops
+- Ownership: every container, pickup spot and workstation is marked **free to take** or **stealing**, using the game's own rule (an owner with ID > 1 and no permission to take), with a filter to show only one or the other
 - Floor plans drawn from the game's navmesh and physics colliders, with a per-floor selector
   for multi-storey buildings
 - Shareable links: the URL keeps the scene, search, selected container, floor and view

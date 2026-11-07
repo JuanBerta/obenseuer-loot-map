@@ -84,7 +84,7 @@ for l in json.load(open(os.path.join(ext_dir,'landmarks.json'))) if os.path.exis
     lms.append(dict(t=l['title'],x=l['x'],y=l['y'],z=l['z'],w=l['w'],h=l['h'],icon=('data/icons/'+l['icon']) if l['icon'] else None,
                     map='tenement' if l['y']>-105 else 'mines'))
 
-index=[]; used=set(); need=set()
+index=[]; used=set(); need=set(); stypes={}
 for f in levels:
     d=json.load(open(f)); name=d['scene']; i=d['level']
     if SKIP(name): continue
@@ -110,6 +110,7 @@ for f in levels:
     feats=[]
     for x in fe['features']:
         if x['x']==0 and x['z']==0: continue
+        if x['kind'] not in ('door','station') and any(f['kind']==x['kind'] and abs(f['x']-x['x'])<1.5 and abs(f['z']-x['z'])<1.5 and abs(f['y']-x['y'])<1.5 for f in feats): continue
         if x['kind']=='door':
             if x['to']==name: continue
             x=dict(x,toName=friendly(x['to']) if x['to'] in present else (x.get('title') or suffix(x['to'])),
@@ -124,7 +125,12 @@ for f in levels:
         need.update(p.get('customItems',[])); need.update(p.get('startItems',[]))
     ent=entr.get(name,[])
     parent=collections.Counter(e[0] for e in ent).most_common(1)
-    index.append(dict(scene=name,slug=slug,name=friendly(name),group=group(name,mk),map=mk,outdoor=name.startswith('Open Sewer') or name=='Under Map',
+    stations={}
+    for x in feats:
+        if x['kind']=='station' and x.get('title') and x.get('active'):
+            stations[x['title']]=stations.get(x['title'],0)+1; stypes.setdefault(x['title'],sorted(set(x.get('types') or [])))
+    index.append(dict(stations=stations,safe=sum(1 for p in pts if p.get('active') and not p.get('steal') and (p['kind']=='pickup' or p.get('category') in loot)),
+        steal=sum(1 for p in pts if p.get('active') and p.get('steal') and (p['kind']=='pickup' or p.get('category') in loot)),scene=name,slug=slug,name=friendly(name),group=group(name,mk),map=mk,outdoor=name.startswith('Open Sewer') or name=='Under Map',
         lootContainers=sum(1 for p in pts if p['kind']=='container' and p.get('category') in loot and p.get('active')),
         lootPickups=sum(1 for p in pts if p['kind']=='pickup' and p.get('active')),
         cats=cats,parent=slugify(parent[0][0]) if parent and not name.startswith('Open Sewer') else None,
@@ -132,7 +138,14 @@ for f in levels:
 for c in used:
     if c in loot: need.update(loot[c]['common']); need.update(loot[c]['rare'])
 meta=json.load(open(os.path.join(ext_dir,'meta.json'))) if os.path.exists(os.path.join(ext_dir,'meta.json')) else {}
-idx=dict(meta=meta,scenes=index,maps=maps,landmarks=lms,loot=loot,items={i:items[i] for i in need if i in items})
+recipes=collections.defaultdict(list)
+try:
+    raw=open(os.path.join(SA,'Recipes.json'),'rb').read()
+    txt=raw.decode('utf-16') if raw[:2] in (b'\xff\xfe',b'\xfe\xff') else raw.decode('utf-8-sig')
+    for r in json.loads(txt)['Recipes']:
+        if r.get('Name') and r['Name'] not in recipes[r['Type']]: recipes[r['Type']].append(r['Name'])
+except Exception as e: print('recipes skipped',e)
+idx=dict(stationTypes=stypes,recipes={k:sorted(v) for k,v in recipes.items()},meta=meta,scenes=index,maps=maps,landmarks=lms,loot=loot,items={i:items[i] for i in need if i in items})
 with open(os.path.join(dd,'index.js'),'w') as fh:
     fh.write('window.OBS_INDEX='+json.dumps(idx,separators=(',',':'))+';')
 print(len(index),'scenes;',len(lms),'landmarks;',len(maps),'maps;',len(idx['items']),'items')
