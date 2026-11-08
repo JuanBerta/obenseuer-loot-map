@@ -1,4 +1,4 @@
-# Changelog - Obenseuer Loot Map (in-game mod)
+# Changelog - Loot Map (in-game mod)
 
 ## 0.3.2
 - World markers and the guide arrow are hidden while a game menu is open.

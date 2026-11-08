@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap
 {
-    [BepInPlugin(Guid, "Obenseuer Loot Map", "0.3.2")]
+    [BepInPlugin(Guid, "Loot Map", "0.3.2")]
     public partial class LootMapPlugin : BaseUnityPlugin
     {
         public const string Guid = "com.juanberta.obenseuer.lootmap";
@@ -58,7 +58,7 @@ namespace ObenseuerLootMap
             }
             catch (Exception e) { Logger.LogError("Could not load lootmap-data.json: " + e); }
             new Harmony(Guid).PatchAll(typeof(LootMapPlugin).Assembly);
-            Logger.LogInfo("Obenseuer Loot Map loaded.");
+            Logger.LogInfo("Loot Map loaded.");
         }
 
         void OnApplicationQuit() { try { Config.Save(); } catch { } }

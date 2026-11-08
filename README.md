@@ -37,7 +37,7 @@ git push -u origin main
 The site is plain static HTML/JS with no build step. You can also open `index.html`
 directly from disk.
 
-## In-game mod: Loot Map on the Map tab
+## In-game mod: Loot Map
 
 `mod/ObenseuerLootMap` is a BepInEx 6 (Unity Mono) plugin that brings the same data into the game's own Map tab.
 
