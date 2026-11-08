@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap
 {
-    [BepInPlugin(Guid, "Loot Map", "0.3.2")]
+    [BepInPlugin(Guid, "Loot Map", "0.3.3")]
     public partial class LootMapPlugin : BaseUnityPlugin
     {
         public const string Guid = "com.juanberta.obenseuer.lootmap";

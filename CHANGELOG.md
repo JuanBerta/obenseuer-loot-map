@@ -1,5 +1,9 @@
 # Changelog - Loot Map (in-game mod)
 
+## 0.3.3
+- Renamed to Loot Map.
+- Installs to BepInEx\plugins\LootMap as LootMap.dll. Delete the old BepInEx\plugins\ObenseuerLootMap folder when updating; your settings are kept.
+
 ## 0.3.2
 - World markers and the guide arrow are hidden while a game menu is open.
 
