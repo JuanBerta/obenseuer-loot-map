@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap
 {
-    [BepInPlugin(Guid, "Obenseuer Loot Map", "0.3.0")]
+    [BepInPlugin(Guid, "Obenseuer Loot Map", "0.3.1")]
     public partial class LootMapPlugin : BaseUnityPlugin
     {
         public const string Guid = "com.juanberta.obenseuer.lootmap";
@@ -94,6 +94,7 @@ namespace ObenseuerLootMap
             if (search != lastTyped) { lastTyped = search; searchChangedAt = Time.unscaledTime; }
             if (search != appliedSearch && (Time.unscaledTime - searchChangedAt > 0.35f || search.Length == 0)) { appliedSearch = search; if (search.Length > 0) searchIds = null; }
 
+            UpdateSlotHighlights();
             bool open = MapOpen;
             if (open || Guiding || (Searching && cfgWorld.Value)) ScanLive(false);
             if (CurrentScene != langScene) { langScene = CurrentScene; Loc.Detect(cfgLanguage.Value); }
