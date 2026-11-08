@@ -91,10 +91,10 @@ namespace ObenseuerLootMap
         void DrawHud()
         {
             var cam = Camera.main; if (cam == null) return;
-            // Don't draw world markers / the guide arrow over the game's menus (inventory, character, map...).
-            try { if (GameUIController.instance != null && GameUIController.instance.IsAnyMenuOpen()) return; } catch { }
+            // Don't draw world markers / the guide arrow over menus: inventory, character, map, or the pause menu.
+            if (HudHidden()) return;
             EnsureHudTextures(); InitStyles();
-            if (Searching && cfgWorld.Value && cfgEnabled.Value) DrawWorldHighlights(cam);
+            if ((Searching || TrashRoute) && cfgWorld.Value && cfgEnabled.Value) DrawWorldHighlights(cam);
             if (guide == null) return;
             bool have = NextWaypoint(out var wp, out var text);
             float cx = Screen.width / 2f, top = 70f;
@@ -121,6 +121,18 @@ namespace ObenseuerLootMap
             GUI.Box(new Rect(cx - w / 2f, top + 26, w, h), content, tipStyle);
         }
 
+        static bool HudHidden()
+        {
+            if (Time.timeScale < 0.01f) return true;   // paused (pause menu)
+            try
+            {
+                var ui = GameUIController.instance;
+                if (ui != null && (ui.IsAnyMenuOpen() || ui.IsMenuVisible || !ui.GameUIVisible())) return true;
+            }
+            catch { }
+            return false;
+        }
+
         void DrawWorldHighlights(Camera cam)
         {
             var cur = CurrentScene; if (cur == null) return;
@@ -130,17 +142,20 @@ namespace ObenseuerLootMap
             {
                 if (p.live && p.empty) continue;
                 if (cfgFreeOnly.Value && p.s == 1) continue;
+                bool trash = IsTrash(p), searched = trash && SearchedToday(p, cur);
+                if (searched) continue;                                  // Scavenger: already searched today
+                bool routeTodo = TrashRoute && trash;
                 var pos = new Vector3(p.x, p.y, p.z);
                 float d = Vector3.Distance(me, pos);
                 if (d > 25f || Mathf.Abs(pos.y - (me.y - 1.6f)) > 3.2f) continue;
-                if (!PointMatches(p)) continue;
+                if (!routeTodo && (!Searching || !PointMatches(p))) continue;
                 var sp = cam.WorldToScreenPoint(pos + Vector3.up * 0.25f);
                 if (sp.z <= 0) continue;
                 float s = Mathf.Lerp(20f, 10f, d / 25f);
                 var r = new Rect(sp.x - s / 2, Screen.height - sp.y - s / 2, s, s);
                 GUI.color = p.s == 1 ? new Color(.8f, .12f, .1f, .9f) : new Color(.1f, .1f, .08f, .85f);
                 GUI.DrawTexture(new Rect(r.x - 2, r.y - 2, r.width + 4, r.height + 4), diamondEdgeTex);
-                GUI.color = HasNow(p) ? (Color)ColHasNow : p.k == "p" ? new Color(.12f, .6f, .7f) : new Color(.95f, .62f, .1f);
+                GUI.color = routeTodo ? (Color)ColTrash : HasNow(p) ? (Color)ColHasNow : p.k == "p" ? new Color(.12f, .6f, .7f) : new Color(.95f, .62f, .1f);
                 GUI.DrawTexture(r, diamondTex);
                 if (d < 7f && p.t != null) { GUI.color = oldC; GUI.Label(new Rect(r.xMax + 4, r.y - 2, 220, 22), p.t, smallStyle); }
                 if (++drawn > 60) break;
