@@ -91,6 +91,8 @@ namespace ObenseuerLootMap
         void DrawHud()
         {
             var cam = Camera.main; if (cam == null) return;
+            // Don't draw world markers / the guide arrow over the game's menus (inventory, character, map...).
+            try { if (GameUIController.instance != null && GameUIController.instance.IsAnyMenuOpen()) return; } catch { }
             EnsureHudTextures(); InitStyles();
             if (Searching && cfgWorld.Value && cfgEnabled.Value) DrawWorldHighlights(cam);
             if (guide == null) return;
