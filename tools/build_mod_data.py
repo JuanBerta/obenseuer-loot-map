@@ -18,6 +18,7 @@ names={}
 if site:
     raw_idx=open(os.path.join(site,'data','index.js'),encoding='utf-8').read()
     for sc in json.loads(raw_idx[raw_idx.index('{'):raw_idx.rindex('}')+1])['scenes']: names[sc['scene']]=sc['name']
+TRASH={'Dumpster','TrashBin','Trashcan','Trash','Trash Machineshop','Trash Organic','TrashBale','CrateSack','CrateSackMines'}
 OWNER_PLACEHOLDER={'','name','default male','default female','player'}
 S={}; need=set(); used_stock=set()
 for i,name in enumerate(scenes):
@@ -35,6 +36,7 @@ for i,name in enumerate(scenes):
         if nm: e['n']=nm
         if p.get('steal'): e['s']=1
         if p.get('locked'): e['l']=1
+        if p.get('guid') and p.get('category') in TRASH: e['g']=p['guid']   # for Scavenger's "searched today"
         ow=(p.get('owner') or '').strip()
         if ow and ow.lower() not in OWNER_PLACEHOLDER and p.get('steal'): e['o']=ow
         fx=(p.get('customItems') or [])+(p.get('startItems') or [])
@@ -73,7 +75,7 @@ for i,name in enumerate(scenes):
 used=set(t for s in S.values() for t in [p.get('t') for p in s['points']] if t)|used_stock
 for t in used_stock: need.update(loot[t][0]); need.update(loot[t][1])
 for r in recipe_inputs.values(): need.update(r[2])
-data=dict(version=3,recipeInputs=recipe_inputs,scenes=S,loot={k:v for k,v in loot.items() if k in used},
+data=dict(version=4,recipeInputs=recipe_inputs,scenes=S,loot={k:v for k,v in loot.items() if k in used},
           items={str(k):v for k,v in items.items()},recipes=recipes)
 os.makedirs(os.path.dirname(os.path.abspath(out)),exist_ok=True)
 json.dump(data,open(out,'w',encoding='utf-8'),separators=(',',':'),ensure_ascii=False)

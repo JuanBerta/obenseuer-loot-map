@@ -99,6 +99,7 @@ namespace ObenseuerLootMap
         public int l;         // 1 = locked
         public string o;      // owner name
         public List<int> f;   // fixed items
+        public string g;      // save GUID (trash containers), to match Scavenger's "searched today"
 
         // Live state (current scene only)
         [JsonIgnore] public bool live, empty;

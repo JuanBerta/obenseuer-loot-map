@@ -202,6 +202,12 @@ namespace ObenseuerLootMap
                 cfgFloorOnly.Value = GUILayout.Toggle(cfgFloorOnly.Value, " " + Loc.T("Indoors: only my floor"));
                 cfgWholeMap.Value = GUILayout.Toggle(cfgWholeMap.Value, " " + Loc.T("Search other buildings too"));
                 cfgWorld.Value = GUILayout.Toggle(cfgWorld.Value, " " + Loc.T("Highlight matches in the world"));
+                if (ScavengerBridge.Available)
+                {
+                    cfgTrashRoute.Value = GUILayout.Toggle(cfgTrashRoute.Value, " " + Loc.T("Trash route (Scavenger)"));
+                    GUILayout.Label($"<color=#b5c936>■</color> {Loc.T("Trash searched today")}: <b>{ScavengerBridge.SearchedTodayCount}</b>" +
+                                    (TrashRoute ? $" · <b>{TrashLeftOnMap()}</b> {Loc.T("left on this map")}" : ""), labelStyle);
+                }
                 GUILayout.Space(6);
                 GUILayout.Label(Summary(), labelStyle);
                 var ids = MatchedIds;
@@ -335,6 +341,9 @@ namespace ObenseuerLootMap
                 sb.Append(p.s == 1 ? $"<color={red}><b>{Loc.T("Stealing — owned by")} {p.o ?? Loc.T("a resident")}</b></color>" : $"<color={green}><b>{Loc.T("Free to take")}</b></color>");
                 if (p.l == 1) sb.Append($"  ·  <color=#6b3fa0>{Loc.T("locked")}</color>");
                 sb.Append('\n');
+                if (IsTrash(p))
+                    sb.Append(SearchedToday(p, m.scene) ? $"<color={dim}>{Loc.T("Searched today")} ✓</color>\n"
+                                               : $"<color=#5a6b12><b>{Loc.T("Not searched today: gives Scavenging XP")}</b></color>\n");
                 if (m.scene != CurrentScene) sb.Append($"<color={dim}>{Loc.T("in")} {Db.SceneName(m.scene)}</color>\n");
                 if (HasNow(p)) sb.Append($"<color=#1f8a3a><b>✔ {Loc.T("Has it now")}</b></color>\n");
                 if (p.live)

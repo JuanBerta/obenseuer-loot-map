@@ -1,5 +1,9 @@
 # Changelog - Loot Map (in-game mod)
 
+## 0.4.0
+- Scavenger support (needs Scavenger 1.0.0): trash you have searched today is shown as a faded ring, and tooltips say whether a trash container still gives Scavenging XP today.
+- New "Trash route" filter: shows only trash on the current map (all buildings), highlighting in olive green the trash you haven't searched today, with a "searched today / left on this map" counter.
+
 ## 0.3.3
 - Renamed to Loot Map.
 - Installs to BepInEx\plugins\LootMap as LootMap.dll. Delete the old BepInEx\plugins\ObenseuerLootMap folder when updating; your settings are kept.

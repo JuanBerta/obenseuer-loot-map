@@ -68,6 +68,7 @@ namespace ObenseuerLootMap
                         s = Stealing(st.StorageOwner, st.PermissionToTake) ? 1 : 0,
                         l = st._Lock != null && st._Lock.Locked ? 1 : 0,
                         live = true, empty = have.Count == 0, have = have,
+                        g = string.IsNullOrEmpty(st.GUID) ? null : st.GUID,
                     };
                     if (p.s == 1 && st.StorageOwner != null && !string.IsNullOrEmpty(st.StorageOwner.name) && st.StorageOwner.name != "Default Male" && st.StorageOwner.name != "Name") p.o = st.StorageOwner.name;
                     p.restock = RestockText(st.spawnSettings, p.empty);

@@ -95,6 +95,7 @@ def process(data_dir, idx, scenes):
                x=round(P[0],2), y=round(P[1],2), z=round(P[2],2), yaw=round(yaw),
                category=d.get('itemSpawnCategory') or None, owner=own(d), steal=steal(d))
         if sn[2]=='Storage':
+            if d.get('GUID'): e['guid']=d['GUID']
             lk=d.get('_Lock') or {}
             e.update(type=d.get('StorageSettings') or None, title=d.get('title') or None,
                      fromCategory=bool(d.get('spawnItemsFromCategory')),

@@ -48,6 +48,7 @@ directly from disk.
 - Matching containers near you are **highlighted in the world** while a search is active
 - **Doors** labeled with their in-game names, with free/stealing counts when you hover them
 - **Recipe Marker** support: one button highlights every container that can drop ingredients for your starred recipes
+- With the **Scavenger** mod: trash you've searched today is faded, and a **Trash route** filter shows the trash left to search on the map
 - Panel in the language the game is showing (English, Finnish; Spanish once the game ships it); **F6** toggles it; it remembers its position
 
 ### Install

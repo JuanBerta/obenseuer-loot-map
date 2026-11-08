@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap
 {
-    [BepInPlugin(Guid, "Loot Map", "0.3.3")]
+    [BepInPlugin(Guid, "Loot Map", "0.4.0")]
     public partial class LootMapPlugin : BaseUnityPlugin
     {
         public const string Guid = "com.juanberta.obenseuer.lootmap";
@@ -20,6 +20,7 @@ namespace ObenseuerLootMap
         internal static bool Typing, LeaveSearch;
 
         internal LootDb Db;
+        ConfigEntry<bool> cfgTrashRoute;
         ConfigEntry<bool> cfgEnabled, cfgContainers, cfgPickups, cfgStations, cfgShops, cfgDoors, cfgFreeOnly, cfgFloorOnly, cfgWholeMap, cfgWorld, cfgPanel;
         ConfigEntry<float> cfgMarkerSize, cfgPanelX, cfgPanelY;
         ConfigEntry<KeyCode> cfgToggleKey;
@@ -48,6 +49,7 @@ namespace ObenseuerLootMap
             cfgWholeMap = Config.Bind("Filters", "SearchWholeMap", true, "When searching, also show matches from other buildings on this map.");
             cfgWorld = Config.Bind("Filters", "HighlightInWorld", true, "While a search is active, mark matching containers near you in the world.");
             cfgMarkerSize = Config.Bind("Display", "MarkerSize", 9f, "Marker size on the map.");
+            cfgTrashRoute = Config.Bind("Filters", "TrashRoute", false, "With the Scavenger mod: show only trash containers on this map, highlighting the ones you haven't searched today.");
             cfgPanelX = Config.Bind("Display", "PanelX", 20f, "Panel position (x).");
             cfgPanelY = Config.Bind("Display", "PanelY", 110f, "Panel position (y).");
             try
@@ -76,7 +78,8 @@ namespace ObenseuerLootMap
             public Vector3 world; public bool top;
         }
         internal static readonly Color32 ColHasNow = new Color32(61, 220, 90, 255), ColSells = new Color32(61, 139, 255, 255),
-                                          ColBuys = new Color32(255, 122, 47, 255), ColBoth = new Color32(180, 92, 255, 255);
+                                          ColBuys = new Color32(255, 122, 47, 255), ColBoth = new Color32(180, 92, 255, 255),
+                                          ColTrash = new Color32(181, 201, 54, 255);
 
         internal bool MapOpen => map != null && map.isActiveAndEnabled && map.gameObject.activeInHierarchy && Db != null;
         internal string CurrentScene => info_map.instance != null ? info_map.instance.gameObject.scene.name : null;
@@ -114,7 +117,8 @@ namespace ObenseuerLootMap
                 if (band != floorBand) { floorBand = band; builtKey = null; }
             }
             string key = string.Join("|", CurrentScene, CurrentMap, appliedSearch, searchIdsLabel, cfgEnabled.Value, cfgContainers.Value, cfgPickups.Value,
-                cfgStations.Value, cfgShops.Value, cfgFreeOnly.Value, cfgFloorOnly.Value, cfgWholeMap.Value, cfgMarkerSize.Value, floorBand, LiveKey(), Loc.Lang);
+                cfgStations.Value, cfgShops.Value, cfgFreeOnly.Value, cfgFloorOnly.Value, cfgWholeMap.Value, cfgMarkerSize.Value, floorBand, LiveKey(), Loc.Lang,
+                TrashRoute, ScavengerBridge.SearchedTodayCount);
             if (layer == null || key != builtKey) { Rebuild(); builtKey = key; }
             KeepMarkerSize();
         }
@@ -125,6 +129,29 @@ namespace ObenseuerLootMap
             return cam != null ? cam.transform.position.y - 1.6f : 0f;
         }
         static int PlayerFloorBand() => Mathf.FloorToInt((PlayerY() + 1.2f) / 3f);
+
+        internal bool TrashRoute => cfgTrashRoute.Value && ScavengerBridge.Available;
+        internal static bool IsTrash(PointData p) => p != null && p.k == "c" && p.t != null && ScavengerBridge.IsTrash(p.t);
+        internal static bool SearchedToday(PointData p, string scene) => IsTrash(p) && ScavengerBridge.SearchedAt(scene, p.x, p.y, p.z);
+
+        // Trash on this map not searched today (for the "Trash route" line).
+        int trashLeftCache; float trashLeftAt = -10f;
+        internal int TrashLeftOnMap()
+        {
+            if (Time.unscaledTime - trashLeftAt < 1f) return trashLeftCache;
+            trashLeftAt = Time.unscaledTime;
+            return trashLeftCache = CountTrashLeft();
+        }
+        int CountTrashLeft()
+        {
+            string mapName = CurrentMap; int left = 0;
+            foreach (var kv in Db.scenes)
+            {
+                if (kv.Value.map != mapName) continue;
+                foreach (var p in PointsOf(kv.Key)) if (IsTrash(p) && !SearchedToday(p, kv.Key)) left++;
+            }
+            return left;
+        }
 
         // ---------------- matching ----------------
         internal string Q => appliedSearch.Trim().ToLowerInvariant();
@@ -276,7 +303,8 @@ namespace ObenseuerLootMap
             string cur = CurrentScene, mapName = CurrentMap;
             var scenes = new List<string>();
             if (cur != null) scenes.Add(cur);
-            if (Searching && cfgWholeMap.Value)
+            bool route = TrashRoute;
+            if ((Searching && cfgWholeMap.Value) || route)
                 scenes.AddRange(Db.scenes.Where(kv => kv.Key != cur && kv.Value.map == mapName).Select(kv => kv.Key));
 
             float w = size.rect.width, h = size.rect.height, py = PlayerY(); int others = 0;
@@ -286,6 +314,12 @@ namespace ObenseuerLootMap
                 Db.scenes.TryGetValue(sn, out var sd);
                 foreach (var p in PointsOf(sn))
                 {
+                    if (route)
+                    {
+                        if (!IsTrash(p) || (here && floorFilter && Mathf.Abs(p.y - py) > 2.2f)) continue;
+                        AddMarker(info, w, h, new Vector3(p.x, p.y, p.z), sn, !SearchedToday(p, sn), p, null, null);
+                        continue;
+                    }
                     if (p.k == "p" ? !cfgPickups.Value : !cfgContainers.Value) continue;
                     if (cfgFreeOnly.Value && p.s == 1) continue;
                     if (floorFilter && Mathf.Abs(p.y - py) > 2.2f) continue;
@@ -294,6 +328,7 @@ namespace ObenseuerLootMap
                     if (!here) others++;
                     AddMarker(info, w, h, new Vector3(p.x, p.y, p.z), sn, m, p, null, null);
                 }
+                if (route) continue;
                 if (cfgStations.Value)
                     foreach (var s in StationsOf(sn))
                     {
@@ -340,7 +375,8 @@ namespace ObenseuerLootMap
             }
             var rt = mk.rt; rt.gameObject.SetActive(true);
             rt.localPosition = MapLocal(info, w, h, world);
-            bool pickup = p != null && p.k == "p", empty = p != null && p.live && p.empty;
+            bool pickup = p != null && p.k == "p", searchedTrash = SearchedToday(p, scene);
+            bool empty = p != null && ((p.live && p.empty) || searchedTrash);
             var spr = pickup || v != null ? circle : square;
             mk.edge.sprite = spr; mk.fill.sprite = empty ? ring : spr;
 
@@ -353,12 +389,14 @@ namespace ObenseuerLootMap
             int vmode = Searching && match && v != null ? VendorMode(v) : 0;
             if (hasNow) { fc = ColHasNow; mk.fill.sprite = spr; }
             if (vmode == 1) fc = ColSells; else if (vmode == 2) fc = ColBuys; else if (vmode == 3) fc = ColBoth;
-            float alpha = Searching && !match ? 0.28f : (empty ? 0.75f : 1f);
+            bool routeTodo = TrashRoute && IsTrash(p) && !searchedTrash;
+            if (routeTodo) { fc = ColTrash; mk.fill.sprite = spr; }
+            float alpha = TrashRoute ? (routeTodo ? 1f : 0.45f) : (Searching && !match ? 0.28f : (empty ? 0.75f : 1f));
             fc.a = Mathf.Min(fc.a, alpha); ec.a = Mathf.Min(ec.a, alpha);
             mk.fill.color = fc; mk.edge.color = ec;
-            float s = cfgMarkerSize.Value * (Searching && match ? 1.5f : 1f) * (st != null || v != null ? 1.15f : 1f) * (hasNow ? 1.25f : 1f);
+            float s = cfgMarkerSize.Value * (Searching && match ? 1.5f : 1f) * (routeTodo ? 1.35f : 1f) * (st != null || v != null ? 1.15f : 1f) * (hasNow ? 1.25f : 1f);
             rt.sizeDelta = new Vector2(s, s);
-            mk.p = p; mk.st = st; mk.v = v; mk.scene = scene; mk.match = match; mk.world = world; mk.top = hasNow || vmode != 0;
+            mk.p = p; mk.st = st; mk.v = v; mk.scene = scene; mk.match = match; mk.world = world; mk.top = hasNow || vmode != 0 || routeTodo;
             markers.Add(mk);
         }
 
