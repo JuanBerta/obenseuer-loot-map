@@ -14,12 +14,20 @@ namespace ObenseuerLootMap
         const string SearchControl = "lootmap_search";
         static readonly Color Paper = new Color(0.91f, 0.88f, 0.81f), Ink = new Color(0.14f, 0.11f, 0.08f), Ochre = new Color(0.79f, 0.6f, 0.23f);
 
+        // 8x8 texture with a coloured edge, used as a 9-slice background (GUIStyle.border).
+        static Texture2D Framed(Color fill, Color edge, int width)
+        {
+            var t = new Texture2D(8, 8) { hideFlags = HideFlags.HideAndDontSave };
+            for (int y = 0; y < 8; y++) for (int x = 0; x < 8; x++)
+                t.SetPixel(x, y, x < width || y < width || x >= 8 - width || y >= 8 - width ? edge : fill);
+            t.Apply(); return t;
+        }
         static Texture2D Solid(Color c) { var t = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave }; t.SetPixel(0, 0, c); t.Apply(); return t; }
 
         void InitStyles()
         {
             // Scene changes unload unreferenced assets; rebuild the styles if their textures or font were destroyed.
-            if (panelStyle != null && panelStyle.normal.background != null && tipStyle.normal.background != null && btnStyle.normal.background != null && (gameFont != null || !hadFont)) return;
+            if (panelStyle != null && panelStyle.normal.background != null && tipStyle.normal.background != null && btnStyle.normal.background != null && fieldStyle.focused.background != null && (gameFont != null || !hadFont)) return;
             gameFont = Resources.FindObjectsOfTypeAll<Font>().FirstOrDefault(f =>
                 new[] { "special", "elite", "typewriter", "courier", "american" }.Any(k => f.name.ToLowerInvariant().Contains(k)));
             hadFont = gameFont != null;
@@ -40,9 +48,13 @@ namespace ObenseuerLootMap
             btnStyle.normal.background = Solid(new Color(0.42f, 0.29f, 0.08f)); btnStyle.hover.background = Solid(new Color(0.6f, 0.42f, 0.12f));
             btnStyle.active.background = Solid(new Color(0.79f, 0.6f, 0.23f));
             btnStyle.normal.textColor = btnStyle.hover.textColor = new Color(0.98f, 0.93f, 0.8f); btnStyle.active.textColor = Ink;
-            fieldStyle = new GUIStyle(GUI.skin.textField) { fontSize = 14 };
-            fieldStyle.normal.background = fieldStyle.focused.background = fieldStyle.hover.background = Solid(Paper);
-            fieldStyle.normal.textColor = fieldStyle.focused.textColor = fieldStyle.hover.textColor = Ink;
+            fieldStyle = new GUIStyle(GUI.skin.textField) { fontSize = 14, border = new RectOffset(3, 3, 3, 3), padding = new RectOffset(7, 7, 5, 5) };
+            var idle = new Color(0.78f, 0.74f, 0.66f);
+            fieldStyle.normal.background = Framed(idle, new Color(0.35f, 0.3f, 0.24f), 1);
+            fieldStyle.hover.background = Framed(new Color(0.86f, 0.82f, 0.74f), new Color(0.55f, 0.45f, 0.3f), 1);
+            fieldStyle.focused.background = Framed(new Color(1f, 0.98f, 0.92f), new Color(0.95f, 0.66f, 0.12f), 3);
+            fieldStyle.normal.textColor = fieldStyle.hover.textColor = new Color(0.25f, 0.21f, 0.16f);
+            fieldStyle.focused.textColor = Ink;
             doorStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, richText = true, padding = new RectOffset(4, 4, 1, 1) };
             doorStyle.normal.background = Solid(new Color(0.1f, 0.09f, 0.08f, 0.88f));
             doorStyle.normal.textColor = new Color(0.98f, 0.93f, 0.8f);
@@ -171,6 +183,8 @@ namespace ObenseuerLootMap
                 GUILayout.Label(Loc.T("Search item, container or workstation"), smallStyle);
                 GUI.SetNextControlName(SearchControl);
                 search = GUILayout.TextField(search, 40, fieldStyle);
+                if (Typing) GUILayout.Label("<color=#f2a51f>✎ " + Loc.T("Typing — game keys are paused. Esc to leave.") + "</color>", smallStyle);
+                else if (search.Length == 0) GUILayout.Label(Loc.T("Click the box to type."), smallStyle);
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button(Loc.T("Zoom to me"), btnStyle)) ZoomToPlayer();
                 if ((search.Length > 0 || searchIds != null || searchIdsLabel != null) && GUILayout.Button(Loc.T("Clear search"), btnStyle)) { ClearSearch(); GUI.FocusControl(null); }

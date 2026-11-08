@@ -34,7 +34,7 @@ namespace ObenseuerLootMap
             ["No marked recipes (Recipe Marker)"] = "No hay recetas marcadas (Recipe Marker)", ["Where to buy"] = "Dónde comprar",
             ["Click to go there"] = "Clic para ir allí", ["leads to"] = "lleva a", ["not open in this game version"] = "no disponible en esta versión",
             ["free"] = "libres", ["stealing"] = "robo", ["loot"] = "botín", ["Pickup spot"] = "Objeto suelto", ["Container"] = "Contenedor",
-            ["Shop"] = "Tienda", ["LOOT MAP"] = "MAPA DE BOTÍN", ["Toggle panel"] = "Mostrar/ocultar panel",
+            ["Shop"] = "Tienda", ["LOOT MAP"] = "MAPA DE BOTÍN", ["Typing — game keys are paused. Esc to leave."] = "Escribiendo — las teclas del juego están en pausa. Esc para salir.", ["Click the box to type."] = "Haz clic en el cuadro para escribir.", ["Toggle panel"] = "Mostrar/ocultar panel",
         };
         static readonly Dictionary<string, string> Fi = new Dictionary<string, string>
         {
@@ -60,7 +60,7 @@ namespace ObenseuerLootMap
             ["No marked recipes (Recipe Marker)"] = "Ei merkittyjä reseptejä (Recipe Marker)", ["Where to buy"] = "Mistä ostaa",
             ["Click to go there"] = "Klikkaa mennäksesi sinne", ["leads to"] = "vie kohteeseen", ["not open in this game version"] = "ei avoinna tässä pelin versiossa",
             ["free"] = "vapaata", ["stealing"] = "varastettavaa", ["loot"] = "saalista", ["Pickup spot"] = "Löytöpaikka", ["Container"] = "Säilytys",
-            ["Shop"] = "Kauppa", ["LOOT MAP"] = "SAALISKARTTA", ["Toggle panel"] = "Näytä/piilota paneeli",
+            ["Shop"] = "Kauppa", ["LOOT MAP"] = "SAALISKARTTA", ["Typing — game keys are paused. Esc to leave."] = "Kirjoitetaan — pelin näppäimet ovat tauolla. Esc lopettaa.", ["Click the box to type."] = "Klikkaa kenttää kirjoittaaksesi.", ["Toggle panel"] = "Näytä/piilota paneeli",
         };
         internal static string T(string s) =>
             Lang == "es" && Es.TryGetValue(s, out var v) ? v : Lang == "fi" && Fi.TryGetValue(s, out var f) ? f : s;
