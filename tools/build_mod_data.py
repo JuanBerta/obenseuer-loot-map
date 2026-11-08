@@ -5,7 +5,7 @@ data_dir, ext_dir, out = sys.argv[1:4]
 site = sys.argv[4] if len(sys.argv) > 4 else None
 SA=os.path.join(data_dir,'StreamingAssets')
 scenes=json.load(open(os.path.join(ext_dir,'scenes_index.json')))
-items={it['ID']:[it['Title'],it.get('BaseValue',0)] for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig'))}
+items={it['ID']:[it['Title'],it.get('BaseValue',0),it.get('Categories') or [],sorted({str(m.get('$type','')).split('.')[-1] for m in (it.get('Meta') or []) if isinstance(m,dict)})] for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig'))}
 loot={c['Name']:[c.get('ItemCommon') or [],c.get('ItemRare') or []] for c in json.load(open(os.path.join(SA,'StorageSpawnCategory.json'),encoding='utf-8-sig'))['$content']}
 raw=open(os.path.join(SA,'Recipes.json'),'rb').read()
 txt=raw.decode('utf-16') if raw[:2] in (b'\xff\xfe',b'\xfe\xff') else raw.decode('utf-8-sig')
@@ -59,7 +59,12 @@ for i,name in enumerate(scenes):
         if f.get('owner'): e['o']=f['owner']
         if f.get('stock') in loot: e['t']=f['stock']; used_stock.add(f['stock'])
         if f.get('items'): e['i']=f['items']; need.update(f['items'])
-        if 't' in e or 'i' in e: V.append(e)
+        if f.get('trader'):
+            e['b']=1
+            if f.get('buyAllow'): e['ba']=f['buyAllow']
+            if f.get('buyForbid'): e['bf']=f['buyForbid']
+            if f.get('buysStolen'): e['bs']=1
+        if 't' in e or 'i' in e or 'b' in e: V.append(e)
     mk=None
     if fe.get('map') and fe['map'].get('sprite'): mk=fe['map']['sprite'][1]
     if P or F or V or D:
@@ -68,8 +73,8 @@ for i,name in enumerate(scenes):
 used=set(t for s in S.values() for t in [p.get('t') for p in s['points']] if t)|used_stock
 for t in used_stock: need.update(loot[t][0]); need.update(loot[t][1])
 for r in recipe_inputs.values(): need.update(r[2])
-data=dict(version=2,recipeInputs=recipe_inputs,scenes=S,loot={k:v for k,v in loot.items() if k in used},
-          items={str(k):v for k,v in items.items() if k in need},recipes=recipes)
+data=dict(version=3,recipeInputs=recipe_inputs,scenes=S,loot={k:v for k,v in loot.items() if k in used},
+          items={str(k):v for k,v in items.items()},recipes=recipes)
 os.makedirs(os.path.dirname(os.path.abspath(out)),exist_ok=True)
 json.dump(data,open(out,'w',encoding='utf-8'),separators=(',',':'),ensure_ascii=False)
 print(sum(len(s['vendors']) for s in S.values()),'vendors',sum(len(s['doors']) for s in S.values()),'doors;',len(S),'scenes',sum(len(s['points']) for s in S.values()),'points',sum(len(s['stations']) for s in S.values()),'stations',os.path.getsize(out)//1024,'KB')

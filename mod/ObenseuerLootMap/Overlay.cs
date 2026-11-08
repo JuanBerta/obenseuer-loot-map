@@ -204,6 +204,10 @@ namespace ObenseuerLootMap
                 cfgWorld.Value = GUILayout.Toggle(cfgWorld.Value, " " + Loc.T("Highlight matches in the world"));
                 GUILayout.Space(6);
                 GUILayout.Label(Summary(), labelStyle);
+                var ids = MatchedIds;
+                if (ids != null && ids.Count > 0)
+                    GUILayout.Label($"<color=#3ddc5a>■</color> {Loc.T("has it now")}   <color=#d98e04>■</color> {Loc.T("can drop it")}\n" +
+                                    $"<color=#3d8bff>●</color> {Loc.T("sells it")}   <color=#ff7a2f>●</color> {Loc.T("buys it")}   <color=#b45cff>●</color> {Loc.T("sells & buys")}", smallStyle);
                 DrawShops();
                 if (guide != null)
                 {
@@ -232,7 +236,9 @@ namespace ObenseuerLootMap
         }
 
         // "Where to buy": shops anywhere in the game that sell what you searched for.
-        List<(string scene, VendorData v)> shopHits; string shopKey;
+        List<(string scene, VendorData v, int mode)> shopHits; string shopKey;
+        static string ModeText(int mode) => mode == 3 ? "<color=#c99bff>" + Loc.T("sells & buys") + "</color>" :
+                                            mode == 1 ? "<color=#7fb2ff>" + Loc.T("sells it") + "</color>" : "<color=#ffa070>" + Loc.T("buys it") + "</color>";
         void DrawShops()
         {
             if (!Searching) return;
@@ -240,14 +246,15 @@ namespace ObenseuerLootMap
             if (key != shopKey)
             {
                 shopKey = key;
-                shopHits = Db.scenes.SelectMany(kv => kv.Value.vendors.Where(VendorMatches).Select(v => (kv.Key, v)))
-                    .OrderByDescending(x => Db.scenes[x.Key].map == CurrentMap).Take(6).ToList();
+                shopHits = Db.scenes.SelectMany(kv => kv.Value.vendors.Select(v => (kv.Key, v, VendorMode(v)))).Where(x => x.Item3 != 0)
+                    .OrderByDescending(x => (x.Item3 & 1) != 0).ThenByDescending(x => x.Item3 == 3).ThenByDescending(x => Db.scenes[x.Key].map == CurrentMap)
+                    .Take(8).ToList();
             }
             if (shopHits == null || shopHits.Count == 0) return;
             GUILayout.Space(4);
-            GUILayout.Label(Loc.T("Where to buy"), headStyle);
-            foreach (var (scene, v) in shopHits)
-                if (GUILayout.Button($"{v.n} <color=#d9c7a2>· {Db.SceneName(scene)}</color>", btnStyle))
+            GUILayout.Label(Loc.T("Shops for this item"), headStyle);
+            foreach (var (scene, v, mode) in shopHits)
+                if (GUILayout.Button($"{v.n} <color=#d9c7a2>· {Db.SceneName(scene)}</color> · {ModeText(mode)}", btnStyle))
                     SetGuide(scene, new Vector3(v.x, v.y, v.z), v.n);
         }
 
@@ -309,6 +316,14 @@ namespace ObenseuerLootMap
             {
                 var v = m.v;
                 sb.Append($"<b><size=15>{v.n}</size></b>  <color={dim}>{Loc.T("shop")}{(v.o != null ? " · " + v.o : "")}</color>\n");
+                var ids = MatchedIds;
+                if (ids != null && ids.Count > 0)
+                {
+                    var sold = ids.Where(id => Db.Sells(v, id)).Take(6).ToList(); var bought = ids.Where(id => Db.Buys(v, id)).Take(6).ToList();
+                    if (sold.Count > 0) sb.Append($"<color=#1f5fd0><b>{Loc.T("Sells")}</b>: {string.Join(", ", sold.Select(Db.ItemName))}</color>\n");
+                    if (bought.Count > 0) sb.Append($"<color=#c2501a><b>{Loc.T("Buys")}</b>: {string.Join(", ", bought.Select(Db.ItemName))}</color>\n");
+                }
+                if (v.b == 1) sb.Append($"<color={dim}>{Loc.T("Buys from you")}{(v.ba != null && v.ba.Count > 0 ? ": " + string.Join(", ", v.ba.Take(8).Select(r => r.Replace("_item_", "").Replace("_Meta_", ""))) : " " + Loc.T("almost anything"))}{(v.bs == 1 ? " · " + Loc.T("buys stolen goods") : "")}</color>\n");
                 if (v.i != null && v.i.Count > 0) sb.Append($"\n<b>{Loc.T("Sells")}</b>: {ItemList(v.i, 16)}\n");
                 if (v.t != null && Db.loot.TryGetValue(v.t, out var tb))
                     sb.Append($"\n<b>{Loc.T("Stock from")} {v.t}</b>: {ItemList(tb.SelectMany(x => x), 18)}\n");
@@ -321,6 +336,7 @@ namespace ObenseuerLootMap
                 if (p.l == 1) sb.Append($"  ·  <color=#6b3fa0>{Loc.T("locked")}</color>");
                 sb.Append('\n');
                 if (m.scene != CurrentScene) sb.Append($"<color={dim}>{Loc.T("in")} {Db.SceneName(m.scene)}</color>\n");
+                if (HasNow(p)) sb.Append($"<color=#1f8a3a><b>✔ {Loc.T("Has it now")}</b></color>\n");
                 if (p.live)
                 {
                     if (p.empty) sb.Append($"<color={dim}><b>{Loc.T("Empty right now")}</b></color>\n");

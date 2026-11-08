@@ -256,8 +256,13 @@ def features(sf):
         e=dict(kind='vendor',x=round(P[0],2),y=round(P[1],2),z=round(P[2],2),active=act)
         try:
             if cls=='Trade':
-                _,d,_=ser.read_mb(sf,pid,'Assembly-CSharp','Trade',upto='sharedId')
+                try: _,d,_=ser.read_mb(sf,pid,'Assembly-CSharp','Trade',upto='buysStolen')
+                except Exception: _,d,_=ser.read_mb(sf,pid,'Assembly-CSharp','Trade',upto='sharedId')
                 e['title']=(d.get('title') or '').strip() or None
+                e['trader']=True
+                if d.get('allowedCategories'): e['buyAllow']=d['allowedCategories']
+                if d.get('forbiddenCategories'): e['buyForbid']=d['forbiddenCategories']
+                if d.get('buysStolen'): e['buysStolen']=True
                 ow=(d.get('owner') or {}).get('name') or ''
                 if ow.strip().lower() not in PLACEHOLDER_OWNERS: e['owner']=ow.strip()
                 if go[1] in stock: e['stock']=stock[go[1]]
@@ -273,7 +278,7 @@ def features(sf):
                 e['items']=items
         except Exception as ex:
             continue
-        if not e.get('stock') and not e.get('items'): continue
+        if not e.get('stock') and not e.get('items') and not e.get('trader'): continue
         out.append({k:v for k,v in e.items() if v is not None})
     return out,mapinfo
 

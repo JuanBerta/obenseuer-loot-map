@@ -138,7 +138,7 @@ namespace ObenseuerLootMap
                 var r = new Rect(sp.x - s / 2, Screen.height - sp.y - s / 2, s, s);
                 GUI.color = p.s == 1 ? new Color(.8f, .12f, .1f, .9f) : new Color(.1f, .1f, .08f, .85f);
                 GUI.DrawTexture(new Rect(r.x - 2, r.y - 2, r.width + 4, r.height + 4), diamondEdgeTex);
-                GUI.color = p.k == "p" ? new Color(.12f, .6f, .7f) : new Color(.95f, .62f, .1f);
+                GUI.color = HasNow(p) ? (Color)ColHasNow : p.k == "p" ? new Color(.12f, .6f, .7f) : new Color(.95f, .62f, .1f);
                 GUI.DrawTexture(r, diamondTex);
                 if (d < 7f && p.t != null) { GUI.color = oldC; GUI.Label(new Rect(r.xMax + 4, r.y - 2, 220, 22), p.t, smallStyle); }
                 if (++drawn > 60) break;

@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap
 {
-    [BepInPlugin(Guid, "Obenseuer Loot Map", "0.2.3")]
+    [BepInPlugin(Guid, "Obenseuer Loot Map", "0.3.0")]
     public partial class LootMapPlugin : BaseUnityPlugin
     {
         public const string Guid = "com.juanberta.obenseuer.lootmap";
@@ -73,8 +73,10 @@ namespace ObenseuerLootMap
         {
             public RectTransform rt; public Image fill, edge;
             public PointData p; public StationData st; public VendorData v; public string scene; public bool match;
-            public Vector3 world;
+            public Vector3 world; public bool top;
         }
+        internal static readonly Color32 ColHasNow = new Color32(61, 220, 90, 255), ColSells = new Color32(61, 139, 255, 255),
+                                          ColBuys = new Color32(255, 122, 47, 255), ColBoth = new Color32(180, 92, 255, 255);
 
         internal bool MapOpen => map != null && map.isActiveAndEnabled && map.gameObject.activeInHierarchy && Db != null;
         internal string CurrentScene => info_map.instance != null ? info_map.instance.gameObject.scene.name : null;
@@ -163,13 +165,41 @@ namespace ObenseuerLootMap
             var q = Q; if (q.Length == 0) return true;
             return Db.StationTextFor(s.n, s.r).Split('\n').Any(TextMatch);
         }
+        // Items the current search refers to (by name, or the marked-recipe ingredients).
+        HashSet<int> matchedIdsCache; string matchedIdsQ;
+        internal HashSet<int> MatchedIds
+        {
+            get
+            {
+                if (searchIds != null) return searchIds;
+                if (Q.Length == 0) return null;
+                if (matchedIdsQ != Q)
+                {
+                    matchedIdsQ = Q;
+                    matchedIdsCache = new HashSet<int>(Db.items.Keys.Select(int.Parse).Where(NameMatch));
+                }
+                return matchedIdsCache;
+            }
+        }
+        // 0 = no match, 1 = sells it, 2 = buys it, 3 = both
+        internal int VendorMode(VendorData v)
+        {
+            var ids = MatchedIds; if (ids == null || ids.Count == 0) return 0;
+            bool sells = ids.Any(id => Db.Sells(v, id)), buys = ids.Any(id => Db.Buys(v, id));
+            return (sells ? 1 : 0) | (buys ? 2 : 0);
+        }
+        internal bool HasNow(PointData p)
+        {
+            var ids = MatchedIds;
+            return ids != null && ids.Count > 0 && p != null && p.live && p.have != null && p.have.Any(h => ids.Contains(h.Key));
+        }
+
         internal bool VendorMatches(VendorData v)
         {
-            if (searchIds != null) return (v.t != null && Db.TableItems.TryGetValue(v.t, out var ti) && ti.Overlaps(searchIds)) || IdMatch(v.i);
+            if (VendorMode(v) != 0) return true;
+            if (searchIds != null) return false;
             var q = Q; if (q.Length == 0) return true;
-            if (TextMatch(v.n) || TextMatch(v.o)) return true;
-            if (TableMatch(v.t)) return true;
-            return v.i != null && v.i.Any(NameMatch);
+            return TextMatch(v.n) || TextMatch(v.o) || (v.t != null && TextMatch(v.t));
         }
 
         // Points/stations for a scene: live components for the scene we're in, bundled data otherwise.
@@ -282,6 +312,7 @@ namespace ObenseuerLootMap
                     }
             }
             foreach (var mk in markers.Where(k => k.match && Searching)) mk.rt.SetAsLastSibling();
+            foreach (var mk in markers.Where(k => k.top)) mk.rt.SetAsLastSibling();
             lastZoom = -1;
         }
 
@@ -317,12 +348,16 @@ namespace ObenseuerLootMap
             Color ec = steal ? new Color32(200, 30, 24, 255) : v != null ? new Color32(60, 40, 10, 255) : new Color32(250, 246, 235, 255);
             if (p != null && p.l == 1 && !steal) ec = new Color32(120, 70, 180, 255);
             if (empty) { ec = new Color32(250, 246, 235, 120); }
+            bool hasNow = Searching && match && HasNow(p);
+            int vmode = Searching && match && v != null ? VendorMode(v) : 0;
+            if (hasNow) { fc = ColHasNow; mk.fill.sprite = spr; }
+            if (vmode == 1) fc = ColSells; else if (vmode == 2) fc = ColBuys; else if (vmode == 3) fc = ColBoth;
             float alpha = Searching && !match ? 0.28f : (empty ? 0.75f : 1f);
             fc.a = Mathf.Min(fc.a, alpha); ec.a = Mathf.Min(ec.a, alpha);
             mk.fill.color = fc; mk.edge.color = ec;
-            float s = cfgMarkerSize.Value * (Searching && match ? 1.5f : 1f) * (st != null || v != null ? 1.15f : 1f);
+            float s = cfgMarkerSize.Value * (Searching && match ? 1.5f : 1f) * (st != null || v != null ? 1.15f : 1f) * (hasNow ? 1.25f : 1f);
             rt.sizeDelta = new Vector2(s, s);
-            mk.p = p; mk.st = st; mk.v = v; mk.scene = scene; mk.match = match; mk.world = world;
+            mk.p = p; mk.st = st; mk.v = v; mk.scene = scene; mk.match = match; mk.world = world; mk.top = hasNow || vmode != 0;
             markers.Add(mk);
         }
 

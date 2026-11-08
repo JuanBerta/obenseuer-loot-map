@@ -49,6 +49,31 @@ namespace ObenseuerLootMap
         public string ItemValue(int id) =>
             items.TryGetValue(id.ToString(), out var v) && v.Count > 1 ? v[1].ToString() : "";
 
+        IEnumerable<string> ItemField(int id, int idx)
+        {
+            if (!items.TryGetValue(id.ToString(), out var v) || v.Count <= idx) return Enumerable.Empty<string>();
+            return v[idx] is JArray a ? a.Select(x => x.ToString()) : Enumerable.Empty<string>();
+        }
+
+        public bool Sells(VendorData v, int id) =>
+            (v.i != null && v.i.Contains(id)) || (v.t != null && TableItems.TryGetValue(v.t, out var s) && s.Contains(id));
+
+        // Same rules as Trade.CheckIfAllowed: categories, "_item_<Title>" and "_Meta_<MetaType>" entries.
+        public bool Buys(VendorData v, int id)
+        {
+            if (v.b != 1 || !items.TryGetValue(id.ToString(), out var it)) return false;
+            string title = it[0].ToString();
+            var cats = ItemField(id, 2).ToList(); var metas = ItemField(id, 3).ToList();
+            bool Match(string rule)
+            {
+                if (rule.StartsWith("_item_")) return string.Equals(rule.Substring(6), title, System.StringComparison.OrdinalIgnoreCase);
+                if (rule.StartsWith("_Meta_")) { var m = rule.Substring(6); return metas.Any(x => x.EndsWith(m, System.StringComparison.OrdinalIgnoreCase)); }
+                return cats.Any(c => string.Equals(c, rule, System.StringComparison.OrdinalIgnoreCase));
+            }
+            bool allowed = v.ba == null || v.ba.Count == 0 || v.ba.Any(Match);
+            return allowed && !(v.bf != null && v.bf.Any(Match));
+        }
+
         public string SceneName(string scene) =>
             scene != null && scenes.TryGetValue(scene, out var s) && !string.IsNullOrEmpty(s.name) ? s.name : scene?.Replace("Interior ", "");
     }
@@ -104,5 +129,8 @@ namespace ObenseuerLootMap
         public float x, y, z;
         public string t;      // stock table
         public List<int> i;   // fixed items for sale
+        public int b;         // 1 = trader that buys from the player
+        public List<string> ba, bf;   // buy rules: allowed / forbidden (category, _item_<Title>, _Meta_<MetaType>)
+        public int bs;        // 1 = buys stolen goods
     }
 }
