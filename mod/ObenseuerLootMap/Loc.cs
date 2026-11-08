@@ -36,16 +36,52 @@ namespace ObenseuerLootMap
             ["free"] = "libres", ["stealing"] = "robo", ["loot"] = "botín", ["Pickup spot"] = "Objeto suelto", ["Container"] = "Contenedor",
             ["Shop"] = "Tienda", ["LOOT MAP"] = "MAPA DE BOTÍN", ["Toggle panel"] = "Mostrar/ocultar panel",
         };
-        internal static string T(string s) => Lang == "es" && Es.TryGetValue(s, out var v) ? v : s;
+        static readonly Dictionary<string, string> Fi = new Dictionary<string, string>
+        {
+            ["Show loot markers"] = "Näytä merkit", ["Search item, container or workstation"] = "Hae esinettä, säilytystä tai työpistettä",
+            ["Zoom to me"] = "Keskitä minuun", ["Clear search"] = "Tyhjennä haku", ["searching…"] = "haetaan…",
+            ["Containers"] = "Säilytykset", ["Pickup spots"] = "Löytöpaikat", ["Workstations"] = "Työpisteet",
+            ["Shops"] = "Kaupat", ["Doors"] = "Ovet", ["Only free to take"] = "Vain vapaasti otettavat", ["Indoors: only my floor"] = "Sisällä: vain oma kerros",
+            ["Search other buildings too"] = "Hae myös muista rakennuksista", ["Highlight matches in the world"] = "Korosta osumat maailmassa",
+            ["markers in this place."] = "merkkiä tässä paikassa.", ["matches here"] = "osumaa täällä", ["in"] = "",
+            ["other buildings on this map"] = "muussa rakennuksessa tällä kartalla",
+            ["container"] = "säilytys", ["pickup"] = "löytö", ["workstation"] = "työpiste", ["shop"] = "kauppa",
+            ["red edge = stealing"] = "punainen reuna = varastamista", ["purple edge = locked"] = "violetti reuna = lukittu", ["hollow = empty"] = "ontto = tyhjä",
+            ["Hover a marker for its loot. Click it to be guided there."] = "Vie hiiri merkin päälle nähdäksesi saaliin. Klikkaa, niin sinut opastetaan perille.",
+            ["Free to take"] = "Vapaasti otettavissa", ["Stealing — owned by"] = "Varastamista — omistaja", ["a resident"] = "asukas",
+            ["locked"] = "lukittu", ["Common"] = "Yleinen", ["Rare"] = "Harvinainen", ["Always contains"] = "Sisältää aina", ["more"] = "lisää",
+            ["Free to use"] = "Vapaasti käytettävissä", ["Owned"] = "Omistettu", ["by"] = "—", ["taking its items is stealing"] = "sen tavaroiden ottaminen on varastamista",
+            ["recipes"] = "reseptiä", ["Empty right now"] = "Tyhjä juuri nyt", ["Contains now"] = "Sisältää nyt", ["Restocks"] = "Täydentyy",
+            ["in about"] = "noin", ["day"] = "päivässä", ["days"] = "päivässä", ["today"] = "tänään", ["Sells"] = "Myy", ["Stock from"] = "Valikoima",
+            ["Guide"] = "Opastus", ["Stop guiding"] = "Lopeta opastus", ["Guiding to"] = "Opastetaan kohteeseen", ["You are there"] = "Olet perillä",
+            ["floor up"] = "kerros ylös", ["floors up"] = "kerrosta ylös", ["floor down"] = "kerros alas", ["floors down"] = "kerrosta alas",
+            ["Go through the door to"] = "Mene ovesta kohteeseen", ["Go outside"] = "Mene ulos", ["Head to"] = "Suuntaa kohteeseen",
+            ["Ingredients for my marked recipes"] = "Merkittyjen reseptien ainekset", ["Marked recipes"] = "Merkityt reseptit",
+            ["No marked recipes (Recipe Marker)"] = "Ei merkittyjä reseptejä (Recipe Marker)", ["Where to buy"] = "Mistä ostaa",
+            ["Click to go there"] = "Klikkaa mennäksesi sinne", ["leads to"] = "vie kohteeseen", ["not open in this game version"] = "ei avoinna tässä pelin versiossa",
+            ["free"] = "vapaata", ["stealing"] = "varastettavaa", ["loot"] = "saalista", ["Pickup spot"] = "Löytöpaikka", ["Container"] = "Säilytys",
+            ["Shop"] = "Kauppa", ["LOOT MAP"] = "SAALISKARTTA", ["Toggle panel"] = "Näytä/piilota paneeli",
+        };
+        internal static string T(string s) =>
+            Lang == "es" && Es.TryGetValue(s, out var v) ? v : Lang == "fi" && Fi.TryGetValue(s, out var f) ? f : s;
 
         // ---- game language detection & item names (via Unity Localization, through reflection) ----
         static object stringDb; static MethodInfo getLocalized; static bool locFailed;
         static readonly Dictionary<string, string> itemCache = new Dictionary<string, string>();
 
+        internal static string Detected = "";
+
+        // The language the game actually shows: its selected locale, but only if the game has real text for it
+        // (most locales are empty placeholders and the game falls back to English).
         internal static void Detect(string setting)
         {
-            if (setting != "Auto") { Lang = setting.ToLowerInvariant().StartsWith("es") ? "es" : "en"; return; }
-            string code = null;
+            if (setting != "Auto")
+            {
+                var sl = setting.ToLowerInvariant();
+                Lang = sl.StartsWith("es") || sl.StartsWith("span") ? "es" : sl.StartsWith("fi") ? "fi" : "en";
+                itemCache.Clear(); return;
+            }
+            string code = null; int menuEntries = -1;
             try
             {
                 var t = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("UnityEngine.Localization.Settings.LocalizationSettings")).FirstOrDefault(x => x != null);
@@ -55,10 +91,23 @@ namespace ObenseuerLootMap
                 stringDb = t?.GetProperty("StringDatabase", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
                 getLocalized = stringDb?.GetType().GetMethods().FirstOrDefault(m => m.Name == "GetLocalizedString" && m.GetParameters().Length == 2
                     && m.GetParameters()[0].ParameterType.Name == "TableReference" && m.GetParameters()[1].ParameterType.Name == "TableEntryReference");
+                var getTable = stringDb?.GetType().GetMethods().FirstOrDefault(m => m.Name == "GetTable" && m.GetParameters().Length >= 1 && m.GetParameters()[0].ParameterType.Name == "TableReference");
+                if (getTable != null)
+                {
+                    var ps = getTable.GetParameters();
+                    var args = new object[ps.Length];
+                    args[0] = Convert(ps[0].ParameterType, "Menu");
+                    for (int i = 1; i < ps.Length; i++) args[i] = ps[i].HasDefaultValue ? ps[i].DefaultValue : null;
+                    var table = getTable.Invoke(stringDb, args);
+                    var count = table?.GetType().GetProperty("Count")?.GetValue(table);
+                    if (count is int c) menuEntries = c;
+                }
             }
             catch { }
-            if (string.IsNullOrEmpty(code)) code = Application.systemLanguage == SystemLanguage.Spanish ? "es" : "en";
-            Lang = code.StartsWith("es") ? "es" : "en";
+            code = (code ?? "en").ToLowerInvariant();
+            bool translated = code.StartsWith("en") || menuEntries > 20;
+            Lang = !translated ? "en" : code.StartsWith("es") ? "es" : code.StartsWith("fi") ? "fi" : "en";
+            Detected = $"game locale '{code}', Menu table entries {menuEntries} -> panel language '{Lang}'";
             itemCache.Clear();
         }
 

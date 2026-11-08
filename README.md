@@ -48,7 +48,7 @@ directly from disk.
 - Matching containers near you are **highlighted in the world** while a search is active
 - **Doors** labeled with their in-game names, with free/stealing counts when you hover them
 - **Recipe Marker** support: one button highlights every container that can drop ingredients for your starred recipes
-- Panel in the game's language (English, Spanish); **F6** toggles it; it remembers its position
+- Panel in the language the game is showing (English, Finnish; Spanish once the game ships it); **F6** toggles it; it remembers its position
 
 ### Install
 1. Install [BepInEx 6 for Unity Mono](https://github.com/BepInEx/BepInEx) in the game folder.

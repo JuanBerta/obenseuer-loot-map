@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap
 {
-    [BepInPlugin(Guid, "Obenseuer Loot Map", "0.2.1")]
+    [BepInPlugin(Guid, "Obenseuer Loot Map", "0.2.2")]
     public partial class LootMapPlugin : BaseUnityPlugin
     {
         public const string Guid = "com.juanberta.obenseuer.lootmap";
@@ -37,7 +37,7 @@ namespace ObenseuerLootMap
             cfgEnabled = Config.Bind("General", "ShowMarkers", true, "Show loot markers on the in-game map.");
             cfgPanel = Config.Bind("General", "ShowPanel", true, "Show the Loot Map panel next to the map.");
             cfgToggleKey = Config.Bind("General", "TogglePanelKey", KeyCode.F6, "Key that shows/hides the Loot Map panel and markers.");
-            cfgLanguage = Config.Bind("General", "Language", "Auto", new ConfigDescription("Panel language.", new AcceptableValueList<string>("Auto", "English", "Spanish")));
+            cfgLanguage = Config.Bind("General", "Language", "Auto", new ConfigDescription("Panel language. Auto = the language the game is showing.", new AcceptableValueList<string>("Auto", "English", "Spanish", "Finnish")));
             cfgContainers = Config.Bind("Filters", "Containers", true, "Show containers.");
             cfgPickups = Config.Bind("Filters", "PickupSpots", true, "Show item pickup spots.");
             cfgStations = Config.Bind("Filters", "Workstations", true, "Show workstations (Drill, Lathe, stoves...).");
@@ -67,7 +67,7 @@ namespace ObenseuerLootMap
         Map map; float nextMapSearch; RectTransform layer; string builtKey; float nextFloorCheck; int floorBand = int.MinValue;
         readonly List<Marker> markers = new List<Marker>();
         Sprite square, circle, ring;
-        bool wasOpen; string langScene;
+        bool wasOpen; string langScene, loggedLang;
 
         internal class Marker
         {
@@ -102,6 +102,7 @@ namespace ObenseuerLootMap
                 UpdateGuide();
                 return;
             }
+            if (!wasOpen) { Loc.Detect(cfgLanguage.Value); if (Loc.Detected != loggedLang) { loggedLang = Loc.Detected; Logger.LogInfo("Language: " + Loc.Detected); } }
             wasOpen = true;
             if (cfgFloorOnly.Value && Time.unscaledTime > nextFloorCheck)
             {
