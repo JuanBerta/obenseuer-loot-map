@@ -37,6 +37,32 @@ git push -u origin main
 The site is plain static HTML/JS with no build step. You can also open `index.html`
 directly from disk.
 
+## In-game mod: Loot Map on the Map tab
+
+`mod/ObenseuerLootMap` is a BepInEx 6 (Unity Mono) plugin that brings the same data into the game's own Map tab.
+
+- Markers for containers, pickup spots, workstations and shops of the place you're in, placed with the game's own world-to-map conversion
+- **Live state** for the current scene: empty containers show as rings, tooltips list what's inside right now and when it restocks, ownership is read live (renting changes it)
+- **Search** items, containers or workstations (words in any order); matches in other buildings on the same map are shown too, plus **where to buy** the item
+- **Guide me there**: click a marker, door or shop and an arrow with distance and floors leads you there, through the right doors
+- Matching containers near you are **highlighted in the world** while a search is active
+- **Doors** labeled with their in-game names, with free/stealing counts when you hover them
+- **Recipe Marker** support: one button highlights every container that can drop ingredients for your starred recipes
+- Panel in the game's language (English, Spanish); **F6** toggles it; it remembers its position
+
+### Install
+1. Install [BepInEx 6 for Unity Mono](https://github.com/BepInEx/BepInEx) in the game folder.
+2. Copy `Obenseuer-LootMap.dll` and `lootmap-data.json` into `BepInEx/plugins/ObenseuerLootMap/`.
+3. Start the game and open the Map tab.
+
+### Build
+```bash
+cd mod/ObenseuerLootMap
+dotnet build -c Release -p:GameDir="C:\Program Files (x86)\Steam\steamapps\common\Obenseuer\\"
+```
+The data file is rebuilt with `python tools/build_mod_data.py <Obenseuer_Data> build mod/ObenseuerLootMap/lootmap-data.json .`
+after running the extractor.
+
 ## Updating the data after a game patch
 
 The data in `data/` is generated from your local game install with two scripts in `tools/`.

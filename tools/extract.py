@@ -73,11 +73,17 @@ def process(data_dir, idx, scenes):
     sf=usf.load("level%d"%idx)
     gos,trs,go2tr,W,path_of=scene(sf)
     pts=[]; errs=0
+    vendor_gos=set()
+    for pid,(o,sz,c) in sf.objs.items():
+        if c!=114: continue
+        r,go,sc,nm=usf.mb_head(sf,pid); sn=usf.script_name(sf,sc)
+        if sn and sn[2] in ('Trade','VendingMachine'): vendor_gos.add(go[1])
     for pid,(o,sz,c) in sf.objs.items():
         if c!=114: continue
         r,go,sc,nm=usf.mb_head(sf,pid)
         sn=usf.script_name(sf,sc)
         if not sn or sn[0]!='Assembly-CSharp' or sn[2] not in ('Storage','CollectibleItemSpawner'): continue
+        if sn[2]=='Storage' and go[1] in vendor_gos: continue   # a shop's hidden stock, not loot
         try: _,d,left=ser.read_mb(sf,pid,'Assembly-CSharp',sn[2])
         except Exception as e: errs+=1; print('  parse error',e); continue
         if left!=0: errs+=1
@@ -172,7 +178,7 @@ FEATURE_SCRIPTS={'DoorChangelevel':'door','Changelevel':'door','Sleep':'bed','To
                  'AnimalBreeder':'breeder','LiquidStorage':'water','InteractableShower':'shower','SaunaCooling':'sauna',
                  'BottleRecyclingDrop':'recycling','Radio':'radio'}
 RECIPE_TYPES={}
-PLACEHOLDER_OWNERS={'','name','default male','default female','none'}
+PLACEHOLDER_OWNERS={'','name','default male','default female','default owner','none'}
 def _recipe_types():
     if not RECIPE_TYPES:
         a=ser.asm('Assembly-CSharp'); ti=a.find_type('RecipeType'); consts={}
@@ -184,7 +190,7 @@ def _recipe_types():
     return RECIPE_TYPES
 def features(sf):
     gos,trs,go2tr,W,path_of=scene(sf)
-    out=[]; mapinfo=None
+    out=[]; mapinfo=None; vend=[]
     for pid,(o,sz,c) in sf.objs.items():
         if c!=114: continue
         r,go,sc,nm=usf.mb_head(sf,pid); sn=usf.script_name(sf,sc)
@@ -199,6 +205,8 @@ def features(sf):
                 if f and sp[2] in f.objs: spn=[fn,f.reader(sp[2]).str()]
             mapinfo=dict(sprite=spn,cx=P[0],cz=P[2],radius=d['mapRadius'],sx=M[0][0],sz=M[2][2])
             continue
+        if cls in ('Trade','VendingMachine'):
+            vend.append((cls,pid,go)); continue
         if cls not in FEATURE_SCRIPTS: continue
         kind=FEATURE_SCRIPTS[cls]
         upto={'door':'OtherEntrypoint','station':'Recipes','bed':'owner','water':'PermissionToTake'}.get(kind,'m_useMessage')
@@ -230,6 +238,42 @@ def features(sf):
         if e['kind']=='door':
             e['to']=d.get('OtherLevel') or None
             if not e['to']: continue
+        out.append({k:v for k,v in e.items() if v is not None})
+    # vendors: Trade (stock = loot table of the Storage on the same object) and VendingMachine (fixed list)
+    stock={}
+    for pid,(o,sz,c) in sf.objs.items():
+        if c!=114: continue
+        r,go,sc,nm=usf.mb_head(sf,pid); sn=usf.script_name(sf,sc)
+        if sn and sn[2]=='Storage' and go[1] in {v[2][1] for v in vend}:
+            try:
+                _,d,_=ser.read_mb(sf,pid,'Assembly-CSharp','Storage')
+                if d.get('spawnItemsFromCategory') and d.get('itemSpawnCategory'): stock[go[1]]=d['itemSpawnCategory']
+            except Exception: pass
+    for cls,pid,go in vend:
+        tp=go2tr.get(go[1])
+        if tp is None: continue
+        path,act=path_of(go[1]); M,P=W(tp)
+        e=dict(kind='vendor',x=round(P[0],2),y=round(P[1],2),z=round(P[2],2),active=act)
+        try:
+            if cls=='Trade':
+                _,d,_=ser.read_mb(sf,pid,'Assembly-CSharp','Trade',upto='sharedId')
+                e['title']=(d.get('title') or '').strip() or None
+                ow=(d.get('owner') or {}).get('name') or ''
+                if ow.strip().lower() not in PLACEHOLDER_OWNERS: e['owner']=ow.strip()
+                if go[1] in stock: e['stock']=stock[go[1]]
+            else:
+                _,d,_=ser.read_mb(sf,pid,'Assembly-CSharp','VendingMachine',upto='sellableItems')
+                e['title']=(d.get('title') or '').strip() or None
+                ow=(d.get('Trader') or {}).get('name') or ''
+                if ow.strip().lower() not in PLACEHOLDER_OWNERS: e['owner']=ow.strip()
+                items=[]
+                for it in d.get('sellableItems') or []:
+                    iid=(it.get('item') or {}).get('ID')
+                    if iid is not None and iid not in items: items.append(iid)
+                e['items']=items
+        except Exception as ex:
+            continue
+        if not e.get('stock') and not e.get('items'): continue
         out.append({k:v for k,v in e.items() if v is not None})
     return out,mapinfo
 
