@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
-    <AssemblyName>Obenseuer-LootMap</AssemblyName>
+    <AssemblyName>LootMap</AssemblyName>
     <RootNamespace>ObenseuerLootMap</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Version>0.3.2</Version>

@@ -52,7 +52,7 @@ directly from disk.
 
 ### Install
 1. Install [BepInEx 6 for Unity Mono](https://github.com/BepInEx/BepInEx) in the game folder.
-2. Copy `Obenseuer-LootMap.dll` and `lootmap-data.json` into `BepInEx/plugins/ObenseuerLootMap/`.
+2. Copy `LootMap.dll` and `lootmap-data.json` into `BepInEx/plugins/LootMap/` (if you have the old `BepInEx/plugins/ObenseuerLootMap` folder, delete it).
 3. Start the game and open the Map tab.
 
 ### Build
