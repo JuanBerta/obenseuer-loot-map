@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap
 {
-    [BepInPlugin(Guid, "Loot Map", "0.5.0")]
+    [BepInPlugin(Guid, "Loot Map", "0.5.1")]
     public partial class LootMapPlugin : BaseUnityPlugin
     {
         public const string Guid = "com.juanberta.obenseuer.lootmap";

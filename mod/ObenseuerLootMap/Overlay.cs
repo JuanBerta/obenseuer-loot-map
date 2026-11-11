@@ -9,7 +9,7 @@ namespace ObenseuerLootMap
     {
         Marker hovered; DoorData hoveredDoor; Vector2 hoveredDoorAt;
         GUIStyle panelStyle, tipStyle, labelStyle, headStyle, smallStyle, btnStyle, doorStyle, fieldStyle;
-        Rect panelRect; bool panelInit, hadFont; Font gameFont;
+        Rect panelRect; bool panelInit, hadFont, paperLook; Font gameFont;
         Rect mapScreenRect;
         const string SearchControl = "lootmap_search";
         static readonly Color Paper = new Color(0.91f, 0.88f, 0.81f), Ink = new Color(0.14f, 0.11f, 0.08f), Ochre = new Color(0.79f, 0.6f, 0.23f);
@@ -27,7 +27,11 @@ namespace ObenseuerLootMap
         void InitStyles()
         {
             // Scene changes unload unreferenced assets; rebuild the styles if their textures or font were destroyed.
-            if (panelStyle != null && panelStyle.normal.background != null && tipStyle.normal.background != null && btnStyle.normal.background != null && fieldStyle.focused.background != null && (gameFont != null || !hadFont)) return;
+            // Diegetic UI asks for its paper look through a shared flag (no dependency either way).
+            object flag = System.AppDomain.CurrentDomain.GetData("Obenseuer.DiegeticTheme.LootMap");
+            bool paper = flag is bool && (bool)flag;
+            if (paper == paperLook && panelStyle != null && panelStyle.normal.background != null && tipStyle.normal.background != null && btnStyle.normal.background != null && fieldStyle.focused.background != null && (gameFont != null || !hadFont)) return;
+            paperLook = paper;
             gameFont = Resources.FindObjectsOfTypeAll<Font>().FirstOrDefault(f =>
                 new[] { "special", "elite", "typewriter", "courier", "american" }.Any(k => f.name.ToLowerInvariant().Contains(k)));
             hadFont = gameFont != null;
@@ -58,6 +62,26 @@ namespace ObenseuerLootMap
             doorStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, richText = true, padding = new RectOffset(4, 4, 1, 1) };
             doorStyle.normal.background = Solid(new Color(0.1f, 0.09f, 0.08f, 0.88f));
             doorStyle.normal.textColor = new Color(0.98f, 0.93f, 0.8f);
+            if (paperLook) PaperStyles();
+        }
+
+        // Diegetic UI's paper look: a manila sheet on a cardboard edge, ink text, cardboard buttons, a receipt-white field.
+        void PaperStyles()
+        {
+            Color manila = new Color32(222, 205, 162, 245), board = new Color32(92, 70, 44, 255), boardHi = new Color32(120, 92, 58, 255);
+            Color ink = new Color32(43, 36, 24, 255), rust = new Color32(122, 43, 28, 255), soft = new Color32(84, 72, 52, 255), cream = new Color32(240, 228, 205, 255);
+            panelStyle.normal.background = panelStyle.onNormal.background = Framed(manila, board, 2);
+            panelStyle.border = new RectOffset(3, 3, 3, 3);
+            panelStyle.normal.textColor = panelStyle.onNormal.textColor = rust;
+            labelStyle.normal.textColor = ink;
+            headStyle.normal.textColor = rust;
+            smallStyle.normal.textColor = soft;
+            btnStyle.normal.background = Solid(board); btnStyle.hover.background = Solid(boardHi); btnStyle.active.background = Solid(new Color32(201, 160, 72, 255));
+            btnStyle.normal.textColor = btnStyle.hover.textColor = cream; btnStyle.active.textColor = ink;
+            fieldStyle.normal.background = Framed(new Color32(241, 238, 230, 255), soft, 1);
+            fieldStyle.hover.background = Framed(new Color32(248, 245, 238, 255), board, 1);
+            fieldStyle.focused.background = Framed(Color.white, rust, 2);
+            fieldStyle.normal.textColor = fieldStyle.hover.textColor = soft; fieldStyle.focused.textColor = ink;
         }
 
         void OnGUI()
@@ -175,6 +199,16 @@ namespace ObenseuerLootMap
 
 
         void DrawPanel(int id)
+        {
+            // checkboxes use Unity's default (white) text; on the paper look they need ink
+            GUIStyle tg = GUI.skin.toggle;
+            Color tn = tg.normal.textColor, to = tg.onNormal.textColor, th = tg.hover.textColor, toh = tg.onHover.textColor;
+            if (paperLook) tg.normal.textColor = tg.onNormal.textColor = tg.hover.textColor = tg.onHover.textColor = new Color32(43, 36, 24, 255);
+            try { DrawPanelContent(id); }
+            finally { tg.normal.textColor = tn; tg.onNormal.textColor = to; tg.hover.textColor = th; tg.onHover.textColor = toh; }
+        }
+
+        void DrawPanelContent(int id)
         {
             cfgEnabled.Value = GUILayout.Toggle(cfgEnabled.Value, " " + Loc.T("Show loot markers"));
             if (cfgEnabled.Value)
