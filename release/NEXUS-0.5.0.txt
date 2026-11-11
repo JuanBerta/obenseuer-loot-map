@@ -1,0 +1,12 @@
+=== NEXUS CHANGELOG: Loot Map 0.5.0 ===
+- Exact search: put a name in quotes or parentheses, like "bottle of ink" or (bottle of ink), to find only that item.
+- Furniture shops: search a piece of furniture to see which shops sell it and which buy it, with buy/sell colours on the map.
+- Search by skill: typing a skill (for example Carpentry or Machining) finds the workstations and furniture that use it.
+- Live furniture stock: in the shop you're in, an "In stock now" section shows the furniture it has right now.
+- Recipe Marker: "Ingredients for my marked recipes" now includes marked blueprints, not only recipes.
+
+=== FULL DESCRIPTION: lines to add to the feature list ===
+[*][b]Exact search[/b] with quotes or parentheses, like "bottle of ink".
+[*][b]Furniture shops[/b]: who sells and who buys a piece of furniture, and what's [b]in stock now[/b] in the shop you're in.
+[*][b]Search by skill[/b]: find the workstations and furniture that use Carpentry, Machining and the rest.
+[*][b]Recipe Marker[/b]: one button highlights where to find the ingredients for your starred recipes [b]and blueprints[/b].
