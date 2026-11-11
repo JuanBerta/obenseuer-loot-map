@@ -1,5 +1,12 @@
 # Changelog - Loot Map (in-game mod)
 
+## 0.5.0
+- Exact search: put a name in quotes or parentheses, like "bottle of ink" or (bottle of ink), to find only that item.
+- Furniture shops: search a piece of furniture to see which shops sell it and which buy it, with buy/sell colours on the map.
+- Search by skill: typing a skill (for example Carpentry or Machining) finds the workstations and furniture that use it.
+- Live furniture stock: in the shop you're in, an "In stock now" section shows the furniture it has right now.
+- Recipe Marker: "Ingredients for my marked recipes" now includes marked blueprints, not only recipes.
+
 ## 0.4.1
 - Trash you've searched today no longer gets an in-world marker; with Trash route on, the world markers show only the trash left to search.
 - In-world markers and the guide arrow are hidden in the pause menu.

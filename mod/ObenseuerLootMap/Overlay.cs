@@ -184,6 +184,8 @@ namespace ObenseuerLootMap
                 GUI.SetNextControlName(SearchControl);
                 search = GUILayout.TextField(search, 40, fieldStyle);
                 if (Typing) GUILayout.Label("<color=#f2a51f>✎ " + Loc.T("Typing — game keys are paused. Esc to leave.") + "</color>", smallStyle);
+                if (ExactSearch) GUILayout.Label("<color=#9fdc8a>" + Loc.T("Exact name only") + ": " + ExactTerm + "</color>", smallStyle);
+                else if (Typing || search.Length == 0) GUILayout.Label(Loc.T("Tip: \"bottle of ink\" or (bottle of ink) finds that exact item."), smallStyle);
                 else if (search.Length == 0) GUILayout.Label(Loc.T("Click the box to type."), smallStyle);
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button(Loc.T("Zoom to me"), btnStyle)) ZoomToPlayer();
@@ -210,8 +212,10 @@ namespace ObenseuerLootMap
                 }
                 GUILayout.Space(6);
                 GUILayout.Label(Summary(), labelStyle);
-                var ids = MatchedIds;
-                if (ids != null && ids.Count > 0)
+                var ids = MatchedIds; var furn = MatchedFurniture;
+                if (furn != null && furn.Count > 0)
+                    GUILayout.Label($"<color=#c9a46a>{Loc.T("Furniture")}</color>: " + string.Join("\n", furn.Take(3).Select(Db.FurnInfo)) + (furn.Count > 3 ? $"  +{furn.Count - 3} {Loc.T("more")}" : ""), smallStyle);
+                if ((ids != null && ids.Count > 0) || (furn != null && furn.Count > 0))
                     GUILayout.Label($"<color=#3ddc5a>■</color> {Loc.T("has it now")}   <color=#d98e04>■</color> {Loc.T("can drop it")}\n" +
                                     $"<color=#3d8bff>●</color> {Loc.T("sells it")}   <color=#ff7a2f>●</color> {Loc.T("buys it")}   <color=#b45cff>●</color> {Loc.T("sells & buys")}", smallStyle);
                 DrawShops();
@@ -243,18 +247,31 @@ namespace ObenseuerLootMap
 
         // "Where to buy": shops anywhere in the game that sell what you searched for.
         List<(string scene, VendorData v, int mode)> shopHits; string shopKey;
-        static string ModeText(int mode) => mode == 3 ? "<color=#c99bff>" + Loc.T("sells & buys") + "</color>" :
+        static string ModeText(int mode) => (mode & 4) != 0 ? "<color=#9fdc8a>" + Loc.T("in stock now") + "</color>" : mode == 3 ? "<color=#c99bff>" + Loc.T("sells & buys") + "</color>" :
                                             mode == 1 ? "<color=#7fb2ff>" + Loc.T("sells it") + "</color>" : "<color=#ffa070>" + Loc.T("buys it") + "</color>";
         void DrawShops()
         {
             if (!Searching) return;
-            string key = appliedSearch + "|" + searchIdsLabel;
+            string key = appliedSearch + "|" + searchIdsLabel + "|" + LiveKey();
             if (key != shopKey)
             {
                 shopKey = key;
                 shopHits = Db.scenes.SelectMany(kv => kv.Value.vendors.Select(v => (kv.Key, v, VendorMode(v)))).Where(x => x.Item3 != 0)
                     .OrderByDescending(x => (x.Item3 & 1) != 0).ThenByDescending(x => x.Item3 == 3).ThenByDescending(x => Db.scenes[x.Key].map == CurrentMap)
                     .Take(8).ToList();
+            }
+            string cur = CurrentScene;
+            if (cur != null && Db.scenes.TryGetValue(cur, out var here))
+            {
+                var now = here.vendors.Select(v => (v, InStockNow(v))).Where(x => x.Item2.Count > 0).ToList();
+                if (now.Count > 0)
+                {
+                    GUILayout.Space(4);
+                    GUILayout.Label(Loc.T("In stock now"), headStyle);
+                    foreach (var (v, stock) in now)
+                        if (GUILayout.Button($"{v.n} <color=#9fdc8a>· {string.Join(", ", stock.Take(3).Select(kv => Db.FurnName(kv.Key) + (kv.Value > 1 ? " ×" + kv.Value : "")))}</color>", btnStyle))
+                            SetGuide(cur, new Vector3(v.x, v.y, v.z), v.n);
+                }
             }
             if (shopHits == null || shopHits.Count == 0) return;
             GUILayout.Space(4);
@@ -314,7 +331,7 @@ namespace ObenseuerLootMap
                 {
                     Db.recipes.TryGetValue(t, out var rs); rs = rs ?? new List<string>();
                     var q = Q;
-                    var shown = rs.OrderByDescending(r => q.Length > 0 && r.ToLowerInvariant().Contains(q)).Take(10).OrderBy(r => r);
+                    var shown = rs.OrderByDescending(r => q.Length > 0 && TextMatch(r)).Take(10).OrderBy(r => r);
                     sb.Append($"\n<b>{t}</b> · {rs.Count} {Loc.T("recipes")}\n{string.Join(", ", shown.Select(Hi))}{(rs.Count > 10 ? $"  <color={dim}>+{rs.Count - 10} {Loc.T("more")}</color>" : "")}\n");
                 }
             }
@@ -329,6 +346,18 @@ namespace ObenseuerLootMap
                     if (sold.Count > 0) sb.Append($"<color=#1f5fd0><b>{Loc.T("Sells")}</b>: {string.Join(", ", sold.Select(Db.ItemName))}</color>\n");
                     if (bought.Count > 0) sb.Append($"<color=#c2501a><b>{Loc.T("Buys")}</b>: {string.Join(", ", bought.Select(Db.ItemName))}</color>\n");
                 }
+                var stockNow = InStockNow(v);
+                if (stockNow.Count > 0)
+                    sb.Append($"<color=#1f8a3a><b>✔ {Loc.T("In stock now")}</b>: {string.Join(", ", stockNow.Select(kv => Db.FurnName(kv.Key) + (kv.Value > 1 ? " ×" + kv.Value : "")))}</color>\n");
+                var mf = MatchedFurniture;
+                if (mf != null && mf.Count > 0)
+                {
+                    var fsold = mf.Where(id => Db.FurnSells(v, id)).Take(6).ToList(); var fbought = mf.Where(id => Db.FurnBuys(v, id)).Take(6).ToList();
+                    if (fsold.Count > 0) sb.Append($"<color=#1f5fd0><b>{Loc.T("Sells furniture")}</b>: {string.Join(", ", fsold.Select(Db.FurnInfo))}</color>\n");
+                    if (fbought.Count > 0) sb.Append($"<color=#c2501a><b>{Loc.T("Buys furniture")}</b>: {string.Join(", ", fbought.Select(Db.FurnName))}</color>\n");
+                }
+                if (v.fs != null && v.fs.Count > 0) sb.Append($"<color={dim}>{Loc.T("Furniture for sale")}: {v.fs.Count}</color>\n");
+                if (v.fb != null) sb.Append($"<color={dim}>{Loc.T("Buys furniture")}: {(v.fb.Type == Newtonsoft.Json.Linq.JTokenType.String ? Loc.T(v.fb.ToString() == "any" ? "any furniture" : "what it sells") : v.fb.Count() + "")}</color>\n");
                 if (v.b == 1) sb.Append($"<color={dim}>{Loc.T("Buys from you")}{(v.ba != null && v.ba.Count > 0 ? ": " + string.Join(", ", v.ba.Take(8).Select(r => r.Replace("_item_", "").Replace("_Meta_", ""))) : " " + Loc.T("almost anything"))}{(v.bs == 1 ? " · " + Loc.T("buys stolen goods") : "")}</color>\n");
                 if (v.i != null && v.i.Count > 0) sb.Append($"\n<b>{Loc.T("Sells")}</b>: {ItemList(v.i, 16)}\n");
                 if (v.t != null && Db.loot.TryGetValue(v.t, out var tb))

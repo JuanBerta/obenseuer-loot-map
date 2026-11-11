@@ -4,7 +4,7 @@
     <AssemblyName>LootMap</AssemblyName>
     <RootNamespace>ObenseuerLootMap</RootNamespace>
     <LangVersion>latest</LangVersion>
-    <Version>0.4.1</Version>
+    <Version>0.5.0</Version>
     <Nullable>disable</Nullable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>

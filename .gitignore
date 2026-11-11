@@ -6,3 +6,5 @@ mod/**/bin/
 mod/**/obj/
 release/stage/
 release/*.rar
+build_tmp/
+build_tmp_decomp.cs

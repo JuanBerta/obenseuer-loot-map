@@ -10,6 +10,10 @@ namespace ObenseuerLootMap
     // what's inside right now, current owner (renting changes it), and restock timers.
     public partial class LootMapPlugin
     {
+        // Furniture shops in the loaded scene and what they have in stock right now (FurnitureShop.availableFurnitures).
+        internal class LiveFurnShop { public Vector3 pos; public string name; public Dictionary<int, int> stock = new Dictionary<int, int>(); }
+        internal List<LiveFurnShop> liveFurnShops = new List<LiveFurnShop>();
+
         internal List<PointData> livePoints;
         internal List<StationData> liveStations;
         string liveScene; float nextLiveScan;
@@ -110,6 +114,23 @@ namespace ObenseuerLootMap
                     Db.StationTextFor(s.n, s.r);
                     sts.Add(s);
                 }
+                var shops = new List<LiveFurnShop>();
+                foreach (var fsh in FindObjectsByType<FurnitureShop>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                {
+                    if (fsh == null || fsh.gameObject.scene.name != scene) continue;
+                    var ls = new LiveFurnShop { pos = fsh.transform.position, name = string.IsNullOrEmpty(fsh.title) ? null : fsh.title };
+                    if (fsh.availableFurnitures != null)
+                        foreach (var fi in fsh.availableFurnitures)
+                        {
+                            if (fi == null || fi.furniture == null) continue;
+                            int id = Db.FurnIdByTitle(fi.furniture.title);
+                            if (id == 0) continue;
+                            ls.stock.TryGetValue(id, out var n);
+                            ls.stock[id] = n + Math.Max(1, fi.amount);
+                        }
+                    shops.Add(ls);
+                }
+                liveFurnShops = shops;
                 livePoints = pts; liveStations = sts;
             }
             catch (Exception e)
@@ -125,7 +146,8 @@ namespace ObenseuerLootMap
             if (livePoints == null) return "";
             int empty = 0, items = 0, steal = 0;
             foreach (var p in livePoints) { if (p.empty) empty++; items += p.have?.Count ?? 0; steal += p.s; }
-            return $"{livePoints.Count}/{empty}/{items}/{steal}";
+            int furn = 0; foreach (var s in liveFurnShops) foreach (var kv in s.stock) furn += kv.Value;
+            return $"{livePoints.Count}/{empty}/{items}/{steal}/{furn}";
         }
     }
 }

@@ -47,7 +47,8 @@ directly from disk.
 - **Guide me there**: click a marker, door or shop and an arrow with distance and floors leads you there, through the right doors
 - Matching containers near you are **highlighted in the world** while a search is active
 - **Doors** labeled with their in-game names, with free/stealing counts when you hover them
-- **Recipe Marker** support: one button highlights every container that can drop ingredients for your starred recipes
+- **Recipe Marker** support: one button highlights every container that can drop ingredients for your starred recipes and blueprints
+- **Exact search** with quotes or parentheses, **furniture shops** (who sells and buys a piece), **search by skill**, and live **furniture stock** in the shop you're in
 - With the **Scavenger** mod: trash you've searched today is faded, and a **Trash route** filter shows the trash left to search on the map
 - Panel in the language the game is showing (English, Finnish; Spanish once the game ships it); **F6** toggles it; it remembers its position
 

@@ -15,6 +15,25 @@ namespace ObenseuerLootMap
         public Dictionary<string, List<object>> items = new Dictionary<string, List<object>>();        // id -> [title, value]
         public Dictionary<string, List<string>> recipes = new Dictionary<string, List<string>>();      // recipe type -> recipe names
         public Dictionary<string, JArray> recipeInputs = new Dictionary<string, JArray>();             // recipe id -> [name, type, [item ids]]
+        public Dictionary<string, List<object>> furniture = new Dictionary<string, List<object>>();    // furniture id -> [title, category, priceOC, priceRM, [recipe types]]
+        public Dictionary<string, List<string>> typeSkills = new Dictionary<string, List<string>>();   // recipe type -> skills it trains
+
+        [JsonIgnore] Dictionary<string, int> furnByTitle;
+        public int FurnIdByTitle(string title)
+        {
+            if (furnByTitle == null)
+            {
+                furnByTitle = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                foreach (var kv in furniture) if (kv.Value.Count > 0) furnByTitle[kv.Value[0].ToString().Trim()] = int.Parse(kv.Key);
+            }
+            return title != null && furnByTitle.TryGetValue(title.Trim(), out var id) ? id : 0;
+        }
+
+        public IEnumerable<string> SkillsFor(IEnumerable<string> types) =>
+            types.SelectMany(t => typeSkills.TryGetValue(t, out var s) ? s : new List<string>()).Distinct();
+
+        public List<string> FurnTypes(int id) =>
+            furniture.TryGetValue(id.ToString(), out var v) && v.Count > 4 && v[4] is JArray a ? a.Select(x => x.ToString()).ToList() : new List<string>();
 
         [JsonIgnore] public Dictionary<string, string> TableText = new Dictionary<string, string>();
         [JsonIgnore] public Dictionary<string, HashSet<int>> TableItems = new Dictionary<string, HashSet<int>>();
@@ -38,7 +57,7 @@ namespace ObenseuerLootMap
         public string StationTextFor(string name, List<string> types)
         {
             if (!StationText.TryGetValue(name, out var t))
-                StationText[name] = t = (name + "\n" + string.Join("\n", types) + "\n" +
+                StationText[name] = t = (name + "\n" + string.Join("\n", types) + "\n" + string.Join("\n", SkillsFor(types)) + "\n" +
                     string.Join("\n", types.SelectMany(x => recipes.TryGetValue(x, out var r) ? r : new List<string>()))).ToLowerInvariant();
             return t;
         }
@@ -72,6 +91,31 @@ namespace ObenseuerLootMap
             }
             bool allowed = v.ba == null || v.ba.Count == 0 || v.ba.Any(Match);
             return allowed && !(v.bf != null && v.bf.Any(Match));
+        }
+
+        public string FurnName(int id) =>
+            furniture.TryGetValue(id.ToString(), out var v) && v.Count > 0 ? v[0].ToString() : "Furniture #" + id;
+
+        public string FurnInfo(int id)
+        {
+            if (!furniture.TryGetValue(id.ToString(), out var v) || v.Count < 4) return FurnName(id);
+            string price = (System.Convert.ToInt32(v[2]) > 0 ? v[2] + " OC" : "") + (System.Convert.ToInt32(v[3]) > 0 ? (System.Convert.ToInt32(v[2]) > 0 ? " / " : "") + v[3] + " RM" : "");
+            var skills = SkillsFor(FurnTypes(id)).ToList();
+            return v[0] + " · " + v[1] + (price.Length > 0 ? " · " + price : "") + (skills.Count > 0 ? " · " + Loc.T("trains") + " " + string.Join(", ", skills) : "");
+        }
+
+        public bool FurnSells(VendorData v, int id) => v.fs != null && v.fs.Contains(id);
+
+        // FurnitureShop.CanSell: buysAnything, or (canSellItems and) same as its stock / its sell lists.
+        public bool FurnBuys(VendorData v, int id)
+        {
+            if (v.fb == null) return false;
+            if (v.fb.Type == JTokenType.String)
+            {
+                var mode = v.fb.ToString();
+                return mode == "any" || (mode == "same" && FurnSells(v, id));
+            }
+            return v.fb.Type == JTokenType.Array && v.fb.Values<int>().Contains(id);
         }
 
         public string SceneName(string scene) =>
@@ -133,5 +177,7 @@ namespace ObenseuerLootMap
         public int b;         // 1 = trader that buys from the player
         public List<string> ba, bf;   // buy rules: allowed / forbidden (category, _item_<Title>, _Meta_<MetaType>)
         public int bs;        // 1 = buys stolen goods
+        public List<int> fs;  // furniture for sale
+        public JToken fb;     // furniture it buys: "any", "same" (its own stock) or a list of furniture ids
     }
 }

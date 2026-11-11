@@ -191,7 +191,7 @@ def _recipe_types():
     return RECIPE_TYPES
 def features(sf):
     gos,trs,go2tr,W,path_of=scene(sf)
-    out=[]; mapinfo=None; vend=[]
+    out=[]; mapinfo=None; vend=[]; fshops=[]; fdisp=[]
     for pid,(o,sz,c) in sf.objs.items():
         if c!=114: continue
         r,go,sc,nm=usf.mb_head(sf,pid); sn=usf.script_name(sf,sc)
@@ -208,6 +208,10 @@ def features(sf):
             continue
         if cls in ('Trade','VendingMachine'):
             vend.append((cls,pid,go)); continue
+        if cls=='FurnitureShop':
+            fshops.append((pid,go)); continue
+        if cls=='InteractableFurnitureDisplay':
+            fdisp.append(pid); continue
         if cls not in FEATURE_SCRIPTS: continue
         kind=FEATURE_SCRIPTS[cls]
         upto={'door':'OtherEntrypoint','station':'Recipes','bed':'owner','water':'PermissionToTake'}.get(kind,'m_useMessage')
@@ -281,7 +285,56 @@ def features(sf):
             continue
         if not e.get('stock') and not e.get('items') and not e.get('trader'): continue
         out.append({k:v for k,v in e.items() if v is not None})
+    out+=furniture_shops(sf,fshops,fdisp,go2tr,W,path_of)
     return out,mapinfo
+
+FURN_LISTS=None
+def _furn_lists():
+    """Furniture stock lists (FurnitureShopItemsList assets) -> furniture asset keys, from build/furniture_assets.json."""
+    global FURN_LISTS
+    if FURN_LISTS is None:
+        p=os.path.join(OUT,'furniture_assets.json')
+        FURN_LISTS=json.load(open(p))['lists'] if os.path.exists(p) else {}
+    return FURN_LISTS
+
+def _key(sf,pp):
+    fid,pid=pp[1],pp[2]
+    if not pid: return None
+    fn=os.path.basename(sf.path) if fid==0 else sf.ext[fid-1]
+    return '%s:%d'%(fn,pid)
+
+def furniture_shops(sf,fshops,fdisp,go2tr,W,path_of):
+    """FurnitureShop components: what they sell (stock lists + furniture on display) and what they buy."""
+    if not fshops: return []
+    lists=_furn_lists(); shops={}
+    for pid,go in fshops:
+        try: _,d,_=ser.read_mb(sf,pid,'Assembly-CSharp','FurnitureShop',upto='sellLists')
+        except Exception: continue
+        tp=go2tr.get(go[1])
+        if tp is None: continue
+        path,act=path_of(go[1]); M,P=W(tp)
+        sell=[]
+        for pp in d.get('itemsLists') or []:
+            for k in lists.get(_key(sf,pp) or '',{}).get('furn',[]):
+                if k not in sell: sell.append(k)
+        buy=None
+        if d.get('buysAnything'): buy='any'
+        elif d.get('canSellItems'):
+            if d.get('sellItemsSameAsBuy'): buy='same'
+            else:
+                buy=[]
+                for pp in d.get('sellLists') or []:
+                    for k in lists.get(_key(sf,pp) or '',{}).get('furn',[]):
+                        if k not in buy: buy.append(k)
+        shops[pid]=dict(kind='vendor',furnShop=True,title=(d.get('title') or '').strip() or None,
+                        x=round(P[0],2),y=round(P[1],2),z=round(P[2],2),active=act,furnSell=sell,furnBuy=buy)
+    for pid in fdisp:
+        try: _,d,_=ser.read_mb(sf,pid,'Assembly-CSharp','InteractableFurnitureDisplay',upto='shop')
+        except Exception: continue
+        sh=d.get('shop'); k=_key(sf,d.get('furn') or ('pptr',0,0))
+        if sh and sh[1]==0 and sh[2] in shops and k and k not in shops[sh[2]]['furnSell']:
+            shops[sh[2]]['furnSell'].append(k)
+    return [{k:v for k,v in e.items() if v not in (None,[],'')} for e in shops.values() if e.get('furnSell') or e.get('furnBuy')]
 
 def landmarks(data_dir):
     import glob
@@ -315,6 +368,9 @@ if __name__=='__main__':
     g=usf.load('globalgamemanagers'); r=g.reader(g.of(141)[0]); n=r.i32()
     scenes=[os.path.splitext(os.path.basename(r.str()))[0] for _ in range(n)]
     json.dump(dict(extracted=datetime.date.today().isoformat(),unity=g.uver),open(os.path.join(out,'meta.json'),'w'))
+    if not os.path.exists(os.path.join(out,'furniture_assets.json')):
+        import subprocess
+        subprocess.check_call([sys.executable,os.path.join(HERE,'scan_furniture.py'),data_dir,out])
     idxs=[int(x) for x in sys.argv[3:]] or range(len(scenes))
     for i in idxs:
         pts,errs=process(data_dir,i,scenes)

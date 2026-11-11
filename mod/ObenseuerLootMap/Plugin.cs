@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap
 {
-    [BepInPlugin(Guid, "Loot Map", "0.4.1")]
+    [BepInPlugin(Guid, "Loot Map", "0.5.0")]
     public partial class LootMapPlugin : BaseUnityPlugin
     {
         public const string Guid = "com.juanberta.obenseuer.lootmap";
@@ -160,10 +160,23 @@ namespace ObenseuerLootMap
         bool IdMatch(IEnumerable<int> ids) => ids != null && searchIds != null && ids.Any(searchIds.Contains);
         string[] QWords => Q.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
         // every word of the search appears in the text, in any order ("metal sheet" finds "Sheet Metal")
+        // "bottle of ink" or (bottle of ink): exact name only.
+        internal bool ExactSearch
+        {
+            get
+            {
+                var q = Q;
+                return q.Length >= 2 && ((q[0] == '"' && q[q.Length - 1] == '"') || (q[0] == '(' && q[q.Length - 1] == ')')
+                                         || (q[0] == '\u201c' && q[q.Length - 1] == '\u201d'));
+            }
+        }
+        internal string ExactTerm => ExactSearch ? Q.Substring(1, Q.Length - 2).Trim() : null;
+
         internal bool TextMatch(string text)
         {
             if (string.IsNullOrEmpty(text)) return false;
             var t = text.ToLowerInvariant(); var q = Q;
+            if (ExactSearch) { var e = ExactTerm; return e.Length > 0 && t.Trim() == e; }
             if (t.Contains(q)) return true;
             var w = QWords; return w.Length > 1 && w.All(t.Contains);
         }
@@ -209,12 +222,57 @@ namespace ObenseuerLootMap
                 return matchedIdsCache;
             }
         }
-        // 0 = no match, 1 = sells it, 2 = buys it, 3 = both
+        // Furniture the current search refers to (by name; exact search supported).
+        HashSet<int> matchedFurnCache; string matchedFurnQ;
+        internal HashSet<int> MatchedFurniture
+        {
+            get
+            {
+                if (searchIds != null || Q.Length == 0 || Db.furniture.Count == 0) return null;
+                if (matchedFurnQ != Q)
+                {
+                    matchedFurnQ = Q;
+                    // by name, or by the skill / station type it trains ("machining", "cooking", "sewing"...)
+                    matchedFurnCache = new HashSet<int>(Db.furniture.Keys.Select(int.Parse).Where(id =>
+                    {
+                        if (TextMatch(Db.FurnName(id))) return true;
+                        var types = Db.FurnTypes(id);
+                        return types.Any(TextMatch) || Db.SkillsFor(types).Any(TextMatch);
+                    }));
+                }
+                return matchedFurnCache;
+            }
+        }
+
+        // Live stock of the furniture shop at this vendor (current scene only), or null.
+        internal LiveFurnShop LiveShopAt(VendorData v)
+        {
+            if (v == null || liveFurnShops == null) return null;
+            var at = new Vector3(v.x, v.y, v.z);
+            LiveFurnShop best = null; float bd = 6f * 6f;
+            foreach (var s in liveFurnShops) { float d = (s.pos - at).sqrMagnitude; if (d < bd) { bd = d; best = s; } }
+            return best;
+        }
+
+        // Matching furniture this vendor has in stock right now (id, amount).
+        internal List<KeyValuePair<int, int>> InStockNow(VendorData v)
+        {
+            var furn = MatchedFurniture; var shop = LiveShopAt(v);
+            if (furn == null || furn.Count == 0 || shop == null) return new List<KeyValuePair<int, int>>();
+            return shop.stock.Where(kv => furn.Contains(kv.Key)).ToList();
+        }
+
+        // 0 = no match, 1 = sells it, 2 = buys it, 3 = both (items and furniture), +4 = has it in stock right now
         internal int VendorMode(VendorData v)
         {
-            var ids = MatchedIds; if (ids == null || ids.Count == 0) return 0;
-            bool sells = ids.Any(id => Db.Sells(v, id)), buys = ids.Any(id => Db.Buys(v, id));
-            return (sells ? 1 : 0) | (buys ? 2 : 0);
+            bool sells = false, buys = false;
+            var ids = MatchedIds;
+            if (ids != null && ids.Count > 0) { sells = ids.Any(id => Db.Sells(v, id)); buys = ids.Any(id => Db.Buys(v, id)); }
+            var furn = MatchedFurniture;
+            if (furn != null && furn.Count > 0) { sells |= furn.Any(id => Db.FurnSells(v, id)); buys |= furn.Any(id => Db.FurnBuys(v, id)); }
+            int mode = (sells ? 1 : 0) | (buys ? 2 : 0);
+            if (InStockNow(v).Count > 0) mode |= 4 | 1;
+            return mode;
         }
         internal bool HasNow(PointData p)
         {
@@ -242,15 +300,30 @@ namespace ObenseuerLootMap
             try
             {
                 var t = AccessTools.TypeByName("ObenseuerRecipeMarker.RecipeMarkerManager");
-                var ids = t != null ? AccessTools.Field(t, "MarkedRecipeIds")?.GetValue(null) as IEnumerable<int> : null;
-                var list = ids?.ToList() ?? new List<int>();
                 var items = new HashSet<int>(); var names = new List<string>();
-                foreach (var rid in list)
-                    if (Db.recipeInputs.TryGetValue(rid.ToString(), out var r))
-                    {
-                        names.Add(r[0].ToString());
-                        foreach (var id in r[2]) items.Add((int)id);
-                    }
+                // Recipe Marker's own cache has the ingredients of every marked recipe AND blueprint.
+                var cache = t != null ? AccessTools.Field(t, "MarkedInputItemIds")?.GetValue(null) as IEnumerable<int> : null;
+                if (cache != null) foreach (var id in cache) items.Add(id);
+                var requiredBy = t != null ? AccessTools.Field(t, "MarkedRequiredByItem")?.GetValue(null) as System.Collections.IDictionary : null;
+                if (requiredBy != null)
+                    foreach (System.Collections.DictionaryEntry kv in requiredBy)
+                        if (kv.Value is System.Collections.IEnumerable entries)
+                            foreach (var e in entries)
+                            {
+                                var n = e?.GetType().GetField("Item1")?.GetValue(e) as string;
+                                if (!string.IsNullOrEmpty(n) && !names.Contains(n)) names.Add(n);
+                            }
+                // Older Recipe Marker versions: marked recipes only, from Loot Map's own data.
+                if (items.Count == 0)
+                {
+                    var ids = t != null ? AccessTools.Field(t, "MarkedRecipeIds")?.GetValue(null) as IEnumerable<int> : null;
+                    foreach (var rid in ids ?? Enumerable.Empty<int>())
+                        if (Db.recipeInputs.TryGetValue(rid.ToString(), out var r))
+                        {
+                            if (!names.Contains(r[0].ToString())) names.Add(r[0].ToString());
+                            foreach (var id in r[2]) items.Add((int)id);
+                        }
+                }
                 if (items.Count == 0) { searchIds = null; searchIdsLabel = Loc.T("No marked recipes (Recipe Marker)"); return; }
                 search = appliedSearch = lastTyped = "";
                 searchIds = items;
@@ -388,7 +461,7 @@ namespace ObenseuerLootMap
             bool hasNow = Searching && match && HasNow(p);
             int vmode = Searching && match && v != null ? VendorMode(v) : 0;
             if (hasNow) { fc = ColHasNow; mk.fill.sprite = spr; }
-            if (vmode == 1) fc = ColSells; else if (vmode == 2) fc = ColBuys; else if (vmode == 3) fc = ColBoth;
+            if ((vmode & 4) != 0) fc = ColHasNow; else if (vmode == 1) fc = ColSells; else if (vmode == 2) fc = ColBuys; else if (vmode == 3) fc = ColBoth;
             bool routeTodo = TrashRoute && IsTrash(p) && !searchedTrash;
             if (routeTodo) { fc = ColTrash; mk.fill.sprite = spr; }
             float alpha = TrashRoute ? (routeTodo ? 1f : 0.45f) : (Searching && !match ? 0.28f : (empty ? 0.75f : 1f));
