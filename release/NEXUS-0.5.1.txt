@@ -1,0 +1,8 @@
+=== FILE DESCRIPTION ===
+LootMap-v0.5.1.rar : Loot Map 0.5.1 (in-game mod, BepInEx 6). Extract into the Obenseuer folder.
+
+=== NEXUS CHANGELOG: Loot Map 0.5.1 ===
+- Diegetic UI support: with Diegetic UI installed, the panel on the map page uses its paper look (manila sheet, ink text, cardboard buttons). Without it, nothing changes.
+
+=== FULL DESCRIPTION: line to add to the compatibility / feature list ===
+[*][b]Diegetic UI[/b]: the panel switches to its paper look automatically when Diegetic UI is installed.

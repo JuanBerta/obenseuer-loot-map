@@ -1,5 +1,8 @@
 # Changelog - Loot Map (in-game mod)
 
+## 0.5.1
+- With Diegetic UI installed (its LootMapPaperLook option on), the panel on the map page uses its paper look: a manila sheet with ink text, cardboard buttons and a white search field. Without it, nothing changes.
+
 ## 0.5.0
 - Exact search: put a name in quotes or parentheses, like "bottle of ink" or (bottle of ink), to find only that item.
 - Furniture shops: search a piece of furniture to see which shops sell it and which buy it, with buy/sell colours on the map.
