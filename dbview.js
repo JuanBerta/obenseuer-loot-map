@@ -17,7 +17,7 @@ const V = { sec: 'items', key: null, q: '', f: '', sort: 'name', lim: 300 };
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=2';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=3';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -75,9 +75,16 @@ function placeIcon(...names) {
   return null;
 }
 const iIco = (id, big) => ico('items', id, big);
-const rIco = (id, big) => { const I = DB.icons; return I && I.recipes && I.recipes[id] != null ? ico('recipes', id, big) : iIco(((X.R[id] || [])[8] || [[0]])[0][0], big); };
+const rIco = (id, big) => { const I = DB.icons; if (I && I.recipes && I.recipes[id] != null) return ico('recipes', id, big); const out = ((X.R[id] || [])[8] || [])[0]; return iIco(out ? out[0] : -1, big); };
 const fIco = (id, big) => ico('furniture', DB.furniture[id] ? DB.furniture[id][0] : '', big);
-const pIco = (name, big) => ico('people', name, big);
+// The game has no real portraits: characters that have a Sprite share a silhouette, so it stands in for everyone.
+function pIco(name, big) {
+  const P = DB.icons && DB.icons.people; if (!P) return ico('people', name, big);
+  if (P[name] == null) { const first = String(name).split(' ')[0]; const cells = Object.values(P); if (!cells.length) return ico('people', name, big);
+    const mode = cells.sort((a, b) => cells.filter(x => x === b).length - cells.filter(x => x === a).length)[0];
+    P[name] = P[first] != null ? P[first] : mode; }
+  return ico('people', name, big);
+}
 function vIco(v, big) {
   const machine = /vending|machine|fountain|cart|counter/i.test(v.n);
   const first = v.i && v.i.length ? v.i[0] : v.t && DB.loot[v.t] && DB.loot[v.t][1].length ? DB.loot[v.t][1][0] : null;
@@ -93,7 +100,7 @@ function vIco(v, big) {
 }
 function secIcon(k) {
   switch (k) {
-    case 'items': return iIco(35100);
+    case 'items': { const I = DB.icons && DB.icons.items; return iIco(I && I[35100] == null ? Object.keys(I)[0] : 35100); }
     case 'recipes': return rIco(0);
     case 'vendors': return imgIco(placeIcon('One Stop Shop'));
     case 'tenement': return imgIco(placeIcon('Tenement'));

@@ -39,9 +39,28 @@ def decode(data, w, h, fmt):
     raise ValueError('texture format %d not supported' % fmt)
 tex.decode = decode
 
+# UnityPy (pip install UnityPy), when installed, decodes what tex.py can't: sprites packed in atlases,
+# crunch-compressed and other texture formats. Our own reader still finds the objects.
+try:
+    import UnityPy
+    UENV = UnityPy.Environment(path=data_dir); _uf = {}
+    print('using UnityPy', UnityPy.__version__)
+except ImportError:
+    UENV = None; print('UnityPy not installed: atlas-packed or crunch-compressed sprites will be skipped (pip install UnityPy)')
+def upy_rgba(fn, pid):
+    if fn not in _uf: _uf[fn] = UENV.load_file(os.path.join(data_dir, fn), name=fn)
+    f = _uf[fn]; f = getattr(f, 'objects', None) and f or next(iter(f.files.values()))
+    img = f.objects[pid].read().image
+    return np.asarray(img.convert('RGBA'))
+
 def sprite_rgba(sf, fid, pid):
     """Sprite or Texture2D -> RGBA image (top row first)."""
     fn = os.path.basename(sf.path) if fid == 0 else sf.ext[fid - 1]
+    if UENV is not None:
+        try:
+            img = upy_rgba(fn, pid)
+            if img.size and img[:, :, 3].max() > 0: return img
+        except Exception as e: problem('UnityPy could not read (fell back)', '%s:%s %s' % (fn, pid, e))
     s = usf.load(fn)
     if s is None or pid not in s.objs: raise KeyError('missing object %s:%s' % (fn, pid))
     cid = s.objs[pid][2]
@@ -130,7 +149,7 @@ for fn in sorted(os.path.basename(f) for f in glob.glob(usf.D + '*.assets')):
         try:
             if n[2] == 'Character':
                 _, d, _ = ser.read_mb(s, p, 'Assembly-CSharp', 'Character', upto='Sprite')
-                key, pp = (d.get('Name') or '').strip(), d.get('Sprite')
+                key, pp = ' '.join(x for x in ((d.get('Name') or '').strip(), (d.get('LastName') or '').strip()) if x), d.get('Sprite')
                 sheet = people
             else:
                 _, d, _ = ser.read_mb(s, p, 'Assembly-CSharp', n[2], upto='image')

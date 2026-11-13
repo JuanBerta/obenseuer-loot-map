@@ -91,7 +91,7 @@ It reads `Items.json`, `Recipes.json`, `StorageSpawnCategory.json`, `Characters.
 `StreamingAssets` and writes `data/db.js` (loaded only when the Database tab opens).
 
 In-game icons for items, recipes, furniture and character portraits come from the game's assets. Extract them
-**before** `build_db.py` (needs `numpy`, `opencv-python` and `Pillow`):
+**before** `build_db.py` (needs `numpy`, `opencv-python`, `Pillow` and, for item icons packed in atlases or crunch-compressed, `UnityPy`):
 
 ```bash
 python tools/icons.py "C:\Program Files (x86)\Steam\steamapps\common\Obenseuer\Obenseuer_Data" .
