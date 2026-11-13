@@ -89,6 +89,16 @@ python tools/build_db.py "C:\Program Files (x86)\Steam\steamapps\common\Obenseue
 
 It reads `Items.json`, `Recipes.json`, `StorageSpawnCategory.json`, `Characters.json` and `CharactersRent.json` from
 `StreamingAssets` and writes `data/db.js` (loaded only when the Database tab opens).
+
+In-game icons for items, recipes, furniture and character portraits come from the game's assets. Extract them
+**before** `build_db.py` (needs `numpy`, `opencv-python` and `Pillow`):
+
+```bash
+python tools/icons.py "C:\Program Files (x86)\Steam\steamapps\common\Obenseuer\Obenseuer_Data" .
+```
+
+It writes four sprite sheets and `icons.json` to `data/icons/sheets/` and prints anything it could not extract.
+Shops and places use the landmark icons from the in-game map.
 A full run takes a few minutes. You can pass level numbers to `extract.py` to re-extract
 only some scenes.
 
@@ -106,6 +116,7 @@ their type trees stripped, so the tools include:
 | `tools/extract.py` | Finds every `Storage` (container) and `CollectibleItemSpawner` (pickup spot) component, computes its world position from the transform hierarchy, and reads its loot table, owner, lock and spawn settings. Also projects box and mesh colliders to 2D footprints. |
 | `tools/tex.py` | Decodes textures and sprites (RGB24, DXT1, DXT5) for the map art and landmark icons. |
 | `tools/finish.py` | Extracts landmarks, their icons and the in-game map textures (`info_map` gives each map's world position and size). |
+| `tools/icons.py` | Extracts item and recipe sprites (through the `Resources` table in `globalgamemanagers`), furniture images and character portraits into sprite sheets. |
 | `tools/build_db.py` | Builds `data/db.js` for the Database pages (items, recipes, vendors, tenement, tenants, furniture, data notes). |
 | `tools/build_data.py` | Joins scene data with `StorageSpawnCategory.json` and `Items.json` and writes `data/index.js` plus one `data/scenes/<scene>.js` per scene. |
 

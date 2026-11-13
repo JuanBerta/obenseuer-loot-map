@@ -17,7 +17,7 @@ const V = { sec: 'items', key: null, q: '', f: '', sort: 'name', lim: 300 };
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=1';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=2';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -60,14 +60,58 @@ function buys(v, id) {
 const furnSells = (v, id) => !!(v.fs && v.fs.includes(id));
 const furnBuys = (v, id) => v.fb === 'any' || (v.fb === 'same' && furnSells(v, id)) || (Array.isArray(v.fb) && v.fb.includes(id));
 
+// ---------- icons (in-game sprites from tools/icons.py, place icons from the map's landmarks) ----------
+function ico(sheet, key, big) {
+  const I = DB.icons, c = I && I.sheets.includes(sheet) && I[sheet] ? I[sheet][key] : null;
+  if (c == null) return `<i class="ic none${big ? ' big' : ''}"></i>`;
+  return `<i class="ic${big ? ' big' : ''}" style="background-image:url(data/icons/sheets/${sheet}.png?v=${DB.iconsV || 1});--n:${I.cols};--c:${c % I.cols};--r:${Math.floor(c / I.cols)}"></i>`;
+}
+const imgIco = (src, big) => src ? `<img class="ic${big ? ' big' : ''}" src="${esc(src)}" alt="" loading="lazy">` : `<i class="ic none${big ? ' big' : ''}"></i>`;
+function placeIcon(...names) {
+  const L = DB.landmarkIcons || {}, keys = Object.keys(L).sort((a, b) => b.length - a.length), ns = names.filter(Boolean).map(n => n.toLowerCase());
+  for (const n of ns) { const k = keys.find(k => k.toLowerCase() === n); if (k) return L[k]; }
+  for (const n of ns) { const k = keys.find(k => k.length > 4 && n.length > 4 && (n.includes(k.toLowerCase()) || k.toLowerCase().includes(n))); if (k) return L[k]; }
+  for (const n of ns) { const w = n.split(/\s+/)[0]; if (w.length < 5) continue; const k = keys.find(k => k.toLowerCase().split(/\s+/)[0] === w); if (k) return L[k]; }   // "Aziz's Hamburger…" ↔ "Aziz's Kebab…"
+  return null;
+}
+const iIco = (id, big) => ico('items', id, big);
+const rIco = (id, big) => { const I = DB.icons; return I && I.recipes && I.recipes[id] != null ? ico('recipes', id, big) : iIco(((X.R[id] || [])[8] || [[0]])[0][0], big); };
+const fIco = (id, big) => ico('furniture', DB.furniture[id] ? DB.furniture[id][0] : '', big);
+const pIco = (name, big) => ico('people', name, big);
+function vIco(v, big) {
+  const machine = /vending|machine|fountain|cart|counter/i.test(v.n);
+  const first = v.i && v.i.length ? v.i[0] : v.t && DB.loot[v.t] && DB.loot[v.t][1].length ? DB.loot[v.t][1][0] : null;
+  if (machine && first != null) return iIco(first, big);
+  const src = placeIcon(v.n, v.o) || placeIcon(sceneName(v.sc));
+  if (src) return imgIco(src, big);
+  if (first != null) return iIco(first, big);
+  const rule = (v.ba || []).find(r => r.startsWith('_item_'));
+  const rid = rule && Object.keys(DB.items).find(id => DB.items[id][0].toLowerCase() === rule.slice(6).toLowerCase());
+  if (rid) return iIco(rid, big);
+  if (v.fs && v.fs.length) return fIco(v.fs[0], big);
+  return imgIco(null, big);
+}
+function secIcon(k) {
+  switch (k) {
+    case 'items': return iIco(35100);
+    case 'recipes': return rIco(0);
+    case 'vendors': return imgIco(placeIcon('One Stop Shop'));
+    case 'tenement': return imgIco(placeIcon('Tenement'));
+    case 'tenants': { const t = DB.tenants.find(t => DB.icons && DB.icons.people && DB.icons.people[t[0]] != null); return t ? pIco(t[0]) : imgIco(placeIcon('Open Homes Company')); }
+    case 'furniture': return imgIco(placeIcon('Möbelmann Furnitures', 'Commercial Furniture Shop'));
+    case 'notes': { const r = Object.keys(DB.items).find(id => DB.items[id][2].includes('Readable')); return r ? iIco(r) : ''; }
+  }
+  return '';
+}
+
 // ---------- helpers ----------
 const iname = id => DB.items[id] ? DB.items[id][0] : 'Item #' + id;
 const sceneName = slug => SCN[slug] ? SCN[slug].name : slug;
 const link = (sec, key, text) => `<a class="dbl" href="#/db/${sec}/${encodeURIComponent(key)}">${esc(text)}</a>`;
-const il = id => DB.items[id] ? link('items', id, iname(id)) : `<span class="muted">Item #${id}</span>`;
-const rl = id => link('recipes', id, X.R[id][1]) + ` <small class="muted">${esc(X.R[id][2])}</small>`;
-const vl = v => link('vendors', v.key, v.n) + ` <small class="muted">${esc(sceneName(v.sc))}</small>`;
-const fl = id => DB.furniture[id] ? link('furniture', id, DB.furniture[id][0]) : 'Furniture #' + id;
+const il = id => DB.items[id] ? `<span class="lk">${iIco(id)}${link('items', id, iname(id))}</span>` : `<span class="muted">Item #${id}</span>`;
+const rl = id => `<span class="lk">${rIco(id)}${link('recipes', id, X.R[id][1])}</span>` + ` <small class="muted">${esc(X.R[id][2])}</small>`;
+const vl = v => `<span class="lk">${vIco(v)}${link('vendors', v.key, v.n)}</span>` + ` <small class="muted">${esc(sceneName(v.sc))}</small>`;
+const fl = id => DB.furniture[id] ? `<span class="lk">${fIco(id)}${link('furniture', id, DB.furniture[id][0])}</span>` : 'Furniture #' + id;
 const price = f => [f[2] > 0 ? f[2] + ' OC' : '', f[3] > 0 ? f[3] + ' RM' : ''].filter(Boolean).join(' / ') || '—';
 const hrs = s => s >= 3600 ? +(s / 3600).toFixed(1) + ' h' : s >= 60 ? Math.round(s / 60) + ' min' : s + ' s';
 const num = x => (+x).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -83,21 +127,21 @@ function rows() {
   const itemRows = ids => {
     let a = ids.filter(id => (m(I[id][0]) || String(id) === q) && (!V.f || I[id][2].includes(V.f)));
     a.sort(V.sort === 'value' ? (x, y) => I[y][1] - I[x][1] : (x, y) => I[x][0].localeCompare(I[y][0]));
-    return a.map(id => [id, I[id][0], (X.inTables[id] ? '◆ ' : '') + (X.makes[id] ? '⚒ ' : '') + I[id][1] + ' OC']);
+    return a.map(id => [id, I[id][0], (X.inTables[id] ? '◆ ' : '') + (X.makes[id] ? '⚒ ' : '') + I[id][1] + ' OC', iIco(id)]);
   };
   switch (V.sec) {
     case 'items': return itemRows(Object.keys(I).map(Number));
     case 'tenement': return itemRows(X.tenIds);
     case 'recipes': return DB.recipes.filter(r => (m(r[1]) || r[8].some(x => m(iname(x[0])))) && (!V.f || r[2] === V.f))
-      .sort((a, b) => a[1].localeCompare(b[1])).map(r => [r[0], r[1], r[2]]);
+      .sort((a, b) => a[1].localeCompare(b[1])).map(r => [r[0], r[1], r[2], rIco(r[0])]);
     case 'vendors': return DB.vendors.filter(v => m(v.n) || m(v.o || '') || m(sceneName(v.sc)) || (q.length > 2 && (v.t && m(v.t))))
       .filter(v => !V.f || (V.f === 'items' ? (v.t || v.i) : V.f === 'buys' ? v.b : V.f === 'furniture' ? (v.fs || v.fb) : V.f === 'vending' ? /vending|soda fountain/i.test(v.n) : true))
       .sort((a, b) => a.n.localeCompare(b.n) || sceneName(a.sc).localeCompare(sceneName(b.sc)))
-      .map(v => [v.key, v.n, sceneName(v.sc)]);
-    case 'tenants': return DB.tenants.filter(t => m(t[0]) || m((DB.people[t[0]] || [])[4] || '')).map(t => [t[0], t[0], (DB.people[t[0]] || [])[4] || '']);
+      .map(v => [v.key, v.n, sceneName(v.sc), vIco(v)]);
+    case 'tenants': return DB.tenants.filter(t => m(t[0]) || m((DB.people[t[0]] || [])[4] || '')).map(t => [t[0], t[0], (DB.people[t[0]] || [])[4] || '', pIco(t[0])]);
     case 'furniture': return Object.entries(DB.furniture).filter(([id, f]) => m(f[0]) && (!V.f || f[1] === V.f))
       .sort(V.sort === 'value' ? (a, b) => (b[1][2] + b[1][3] * 10) - (a[1][2] + a[1][3] * 10) : (a, b) => a[1][0].localeCompare(b[1][0]))
-      .map(([id, f]) => [id, f[0], (f[4] && f[4].length ? '⚒ ' : '') + price(f)]);
+      .map(([id, f]) => [id, f[0], (f[4] && f[4].length ? '⚒ ' : '') + price(f), fIco(id)]);
   }
   return [];
 }
@@ -121,7 +165,7 @@ const INTRO = {
 };
 function renderSide() {
   const el = $('#dbSide');
-  const head = `<div class="dbnav">${SECTIONS.map(([k, t]) => `<a href="#/db/${k}" class="${V.sec === k ? 'on' : ''}">${t}${k === 'notes' ? ` <b>${DB.notes.length}</b>` : ''}</a>`).join('')}</div>`;
+  const head = `<div class="dbnav">${SECTIONS.map(([k, t]) => `<a href="#/db/${k}" class="${V.sec === k ? 'on' : ''}">${secIcon(k)}${t}${k === 'notes' ? ` <b>${DB.notes.length}</b>` : ''}</a>`).join('')}</div>`;
   if (V.sec === 'notes') { el.innerHTML = head + `<p class="dbintro">${INTRO.notes}</p>`; return; }
   el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p><div class="dbbar"><input id="dbQ" type="search" placeholder="Search ${esc(SECTIONS.find(s => s[0] === V.sec)[1].toLowerCase())}…" value="${esc(V.q)}" autocomplete="off">${filters()}</div><div id="dbList"></div>`;
   const q = $('#dbQ'); q.oninput = () => { V.q = q.value; V.lim = 300; renderList(); };
@@ -131,8 +175,8 @@ function renderSide() {
 }
 function renderList() {
   const r = rows(), el = $('#dbList'); if (!el) return;
-  el.innerHTML = `<div class="dbcount">${r.length} ${r.length === 1 ? 'entry' : 'entries'}</div>` + (r.length ? r.slice(0, V.lim).map(([k, a, b]) =>
-    `<a class="row ${String(V.key) === String(k) ? 'on' : ''}" href="#/db/${V.sec}/${encodeURIComponent(k)}"><span class="nm">${esc(a)}</span><span class="ct">${esc(b)}</span></a>`).join('')
+  el.innerHTML = `<div class="dbcount">${r.length} ${r.length === 1 ? 'entry' : 'entries'}</div>` + (r.length ? r.slice(0, V.lim).map(([k, a, b, ic]) =>
+    `<a class="row ${String(V.key) === String(k) ? 'on' : ''}" href="#/db/${V.sec}/${encodeURIComponent(k)}">${ic || ''}<span class="nm">${esc(a)}</span><span class="ct">${esc(b)}</span></a>`).join('')
     + (r.length > V.lim ? `<button class="dbmore" id="dbMore">Show ${r.length - V.lim} more</button>` : '') : '<div class="empty">Nothing matches.</div>');
   const mo = $('#dbMore'); if (mo) mo.onclick = () => { V.lim += 600; renderList(); };
 }
@@ -141,7 +185,7 @@ function renderList() {
 function itemCard(id) {
   const it = DB.items[id]; if (!it) return missing();
   const [t, val, cats, desc, stack, eff, grp, wall] = it;
-  let h = `<div class="card"><h2>${esc(t)}</h2><div class="sub">ID ${id} · ${val} OC · stacks to ${stack}</div>`;
+  let h = `<div class="card"><div class="dbhead">${iIco(id, 1)}<div><h2>${esc(t)}</h2><div class="sub">ID ${id} · ${val} OC · stacks to ${stack}</div></div></div>`;
   if (desc) h += `<p>${esc(desc)}</p>`;
   h += `<div class="tags">${cats.map(c => `<a class="tag" href="#/db/items" data-cat="${esc(c)}">${esc(c)}</a>`).join('')}${eff.map(e => `<span class="tag teal">${e[0]} ${e[1]}</span>`).join('')}${wall ? `<span class="tag">${esc(wall)}</span>` : ''}</div>`;
   if (grp.length) h += `<h3>Any of these counts · ${grp.length}</h3>${ul(grp.map(il))}`;
@@ -174,7 +218,7 @@ function recipeCard(id) {
   const [, n, type, skill, minS, fail, time, inp, out, fout, cond, tags, req] = r;
   const io = a => ul(a.map(x => `<span>${il(x[0])}</span><small>× ${num(x[1])}</small>`));
   const st = DB.stations[type] || [], furn = (X.furnTypes[type] || []).map(Number);
-  let h = `<div class="card"><h2>${esc(n)}</h2><div class="sub">Recipe #${id} · ${esc(type)}</div>
+  let h = `<div class="card"><div class="dbhead">${rIco(id, 1)}<div><h2>${esc(n)}</h2><div class="sub">Recipe #${id} · ${esc(type)}</div></div></div>
     <h3>Ingredients</h3>${io(inp)}<h3>Makes</h3>${io(out)}${fout.length ? `<h3>If it fails</h3>${io(fout)}` : ''}
     <h3>Details</h3><div class="facts"><span>Skill</span><span>${esc(skill)}${minS ? ' · min ' + minS : ''}</span><span>Fail chance</span><span>${Math.round(fail * 100)}%</span>
     <span>Time</span><span>${hrs(time)}</span><span>Recipe needed</span><span>${req ? 'yes, learn it first' : 'no'}</span>
@@ -187,7 +231,7 @@ function recipeCard(id) {
 }
 function vendorCard(key) {
   const v = X.VK[key]; if (!v) return missing();
-  let h = `<div class="card"><h2>${esc(v.n)}</h2><div class="sub">${esc(sceneName(v.sc))}${v.o && v.o !== v.n ? ' · run by ' + esc(v.o) : ''}</div>${mapBtn(v.sc, '', 'Open ' + sceneName(v.sc) + ' on the map')}`;
+  let h = `<div class="card"><div class="dbhead">${vIco(v, 1)}<div><h2>${esc(v.n)}</h2><div class="sub">${esc(sceneName(v.sc))}${v.o && v.o !== v.n ? ' · run by ' + esc(v.o) : ''}</div></div></div>${mapBtn(v.sc, '', 'Open ' + sceneName(v.sc) + ' on the map')}`;
   if (v.t && DB.loot[v.t]) {
     const t = DB.loot[v.t], li = ids => ul([...new Set(ids)].sort((a, b) => iname(a).localeCompare(iname(b))).map(id => `<span>${il(id)}</span><small>${DB.items[id] ? DB.items[id][1] + ' OC' : ''}</small>`));
     h += `<h3>Stock · usually</h3>${li(t[1])}<h3>Stock · sometimes</h3>${li(t[2])}<p class="muted">Stock list “${esc(v.t)}”.</p>`;
@@ -210,13 +254,13 @@ function tenantCard(name) {
   const [n, rid, inc, meth, cmin, cmax, small, big, fmin, fmax, bath, el, heat, kit, wat, fam] = t, p = DB.people[n] || [];
   const yn = b => b ? '<b>needed</b>' : '<span class="muted">not needed</span>';
   const who = x => [x[1], x[2] != null && x[2] >= 0 && x[2] < 200 ? x[2] + ' years' : null, x[3], x[4]].filter(Boolean).map(esc).join(' · ');
-  let h = `<div class="card"><h2>${esc(n)}</h2><div class="sub">${who(p) || 'Not in Characters.json'}</div>
+  let h = `<div class="card"><div class="dbhead">${pIco(n, 1)}<div><h2>${esc(n)}</h2><div class="sub">${who(p) || 'Not in Characters.json'}</div></div></div>
     <h3>Rent they will pay</h3><table class="dbt"><tr>${inc.map((_, i) => `<th>Level ${i + 1}</th>`).join('')}</tr><tr>${inc.map(x => `<td>${x}</td>`).join('')}</tr></table>
     <p class="muted">Income1–6 from the rent table · method ${esc(meth)}${meth === 'OC' ? ' (paid in OC)' : meth === 'RM' ? ' (paid in Real Money)' : ''}.</p>
     <h3>The flat they want</h3><div class="facts"><span>Condition</span><span>${esc(cmin)} to ${esc(cmax)}</span><span>Size</span><span>${esc(small)} to ${esc(big)}</span>
     <span>Floor</span><span>${fmin || fmax ? fmin + '–' + fmax : 'any'}</span><span>Bathroom</span><span>${esc(bath)}</span><span>Heating</span><span>${esc(heat)}</span>
     <span>Electricity</span><span>${yn(el)}</span><span>Kitchen</span><span>${yn(kit)}</span><span>Water</span><span>${yn(wat)}</span></div>`;
-  if (fam.length) h += `<h3>Moves in with</h3>${ul(fam.map(f => `<span>${esc(f)}</span><small>${who(DB.people[f] || [])}</small>`))}`;
+  if (fam.length) h += `<h3>Moves in with</h3>${ul(fam.map(f => `<span>${pIco(f)}${esc(f)}</span><small>${who(DB.people[f] || [])}</small>`))}`;
   h += `<p class="muted">Rent table id ${rid}${p[0] != null ? ' · character ID ' + p[0] : ''}</p>${mapBtn('interior-player-tenement', '', 'Open your tenement on the map')}`;
   return h + '</div>';
 }
@@ -224,7 +268,7 @@ function furnCard(id) {
   const f = DB.furniture[id]; if (!f) return missing();
   const types = f[4] || [], sk = skillsFor(types);
   const sv = DB.vendors.filter(v => furnSells(v, +id)), bv = DB.vendors.filter(v => furnBuys(v, +id));
-  let h = `<div class="card"><h2>${esc(f[0])}</h2><div class="sub">${esc(f[1])} · ${price(f)}</div>`;
+  let h = `<div class="card"><div class="dbhead">${fIco(id, 1)}<div><h2>${esc(f[0])}</h2><div class="sub">${esc(f[1])} · ${price(f)}</div></div></div>`;
   if (types.length) {
     const rs = DB.recipes.filter(r => types.includes(r[2])).sort((a, b) => a[1].localeCompare(b[1]));
     h += `<p>Workstation: ${types.map(esc).join(', ')}${sk.length ? ' · trains ' + sk.map(esc).join(', ') : ''}</p><h3>Recipes · ${rs.length}</h3>${ul(rs.map(r => rl(r[0])))}`;
@@ -234,7 +278,7 @@ function furnCard(id) {
 }
 function tenementHome() {
   const recs = X.tenRecipes.slice().sort((a, b) => X.R[a][1].localeCompare(X.R[b][1]));
-  return `<div class="card"><h2>Your tenement</h2><div class="sub">${X.tenIds.length} materials · ${recs.length} recipes</div>
+  return `<div class="card"><div class="dbhead">${imgIco(placeIcon('Tenement'), 1)}<div><h2>Your tenement</h2><div class="sub">${X.tenIds.length} materials · ${recs.length} recipes</div></div></div>
     <p>Pick a material on the left to see where to find it, who sells it and how to make it.</p>${mapBtn('interior-player-tenement', '', 'Open your tenement on the map')}
     <h3>Recipes that make materials or furniture</h3>${ul(recs.map(rl))}</div>`;
 }

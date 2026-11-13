@@ -107,11 +107,21 @@ for c in chars:
     a = c.get('Age')
     if c.get('ID', -1) >= 0 and isinstance(a, int) and (a < 0 or a > 120): notes.append(f'Character {c["Name"]} (ID {c["ID"]}) has age {a}')
 
-db = dict(items={str(k): v for k, v in items.items()}, recipes=recipes, loot=loot, vendors=vendors, furniture=furniture,
+# ---- in-game icons (tools/icons.py), optional
+icons = None
+ip = os.path.join(site, 'data', 'icons', 'sheets', 'icons.json')
+if os.path.exists(ip):
+    icons = json.load(open(ip, encoding='utf-8'))
+    icons['sheets'] = [k for k in ('items', 'recipes', 'furniture', 'people') if os.path.exists(os.path.join(site, 'data', 'icons', 'sheets', k + '.png'))]
+else: print('no icons: run tools/icons.py first to add the in-game icons')
+landmark_icons = {l['t']: l['icon'] for l in IDX['landmarks'] if l.get('icon') and not l.get('w')}
+
+db = dict(icons=icons, landmarkIcons=landmark_icons, items={str(k): v for k, v in items.items()}, recipes=recipes, loot=loot, vendors=vendors, furniture=furniture,
           typeSkills=M.get('typeSkills', {}), stations=stations, sceneCats=scene_cats, tenants=tenants, people=people,
           notes=sorted(set(notes)))
 out = os.path.join(site, 'data', 'db.js')
 with open(out, 'w', encoding='utf-8') as f:
     f.write('window.OBS_DB=' + json.dumps(db, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/') + ';\n')
+print('icons:', ', '.join(f'{k} {len(icons.get(k, {}))}' for k in icons['sheets']) if icons else 'none')
 print(len(items), 'items', len(recipes), 'recipes', len(loot), 'tables', len(vendors), 'vendors', len(furniture), 'furniture',
       len(tenants), 'tenants', len(db['notes']), 'notes', os.path.getsize(out) // 1024, 'KB')

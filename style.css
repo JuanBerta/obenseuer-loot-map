@@ -188,3 +188,15 @@ table.dbt th{font-weight:500;color:#6e624f}
   #dbSide{width:auto;max-height:46vh;border-right:none;border-bottom:1px solid #000}
   .dbtab{order:7}
 }
+/* in-game icons: 48 px sprite-sheet cells shown at --s */
+.ic{--s:24px;display:inline-block;flex:none;width:var(--s);height:var(--s);vertical-align:middle;margin-right:7px;background-repeat:no-repeat;
+  background-size:calc(var(--s) * var(--n)) auto;background-position:calc(var(--s) * var(--c) * -1) calc(var(--s) * var(--r) * -1);object-fit:contain}
+.ic.big{--s:56px;margin-right:12px}
+.ic.none{visibility:hidden}
+.dbnav .ic{--s:18px;margin:-3px 6px -3px 0}
+.dbnav .ic.none{display:none}
+#dbList .row .ic{--s:28px;margin-right:0}
+.dbhead{display:flex;align-items:center}
+.card .items .ic{--s:22px;margin-right:6px}
+img.ic{filter:drop-shadow(0 1px 1px #0006)}
+.lk{display:inline-flex;align-items:center;min-width:0}
