@@ -37,7 +37,8 @@ const S = { scene: null, data: null, q: '', cat: null, sel: null, floor: -1, flo
 const RECIPES = IDX.recipes || {}, STYPES = IDX.stationTypes || {};
 function stationText(title) { const t = STYPES[title] || []; return (title + '\n' + t.join('\n') + '\n' + t.flatMap(x => RECIPES[x] || []).join('\n')).toLowerCase(); }
 const STEXT = {}; for (const t of Object.keys(STYPES)) STEXT[t] = stationText(t);
-const stationMatches = f => f.kind === 'station' && f.title && !S.cat && qTerm() && (STEXT[f.title] || f.title.toLowerCase()).includes(qTerm());
+const stationMatches = f => !S.cat && qTerm() && (f.kind === 'vendor' ? (f.items || []).some(id => itemName(id).toLowerCase().includes(qTerm()))
+  : f.kind === 'station' && f.title && (STEXT[f.title] || f.title.toLowerCase()).includes(qTerm()));
 const cache = {};
 
 // ---------- search ----------
@@ -265,9 +266,10 @@ function label(text, x, y, o = {}) {
   ctx.fillStyle = o.bg || 'rgba(27,25,22,0.88)'; ctx.fillRect(bx, y - h / 2, w + 8, h);
   ctx.fillStyle = o.color || '#ece4d4'; ctx.textBaseline = 'middle'; ctx.fillText(text, bx + 4, y + 0.5);
 }
-const SVC = { bed: ['Bed', 'Bed — you can sleep here'], toilet: ['WC', 'Toilet'], vending: ['$', 'Shop counter'], phone: ['☎', 'Phone'], mailbox: ['✉', 'Mailbox'],
+const SVC = { bed: ['Bed', 'Bed — you can sleep here'], toilet: ['WC', 'Toilet'], vending: ['$', 'Shop counter'], vendor: ['$', 'Shop'], phone: ['☎', 'Phone'], mailbox: ['✉', 'Mailbox'],
   station: ['⚒', 'Workstation'], grow: ['✿', 'Planter / growing spot'], water: ['≈', 'Water source'], shower: ['Sh', 'Shower'], sauna: ['Sa', 'Sauna stove'],
   generator: ['⚡', 'Generator'], breeder: ['Br', 'Animal breeder'], recycling: ['♻', 'Bottle recycling drop'], radio: ['♪', 'Radio'] };
+const svcOf = k => SVC[k] || ['•', k];
 const FURN = new Set(['station', 'grow', 'water', 'shower', 'sauna', 'generator', 'breeder', 'recycling', 'radio']);
 function drawNow() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -308,7 +310,7 @@ function drawNow() {
     const furn = FURN.has(f.kind);
     if (!f.active || !onFloor(f) || (furn ? !L.furniture : !L.services)) continue;
     const [x, y] = toScreen(f.x, f.z); if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
-    const g = SVC[f.kind][0];
+    const g = svcOf(f.kind)[0];
     ctx.font = '600 9.5px "IBM Plex Sans", sans-serif'; const w = Math.max(15, ctx.measureText(g).width + 7);
     const sm = stationMatches(f), dim = searching() && !sm;
     ctx.globalAlpha = dim ? 0.35 : 1;
@@ -318,7 +320,7 @@ function drawNow() {
     else { ctx.beginPath(); ctx.roundRect(x - w / 2, y - 7.5, w, 15, 7.5); ctx.fill(); ctx.stroke(); }
     ctx.fillStyle = furn ? '#fffaf0' : '#241d14'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g, x, y + 0.5); ctx.textAlign = 'left';
     ctx.globalAlpha = 1;
-    if (f.kind === 'station' && f.title && (sm || s > 16 || (S.hover && S.hover.f === f))) label(f.title, x + w / 2 + 3, y, { font: '600 11px "IBM Plex Sans", sans-serif', bg: 'rgba(47,93,58,0.92)' });
+    if ((f.kind === 'station' || f.kind === 'vendor') && f.title && (sm || s > 16 || (S.hover && S.hover.f === f))) label(f.title, x + w / 2 + 3, y, { font: '600 11px "IBM Plex Sans", sans-serif', bg: 'rgba(47,93,58,0.92)' });
     S._hits.push({ x, y, r: 10, f });
   }
   if (L.doors) for (const f of d.doors) {
@@ -431,8 +433,8 @@ function hoverAt(x, y) {
   else if (h.f && h.f.kind === 'door') html = h.f.toSlug ? `<b>Door → ${esc(h.f.toName)}</b><br><small>${SC[h.f.toSlug].lootContainers} loot containers inside · click to enter</small>` : `<b>${esc(h.f.toName)}</b><br><small>Not open in this version of the game</small>`;
   else if (h.f) {
     const f = h.f, own = f.owned ? `<br><small style="color:#f39a88">Owned${f.owner ? ' by ' + esc(f.owner) : ''} — taking its items counts as stealing</small>` : '';
-    const extra = f.kind === 'station' ? esc((f.types || []).join(', ')) + ' · click for recipes' : f.kind === 'bed' ? (f.safe ? 'Safe place to sleep' : 'You can sleep here') + (f.arrest ? ' · you can be arrested here' : '') : SVC[f.kind][1];
-    html = `<b>${esc(f.title || SVC[f.kind][1])}</b><br><small>${extra}</small>${own}`;
+    const extra = f.kind === 'station' ? esc((f.types || []).join(', ')) + ' · click for recipes' : f.kind === 'bed' ? (f.safe ? 'Safe place to sleep' : 'You can sleep here') + (f.arrest ? ' · you can be arrested here' : '') : svcOf(f.kind)[1];
+    html = `<b>${esc(f.title || svcOf(f.kind)[1])}</b><br><small>${extra}</small>${own}`;
   }
   else html = `<b>${esc(h.l.titles.join(', '))}</b><br><small>Landmark on the in-game map</small>`;
   tip.innerHTML = html; tip.style.left = Math.min(x + 16, W - 290) + 'px'; tip.style.top = Math.min(y + 16, H - 60) + 'px'; tip.classList.remove('hidden');
@@ -460,10 +462,11 @@ function renderDetail() {
   const meta = SC[S.scene], q = S.cat ? '' : qTerm();
   if (S.selF && d.services.includes(S.selF)) {
     const f = S.selF, types = f.types || [];
-    let h = `<button class="back" id="backBtn">← ${esc(meta.name)}</button><div class="card"><h2>${esc(f.title || SVC[f.kind][1])}</h2><div class="sub">${esc(SVC[f.kind][1])} · ${esc(meta.name)}</div>`;
+    let h = `<button class="back" id="backBtn">← ${esc(meta.name)}</button><div class="card"><h2>${esc(f.title || svcOf(f.kind)[1])}</h2><div class="sub">${esc(svcOf(f.kind)[1])} · ${esc(meta.name)}</div>`;
     h += f.owned ? `<div class="own steal">Owned${f.owner ? ' by ' + esc(f.owner) : ''}<small>Taking items out of it counts as stealing.</small></div>`
                  : (f.kind === 'station' || f.kind === 'water' || f.kind === 'bed' ? `<div class="own safe">Free to use<small>Not owned by anyone.</small></div>` : '');
     if (f.kind === 'bed') h += `<p>${f.safe ? 'A safe place to sleep.' : 'You can sleep here.'}${f.arrest ? ' You can be arrested if caught sleeping here.' : ''}</p>`;
+    if (f.kind === 'vendor' && f.items && f.items.length) h += lootList(f.items, 'Sells', q);
     if (f.kind === 'station') {
       for (const t of types) {
         const r = RECIPES[t] || [];
@@ -507,7 +510,7 @@ function renderDetail() {
     `<li class="${S.cat === c ? 'on' : ''}${!S.cat && qTerm() && hasTable(c) && !tableMatches(c) ? ' dim' : ''}" data-cat="${esc(c)}"><span>${esc(c)}</span><b>${n}</b></li>`).join('') + '</ul>';
   const inside = [...new Map(d.doors.filter(f => f.toSlug && !SC[f.toSlug].outdoor).map(f => [f.toSlug, f])).values()].sort((a, b) => a.toName.localeCompare(b.toName));
   const svc = d.services.filter(f => f.active && !FURN.has(f.kind)), n = k => svc.filter(f => f.kind === k).length;
-  const fac = [['bed', 'beds'], ['toilet', 'toilets'], ['vending', 'shop counters'], ['phone', 'phones'], ['mailbox', 'mailboxes']].filter(([k]) => n(k)).map(([k, w]) => n(k) + ' ' + w).join(' · ');
+  const fac = [['bed', 'beds'], ['toilet', 'toilets'], ['vending', 'shop counters'], ['vendor', 'shops'], ['phone', 'phones'], ['mailbox', 'mailboxes']].filter(([k]) => n(k)).map(([k, w]) => n(k) + ' ' + w).join(' · ');
   el.innerHTML = `<div class="card"><h2>${esc(meta.name)}</h2><div class="sub">${esc(meta.scene)}</div>
     <p class="muted">Click a container type to light it up on the map, or click any box on the map for its loot.</p>
     <div class="split"><span class="a"><b>${meta.safe}</b>free to take</span><span class="b"><b>${meta.steal}</b>stealing</span></div>
