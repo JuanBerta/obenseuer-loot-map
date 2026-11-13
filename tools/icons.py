@@ -145,7 +145,7 @@ for fn in sorted(os.path.basename(f) for f in glob.glob(usf.D + '*.assets')):
 meta = dict(cell=CELL, cols=COLS)
 for sh in (items, recipes, furn, people):
     sh.save(); meta[sh.name] = sh.map
-json.dump(meta, open(os.path.join(out_dir, 'icons.json'), 'w'), separators=(',', ':'), ensure_ascii=False)
+json.dump(meta, open(os.path.join(out_dir, 'icons.json'), 'w', encoding='utf-8'), separators=(',', ':'), ensure_ascii=False)
 if problems:
     print('Not extracted:')
     for k, n in problems.most_common(): print('  %5d  %s   e.g. %s' % (n, k, examples[k][:140]))

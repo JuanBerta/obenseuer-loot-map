@@ -111,7 +111,9 @@ for c in chars:
 icons = None
 ip = os.path.join(site, 'data', 'icons', 'sheets', 'icons.json')
 if os.path.exists(ip):
-    icons = json.load(open(ip, encoding='utf-8'))
+    raw = open(ip, 'rb').read()
+    try: icons = json.loads(raw.decode('utf-8'))
+    except UnicodeDecodeError: icons = json.loads(raw.decode('cp1252'))   # written by an older icons.py on Windows
     icons['sheets'] = [k for k in ('items', 'recipes', 'furniture', 'people') if os.path.exists(os.path.join(site, 'data', 'icons', 'sheets', k + '.png'))]
 else: print('no icons: run tools/icons.py first to add the in-game icons')
 landmark_icons = {l['t']: l['icon'] for l in IDX['landmarks'] if l.get('icon') and not l.get('w')}
