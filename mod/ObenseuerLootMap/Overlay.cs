@@ -68,7 +68,7 @@ namespace ObenseuerLootMap
         // Diegetic UI's paper look: a manila sheet on a cardboard edge, ink text, cardboard buttons, a receipt-white field.
         void PaperStyles()
         {
-            Color manila = new Color32(222, 205, 162, 245), board = new Color32(92, 70, 44, 255), boardHi = new Color32(120, 92, 58, 255);
+            Color manila = new Color32(222, 205, 162, 245), board = new Color32(94, 82, 64, 255), boardHi = new Color32(118, 104, 82, 255);
             Color ink = new Color32(43, 36, 24, 255), rust = new Color32(122, 43, 28, 255), soft = new Color32(84, 72, 52, 255), cream = new Color32(240, 228, 205, 255);
             panelStyle.normal.background = panelStyle.onNormal.background = Framed(manila, board, 2);
             panelStyle.border = new RectOffset(3, 3, 3, 3);
