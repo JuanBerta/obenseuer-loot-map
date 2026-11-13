@@ -18,6 +18,10 @@ scene list and map light up wherever it can be found.
 - Floor plans drawn from the game's navmesh and physics colliders, with a per-floor selector
   for multi-storey buildings
 - Shareable links: the URL keeps the scene, search, selected container, floor and view
+- **Database** pages (header tab, `#/db/...` links) for every **item** (where it drops, who sells and buys it, what makes and uses it),
+  **recipe** (ingredients, station, skill, fail chance, time), **vendor** (stock, buy rules, furniture), **tenement** material,
+  **tenant** (rent per level, flat requirements, family) and piece of **furniture** (price, shops, recipes), plus a
+  **Data notes** page listing inconsistencies in the game files. "Show on the map" jumps back to the map with the search filled in.
 
 ## Publish on GitHub Pages
 
@@ -77,6 +81,14 @@ python tools/build_data.py "C:\Program Files (x86)\Steam\steamapps\common\Obense
 
 `extract.py` reads every scene and writes raw JSON to `build/` (ignored by git);
 `build_data.py` combines it with the loot tables, item list and navmeshes into `data/`.
+The database pages are built from the game's JSON files and the mod bundle:
+
+```bash
+python tools/build_db.py "C:\Program Files (x86)\Steam\steamapps\common\Obenseuer\Obenseuer_Data" mod/ObenseuerLootMap/lootmap-data.json .
+```
+
+It reads `Items.json`, `Recipes.json`, `StorageSpawnCategory.json`, `Characters.json` and `CharactersRent.json` from
+`StreamingAssets` and writes `data/db.js` (loaded only when the Database tab opens).
 A full run takes a few minutes. You can pass level numbers to `extract.py` to re-extract
 only some scenes.
 
@@ -94,6 +106,7 @@ their type trees stripped, so the tools include:
 | `tools/extract.py` | Finds every `Storage` (container) and `CollectibleItemSpawner` (pickup spot) component, computes its world position from the transform hierarchy, and reads its loot table, owner, lock and spawn settings. Also projects box and mesh colliders to 2D footprints. |
 | `tools/tex.py` | Decodes textures and sprites (RGB24, DXT1, DXT5) for the map art and landmark icons. |
 | `tools/finish.py` | Extracts landmarks, their icons and the in-game map textures (`info_map` gives each map's world position and size). |
+| `tools/build_db.py` | Builds `data/db.js` for the Database pages (items, recipes, vendors, tenement, tenants, furniture, data notes). |
 | `tools/build_data.py` | Joins scene data with `StorageSpawnCategory.json` and `Items.json` and writes `data/index.js` plus one `data/scenes/<scene>.js` per scene. |
 
 A container's loot table is its `itemSpawnCategory`; containers set to "Custom" without a

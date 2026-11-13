@@ -8,13 +8,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <header class="top">
   <button id="menuBtn" class="icon-btn" aria-label="Places">☰</button>
   <div class="brand"><b>OBENSEUER</b><span>loot map</span></div>
   <nav class="tabs" id="regionTabs" aria-label="Regions"></nav>
+  <a class="tab dbtab" id="dbBtn" href="#/db/items">Database</a>
   <div class="search">
     <input id="q" type="search" placeholder="Find an item or container… e.g. duct tape, Locker" autocomplete="off" aria-label="Search">
     <span id="catChip" class="chip hidden"></span>
@@ -64,11 +65,16 @@
   </section>
   <aside id="detail"></aside>
 </main>
+<section id="db" aria-label="Database">
+  <aside id="dbSide"></aside>
+  <div id="dbDetail"></div>
+</section>
 <footer>
   Unofficial fan project, not affiliated with Loiste Interactive. Map art, icons and data come from the game files<span id="ver"></span>.
   Loot tables link to the <a href="https://obenseuer-viewer.pages.dev/" target="_blank" rel="noopener">Obenseuer viewer</a>.
 </footer>
 <script src="data/index.js?v=3"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
+<script src="dbview.js?v=1"></script>
 </body>
 </html>

@@ -562,7 +562,7 @@ $('#hintClose').onclick = () => { $('#hint').classList.add('hidden'); try { loca
 
 // ---------- URL ----------
 function saveHash() {
-  if (!S.scene) return;
+  if (!S.scene || /^#\/db(\/|$)/.test(location.hash)) return;   // the database pages own the URL
   const p = new URLSearchParams();
   if (S.cat) p.set('table', S.cat); else if (S.q.trim()) p.set('q', S.q.trim());
   if (S.sel != null) p.set('sel', S.sel);
@@ -571,6 +571,7 @@ function saveHash() {
   history.replaceState(null, '', '#/' + S.scene + '?' + p.toString());
 }
 function readHash() {
+  if (/^#\/db(\/|$)/.test(location.hash)) return null;
   const m = location.hash.match(/^#\/([^?]+)\??(.*)$/); if (!m) return null;
   const p = new URLSearchParams(m[2]);
   S.q = p.get('q') || ''; $('#q').value = S.q;
@@ -589,4 +590,10 @@ const first = start && SC[start] ? start : 'open-sewer-bazaar';
 S.region = SC[first].group; renderTabs(); resize();
 openScene(first, !!start && !S.autoFit);
 window.addEventListener('hashchange', () => { const s = readHash(); if (s && s !== S.scene) openScene(s, true); });
+// Used by the database pages (dbview.js) to jump to a scene, optionally with a search.
+window.OBS_MAP = { show(slug, q) {
+  S.cat = null; $('#catChip').classList.add('hidden'); S.q = q || ''; $('#q').value = S.q; S.sel = null; S.selF = null;
+  if (SC[slug]) S.region = SC[slug].group; renderTabs(); resize();
+  if (S.scene === slug) { fit(); refresh(); } else openScene(slug);
+} };
 })();
