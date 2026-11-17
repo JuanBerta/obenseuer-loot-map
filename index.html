@@ -8,11 +8,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
+<a class="skip" href="#q">Skip to search</a>
 <header class="top">
-  <button id="menuBtn" class="icon-btn" aria-label="Places">☰</button>
+  <button id="menuBtn" class="icon-btn" aria-label="Show places list" title="Places">☰</button>
   <div class="brand"><b>OBENSEUER</b><span>loot map</span></div>
   <nav class="tabs" id="regionTabs" aria-label="Regions"></nav>
   <a class="tab dbtab" id="dbBtn" href="#/db/items">Database</a>
@@ -20,11 +21,11 @@
     <input id="q" type="search" placeholder="Find an item or container… e.g. duct tape, Locker" autocomplete="off" aria-label="Search">
     <span id="catChip" class="chip hidden"></span>
   </div>
-  <button id="infoBtn" class="icon-btn" aria-label="Details">ⓘ</button>
+  <button id="infoBtn" class="icon-btn" aria-label="Show details" title="Details">ⓘ</button>
 </header>
 <main>
   <aside id="side">
-    <div id="sideHead"></div>
+    <div id="sideHead" aria-live="polite"></div>
     <div id="sideBody"></div>
   </aside>
   <section id="frame">
@@ -34,8 +35,12 @@
       <div id="floors"></div>
       <div class="tools">
         <button id="layersBtn" class="tool" aria-expanded="false">Layers ▾</button>
-        <button id="fitBtn" class="tool" title="Fit to view">⤢</button>
+        <button id="fitBtn" class="tool" title="Fit to view" aria-label="Fit map to view">⤢</button>
         <div id="layers" class="pop hidden">
+          <h4>Readability</h4>
+          <label><input type="checkbox" id="pfText"> Larger text</label>
+          <label><input type="checkbox" id="pfMarkers"> Larger map markers and labels</label>
+          <label><input type="checkbox" id="pfContrast"> High contrast</label>
           <h4>Loot</h4>
           <label><input type="checkbox" id="lyLoot" checked><i class="mk c"></i> Containers with loot</label>
           <label><input type="checkbox" id="lyPickups" checked><i class="mk p"></i> Pickup spots</label>
@@ -60,7 +65,7 @@
       </div>
       <div id="hint" class="hidden"><b>How to use</b> Search for an item above · click a <i class="mk d"></i> door to go inside · click a <i class="mk c"></i> box to see what it can drop. <button id="hintClose">Got it</button></div>
       <div id="tip" class="hidden"></div>
-      <div id="loading" class="hidden">Unfolding the map…</div>
+      <div id="loading" class="hidden" role="status">Unfolding the map…</div>
     </div>
   </section>
   <aside id="detail"></aside>
@@ -74,7 +79,7 @@
   Loot tables link to the <a href="https://obenseuer-viewer.pages.dev/" target="_blank" rel="noopener">Obenseuer viewer</a>.
 </footer>
 <script src="data/index.js?v=3"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 <script src="dbview.js?v=3"></script>
 </body>
 </html>

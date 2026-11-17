@@ -56,7 +56,7 @@ function sceneHits(sc) { let n = 0; for (const [c, k] of Object.entries(sc.cats)
 
 // ---------- tabs & side ----------
 function renderTabs() {
-  $('#regionTabs').innerHTML = REGIONS.map(r => `<button class="tab ${S.region === r.id ? 'on' : ''}" data-region="${r.id}">${r.label}</button>`).join('');
+  $('#regionTabs').innerHTML = REGIONS.map(r => `<button class="tab ${S.region === r.id ? 'on' : ''}" data-region="${r.id}" aria-pressed="${S.region === r.id}">${r.label}</button>`).join('');
 }
 $('#regionTabs').addEventListener('click', e => {
   const b = e.target.closest('[data-region]'); if (!b) return;
@@ -261,7 +261,7 @@ function fit() {
 let raf = 0;
 function draw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; drawNow(); }); }
 function label(text, x, y, o = {}) {
-  ctx.font = o.font || '12px "IBM Plex Sans", sans-serif';
+  ctx.font = (o.font || '13px "IBM Plex Sans", sans-serif').replace(/(\d+(?:\.\d+)?)px/, (m, n) => (+n * (PREF.markers ? 1.2 : 1)) + 'px');
   const w = ctx.measureText(text).width, h = o.h || 16, bx = o.center ? x - w / 2 - 4 : x;
   ctx.fillStyle = o.bg || 'rgba(27,25,22,0.88)'; ctx.fillRect(bx, y - h / 2, w + 8, h);
   ctx.fillStyle = o.color || '#ece4d4'; ctx.textBaseline = 'middle'; ctx.fillText(text, bx + 4, y + 0.5);
@@ -303,8 +303,8 @@ function drawNow() {
     ctx.drawImage(im, x - wm / 2, y - hm / 2, wm, hm);
   }
   const m = [1, 2, 5, 10, 20, 50, 100, 200].find(v => v * s > 60) || 200;
-  ctx.fillStyle = '#241d14'; ctx.fillRect(W - 24 - m * s, H - 22, m * s, 3);
-  ctx.font = '13px "Special Elite", monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.fillText(m + ' m', W - 24, H - 28); ctx.textAlign = 'left';
+  ctx.fillStyle = '#241d14'; ctx.fillRect(W - 24 - m * s, H - 22, m * s, 4);
+  ctx.font = '600 14px "IBM Plex Sans", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.fillText(m + ' m', W - 24, H - 28); ctx.textAlign = 'left';
   S._hits = [];
   for (const f of d.services) {
     const furn = FURN.has(f.kind);
@@ -344,7 +344,7 @@ function drawNow() {
       { center: true, font: '13px "Special Elite", monospace', bg: 'rgba(240,234,220,0.92)', color: '#8f1d16', h: 16 });
     S._hits.push({ x, y, r: sz / 2, l });
   }
-  const on = searching(), pts = visiblePoints(), r = Math.max(3.5, Math.min(7, s * 0.3));
+  const on = searching(), pts = visiblePoints(), r = (PREF.markers ? 1.55 : 1.15) * Math.max(3.5, Math.min(7, s * 0.3));
   const ordered = on ? pts.slice().sort((a, b) => pointMatches(a) - pointMatches(b)) : pts;
   for (const p of ordered) {
     const [x, y] = toScreen(p.x, p.z); if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
@@ -367,7 +367,7 @@ function drawNow() {
   if (s > 24) for (const p of pts) {
     if ((on && !pointMatches(p)) || (p.kind === 'container' && !p.loot)) continue;
     const [x, y] = toScreen(p.x, p.z); if (x < 0 || y < 0 || x > W || y > H) continue;
-    label(hasTable(p.category) ? p.category : (p.title || p.type || p.name), x + r + 4, y, { font: '11px "IBM Plex Sans", sans-serif' });
+    label(hasTable(p.category) ? p.category : (p.title || p.type || p.name), x + r + 4, y, { font: '13px "IBM Plex Sans", sans-serif' });
   }
   for (const [p, c] of [[S.hover && S.hover.p, '#241d14'], [S.sel != null ? d.points[S.sel] : null, '#b3261e']]) {
     if (!p) continue; const [x, y] = toScreen(p.x, p.z);
@@ -554,6 +554,18 @@ for (const [k, id] of Object.entries(LAYERS)) {
 }
 $('#layersBtn').onclick = () => { const p = $('#layers'); p.classList.toggle('hidden'); $('#layersBtn').setAttribute('aria-expanded', String(!p.classList.contains('hidden'))); };
 document.addEventListener('click', e => { if (!e.target.closest('.tools')) $('#layers').classList.add('hidden'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#layers').classList.contains('hidden')) { $('#layers').classList.add('hidden'); $('#layersBtn').setAttribute('aria-expanded', 'false'); $('#layersBtn').focus(); } });
+// reading preferences, kept in this browser
+const PREF = { text: false, markers: false, contrast: false };
+try { Object.assign(PREF, JSON.parse(localStorage.getItem('obs-pref') || '{}')); } catch (e) {}
+function applyPref() {
+  document.documentElement.classList.toggle('big-text', !!PREF.text);
+  document.documentElement.classList.toggle('hc', !!PREF.contrast);
+  $('#pfText').checked = !!PREF.text; $('#pfMarkers').checked = !!PREF.markers; $('#pfContrast').checked = !!PREF.contrast;
+  try { localStorage.setItem('obs-pref', JSON.stringify(PREF)); } catch (e) {}
+  resize(); draw();
+}
+for (const [k, id] of [['text', 'pfText'], ['markers', 'pfMarkers'], ['contrast', 'pfContrast']]) $('#' + id).addEventListener('change', e => { PREF[k] = e.target.checked; applyPref(); });
 $('#fitBtn').onclick = fit;
 $('#menuBtn').onclick = () => $('#side').classList.toggle('open');
 $('#infoBtn').onclick = () => $('#detail').classList.toggle('open');
@@ -587,7 +599,7 @@ new ResizeObserver(resize).observe($('#mapWrap'));
 if (document.fonts) document.fonts.ready.then(draw);
 const start = readHash();
 const first = start && SC[start] ? start : 'open-sewer-bazaar';
-S.region = SC[first].group; renderTabs(); resize();
+S.region = SC[first].group; renderTabs(); applyPref();
 openScene(first, !!start && !S.autoFit);
 window.addEventListener('hashchange', () => { const s = readHash(); if (s && s !== S.scene) openScene(s, true); });
 // Used by the database pages (dbview.js) to jump to a scene, optionally with a search.
