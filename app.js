@@ -129,12 +129,19 @@ $('#sideBody').addEventListener('click', e => {
 });
 
 // ---------- scenes ----------
+// Every scene file calls window.__scene(data) when it loads. Several can be loading at once (tapping a tab while the map is
+// still opening), so the data is filed by its own slug instead of by whichever request was made last.
+const loading = {};
+window.__scene = d => { const slug = d.slug, w = loading[slug]; cache[slug] = prep(d); delete loading[slug]; if (w) w.res(cache[slug]); };
 function loadScene(slug) {
   if (cache[slug]) return Promise.resolve(cache[slug]);
-  return new Promise((res, rej) => {
-    window.__scene = d => { cache[slug] = prep(d); res(cache[slug]); };
-    const s = document.createElement('script'); s.src = `data/scenes/${slug}.js`; s.onerror = rej; document.head.appendChild(s);
-  });
+  if (loading[slug]) return loading[slug].p;
+  const w = loading[slug] = {};
+  w.p = new Promise((res, rej) => { w.res = res; w.rej = rej; });
+  const s = document.createElement('script'); s.src = `data/scenes/${slug}.js`;
+  s.onerror = () => { delete loading[slug]; s.remove(); w.rej(new Error('scene ' + slug)); };
+  document.head.appendChild(s);
+  return w.p;
 }
 function prep(d) {
   const v = d.nav.v, t = d.nav.t; d.tri = [];
@@ -164,16 +171,22 @@ function computeFloors(d) {
   }
   return [];
 }
+let openSeq = 0;
 async function openScene(slug, keepView) {
+  const my = ++openSeq;
   const meta = SC[slug] || SC['open-sewer-bazaar'];
   if (S.scene !== meta.slug) S.selF = null;
   if (S.scene !== meta.slug && !keepView) { S.sel = null; S.floor = -1; }
   S.scene = meta.slug;
   if (!searching()) { S.region = meta.group; renderTabs(); }
-  renderSide(); renderCrumb(meta);
-  $('#loading').classList.remove('hidden');
-  try { S.data = await loadScene(meta.slug); } finally { $('#loading').classList.add('hidden'); }
-  if (S.scene !== meta.slug) return;
+  S.data = null; paths = null; S.floors = []; renderFloors();   // nothing of the previous place is drawn under the new name
+  renderSide(); renderCrumb(meta); renderDetail(); draw();
+  $('#loading').textContent = 'Unfolding the map…'; $('#loading').classList.remove('hidden');
+  let data;
+  try { data = await loadScene(meta.slug); }
+  catch (e) { if (my === openSeq) $('#loading').textContent = 'Could not load this place. Tap it again to retry.'; return; }
+  if (my !== openSeq || S.scene !== meta.slug) return;   // a newer tap took over; it will finish the job
+  $('#loading').classList.add('hidden'); S.data = data;
   S.floors = computeFloors(S.data); if (S.floor >= S.floors.length) S.floor = -1;
   S.layers.plan = S.userPlan ?? !(meta.outdoor && meta.map); $('#lyPlan').checked = S.layers.plan;
   buildPaths(); renderFloors();
