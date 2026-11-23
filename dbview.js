@@ -163,6 +163,11 @@ const wide = () => !matchMedia('(max-width:820px)').matches;
 const tableOn = () => V.sec === 'items' && V.view === 'table' && wide();
 const PARAMS = [['c', 'f'], ['e', 'e'], ['e2', 'e2'], ['min', 'min'], ['w', 'w'], ['s', 'sort'], ['q', 'q'], ['v', 'view'], ['col', 'col']];
 const DEFAULTS = { f: '', e: '', e2: '', min: '', w: '', sort: 'name', q: '', view: 'list', col: '' };
+const FIELDS = ['f', 'e', 'e2', 'min', 'w', 'sort', 'q', 'view', 'col', 'dir'];
+const FRESH = { f: '', e: '', e2: '', min: '', w: '', sort: 'name', q: '', view: 'list', col: '', dir: 1 };
+let SAVED = {}; try { SAVED = JSON.parse(sessionStorage.getItem('obs-dbstate') || '{}') || {}; } catch (e) {}
+function stash() { SAVED[V.sec] = Object.fromEntries(FIELDS.map(f => [f, V[f]])); try { sessionStorage.setItem('obs-dbstate', JSON.stringify(SAVED)); } catch (e) {} }
+const filtered = () => !!(V.f || V.e || V.e2 || V.min || V.w || V.q);
 function qsOf() { const p = new URLSearchParams(); for (const [k, f] of PARAMS) if (V[f] !== DEFAULTS[f] && V[f] != null) p.set(k, V[f]); if (V.col && V.dir < 0) p.set('dir', 'd'); return p.toString(); }
 function applyQs(qs) { const p = new URLSearchParams(qs); for (const [k, f] of PARAMS) V[f] = p.get(k) ?? DEFAULTS[f]; V.dir = p.get('dir') === 'd' ? -1 : 1; V.lim = 300; }
 function setReport() {
@@ -171,7 +176,7 @@ function setReport() {
 }
 function syncUrl() {
   if (!isDb()) return;
-  const qs = qsOf();
+  const qs = qsOf(); stash();
   history.replaceState(null, '', '#/db/' + V.sec + (V.key != null ? '/' + encodeURIComponent(V.key) : '') + (qs ? '?' + qs : ''));
   setReport();
 }
@@ -182,7 +187,10 @@ const shopSave = () => { try { localStorage.setItem(SHOP, JSON.stringify(shopMem
 const shopCount = () => Object.keys(shopGet()).length;
 const shopBadge = () => { const b = $('#shopN'); if (b) b.textContent = shopCount(); };
 function shopChange(rid, d) { const L = shopGet(), n = Math.max(0, (L[rid] || 0) + d); if (n) L[rid] = n; else delete L[rid]; shopSave(); shopBadge(); }
-const shopBtn = rid => `<button type="button" class="shopbtn" data-shop="${rid}" data-d="1">+ Shopping list</button>`;
+const shopCtl = rid => { const n = shopGet()[rid] || 0; return n
+  ? `<span class="shopctl"><button type="button" data-shop="${rid}" data-d="-1" aria-label="One less">−</button><span>On the list × ${n}</span><button type="button" data-shop="${rid}" data-d="1" aria-label="One more">+</button><button type="button" class="x" data-shop="${rid}" data-d="-999">Remove</button></span>`
+  : `<button type="button" class="shopbtn" data-shop="${rid}" data-d="1">+ Shopping list</button>`; };
+const shopBtn = rid => `<span class="shopwrap" data-rid="${rid}">${shopCtl(rid)}</span>`;
 const econText = rid => { const e = X.RC[rid]; return `Ingredients ≈ ${fmt(e.cost)} OC · worth ≈ ${fmt(e.worth)} OC · <b class="${e.profit >= 0 ? 'good' : 'bad'}">${e.profit >= 0 ? '+' : '−'}${fmt(Math.abs(e.profit))} OC</b>`; };
 const fxLine = id => { const st = DB.items[id] && DB.items[id][9]; if (!st) return ''; const t = STATS.filter(([k]) => st[k]).slice(0, 4).map(([k, l]) => `${l} ${sgn(st[k])}`); return t.length ? `<br><small class="muted">${t.join(' · ')}</small>` : ''; };
 
@@ -283,9 +291,10 @@ function renderSide() {
 }
 function renderList() {
   const r = rows(), el = $('#dbList'); if (!el) return;
-  el.innerHTML = `<div class="dbcount">${r.length} ${r.length === 1 ? 'entry' : 'entries'}</div>` + (r.length ? r.slice(0, V.lim).map(([k, a, b, ic]) =>
+  el.innerHTML = `<div class="dbcount">${r.length} ${r.length === 1 ? 'entry' : 'entries'}${filtered() ? ' · <button type="button" class="linkbtn" id="dbReset">Reset filters</button>' : ''}</div>` + (r.length ? r.slice(0, V.lim).map(([k, a, b, ic]) =>
     `<a class="row ${String(V.key) === String(k) ? 'on' : ''}" href="#/db/${V.sec}/${encodeURIComponent(k)}">${ic || ''}<span class="nm">${esc(a)}</span><span class="ct">${esc(b)}</span></a>`).join('')
     + (r.length > V.lim ? `<button class="dbmore" id="dbMore">Show ${r.length - V.lim} more</button>` : '') : '<div class="empty">Nothing matches.</div>');
+  const rs = $('#dbReset'); if (rs) rs.onclick = () => { Object.assign(V, FRESH, { view: V.view }); V.lim = 300; renderSide(); if (V.key == null) renderDetail(); };
   const mo = $('#dbMore'); if (mo) mo.onclick = () => { V.lim += 600; renderList(); };
   if (tableOn() && V.key == null) renderDetail();
   syncUrl();
@@ -448,7 +457,7 @@ function listCard() {
   for (const rid of rids) { const n = L[rid], r = X.R[rid]; r[7].forEach(x => { need[x[0]] = (need[x[0]] || 0) + x[1] * n; }); r[8].forEach(x => { make[x[0]] = (make[x[0]] || 0) + x[1] * n; }); cost += X.RC[rid].cost * n; worth += X.RC[rid].worth * n; }
   const byName = o => Object.entries(o).sort((a, b) => iname(a[0]).localeCompare(iname(b[0])));
   return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ingredients ≈ ${fmt(cost)} OC · worth ≈ ${fmt(worth)} OC</div>
-    <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span>${rl(rid)}</span><span class="qty"><button type="button" data-shop="${rid}" data-d="-1" aria-label="One less">−</button><b>× ${L[rid]}</b><button type="button" data-shop="${rid}" data-d="1" aria-label="One more">+</button></span></div>`).join('')}
+    <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span>${rl(rid)}</span><span class="qty"><button type="button" data-shop="${rid}" data-d="-1" aria-label="One less">−</button><b>× ${L[rid]}</b><button type="button" data-shop="${rid}" data-d="1" aria-label="One more">+</button><button type="button" class="x" data-shop="${rid}" data-d="-999" aria-label="Remove from the list">✕</button></span></div>`).join('')}
     <h3>You will need</h3>${ul(byName(need).map(([id, n]) => { const w = whereIs(id); return `<span>${il(id)} <small class="muted">× ${num(n)}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}`; }))}
     <h3>You will make</h3>${ul(byName(make).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}</small>`))}
     <button type="button" class="dbmore" data-shop="clear">Clear the list</button></div>`;
@@ -485,7 +494,7 @@ async function route() {
   const changed = s !== V.sec || !V.init, bare = s === 'notes' || s === 'list';
   V.sec = s; V.key = key ?? null;
   document.body.classList.toggle('dbpick', V.key != null || bare);   // phones: show the list or the entry, not both
-  if (changed) { V.q = ''; V.f = ''; V.e = ''; V.e2 = ''; V.min = ''; V.w = ''; V.sort = 'name'; V.view = 'list'; V.col = ''; V.dir = 1; V.lim = 300; }
+  if (changed) { Object.assign(V, FRESH, SAVED[s] || {}); V.lim = 300; }
   const applied = !!qs && (changed || qs !== qsOf()); if (applied) applyQs(qs);
   V.init = true;
   if (bare || changed || applied || !$('#dbList')) renderSide(); else renderList();
@@ -504,7 +513,7 @@ document.addEventListener('click', e => {
   if (sb) {
     e.preventDefault(); const v = sb.dataset.shop;
     if (v === 'clear') { shopMem = {}; shopSave(); shopBadge(); } else shopChange(v, +sb.dataset.d || 1);
-    if (V.sec === 'list') renderDetail(); else sb.textContent = 'On the list ✓ × ' + (shopGet()[v] || 0);
+    if (V.sec === 'list') renderDetail(); else document.querySelectorAll('.shopwrap').forEach(w => { if (w.dataset.rid === v) w.innerHTML = shopCtl(v); });
     return;
   }
   const sc = e.target.closest('[data-col]');
