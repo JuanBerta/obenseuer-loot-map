@@ -228,6 +228,8 @@ function itemCard(id) {
     if (st.fx) rows.push(`<span>Special effect</span><span>${esc(st.fx)}${st.fxa ? ' ' + sgn(st.fxa) : ''}</span>`);
     h += `<h3>When used</h3><div class="facts">${rows.join('')}</div><p class="muted">Base values. The game scales depression by your mood, and everything by freshness and quality.</p>`;
   }
+  const mk = [...(X.makes[id] || [])].sort((a, b) => X.R[a][1].localeCompare(X.R[b][1]));
+  if (mk.length) h += `<h3>How to craft · ${mk.length}</h3>${mk.map(r => craftBlock(r, id)).join('')}`;
   if (grp.length) h += `<h3>Any of these counts · ${grp.length}</h3>${ul(grp.map(il))}`;
   if (X.groupsOf[id]) h += `<h3>Counts as</h3><p>${X.groupsOf[id].map(il).join(', ')}</p>`;
   // where to find
@@ -247,11 +249,17 @@ function itemCard(id) {
   const sv = DB.vendors.filter(v => sells(v, +id)), bv = DB.vendors.filter(v => buys(v, +id));
   h += `<h3>Sold by · ${sv.length}</h3>${ul(sv.map(vl))}<h3>Bought by · ${bv.length}</h3>${ul(bv.map(v => vl(v) + (v.bs ? ' <small class="muted">· buys stolen</small>' : '')))}`;
   const via = new Set(); (X.groupsOf[id] || []).forEach(g => (X.uses[g] || []).forEach(r => via.add(r)));
-  h += `<h3>Made by · ${(X.makes[id] || []).size || 0}</h3>${ul(recipesOf(X.makes[id]))}`;
   if (X.fails[id]) h += `<h3>Comes out of a failed</h3>${ul(recipesOf(X.fails[id]))}`;
   h += `<h3>Used in · ${(X.uses[id] || []).size || 0}</h3>${ul(recipesOf(X.uses[id]))}`;
   if (via.size) h += `<h3>Used in, as part of a group · ${via.size}</h3>${ul(recipesOf(via))}`;
   return h + '</div>';
+}
+// A recipe as a short block: name and station, what goes in, what it takes.
+function craftBlock(rid, forItem) {
+  const r = X.R[rid], [, n, type, skill, minS, fail, time, inp, out] = r;
+  const mk = out.find(x => x[0] === +forItem), more = mk && mk[1] > 1 ? ` <small class="muted">makes ${num(mk[1])}</small>` : '';
+  return `<div class="craft"><div class="ch">${rl(rid)}${more}</div><div class="ci">${inp.map(x => `<span>${il(x[0])} <small class="muted">× ${num(x[1])}</small></span>`).join('')}</div>
+    <div class="cm muted">${esc(skill)}${minS ? ' ' + minS + '+' : ''} · ${hrs(time)} · ${Math.round(fail * 100)}% fail</div></div>`;
 }
 function recipeCard(id) {
   const r = X.R[id]; if (!r) return missing();
