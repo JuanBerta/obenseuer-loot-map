@@ -11,13 +11,26 @@ const SECTIONS = [
   ['tenants', 'Tenants'], ['furniture', 'Furniture'], ['notes', 'Data notes'],
 ];
 let DB = null, X = null;                       // raw data, derived indexes
-const V = { sec: 'items', key: null, q: '', f: '', sort: 'name', lim: 300 };
+const V = { sec: 'items', key: null, q: '', f: '', e: '', sort: 'name', lim: 300 };
+// What using an item does (data/db.js item[9], base values). [key, label, text when positive, text when negative, shown first in the filter list]
+const STATS = [
+  ['nut', 'Nutrition', 'Fills you up', 'Makes you hungrier'], ['thi', 'Thirst', 'Quenches thirst', 'Makes you thirstier'],
+  ['dep', 'Depression', 'Raises depression', 'Lowers depression'], ['hp', 'Health', 'Heals', 'Hurts'],
+  ['ble', 'Bleeding', 'Causes bleeding', 'Stops bleeding'], ['tir', 'Tiredness', 'Makes you tired', 'Gives you energy'],
+  ['hyg', 'Hygiene', 'Cleans you', 'Makes you dirty'], ['alc', 'Alcohol', 'Contains alcohol', null], ['nic', 'Nicotine', 'Contains nicotine', null],
+  ['high', 'High', 'Gives a high', null], ['smv', 'SMV', 'Raises SMV', 'Lowers SMV'], ['smvr', 'SMV rate', 'Speeds up SMV', 'Slows down SMV'],
+  ['aal', 'Alcohol addiction', 'Feeds alcohol addiction', 'Eases alcohol addiction'], ['mad', 'Mushroom addiction', 'Feeds mushroom addiction', 'Eases mushroom addiction'],
+  ['sad', 'Smoking addiction', 'Feeds smoking addiction', 'Eases smoking addiction'],
+];
+const STAT = Object.fromEntries(STATS.map(s => [s[0], s]));
+const sgn = v => (v > 0 ? '+' : v < 0 ? '−' : '') + (+Math.abs(v).toFixed(3)).toLocaleString(undefined, { maximumFractionDigits: 3 });
+const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s && s[k] ? s[k] : 0; };
 
 // ---------- loading & indexes ----------
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=3';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=4';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -41,7 +54,9 @@ function index() {
   const tenIds = Object.keys(I).filter(id => I[id][2].some(c => TEN.has(c)) || I[id][7]).map(Number);
   const tenSet = new Set(tenIds);
   const tenRecipes = DB.recipes.filter(r => /furniture/i.test(r[1]) || r[8].some(x => tenSet.has(x[0]))).map(r => r[0]);
-  X = { R, makes, uses, fails, groupsOf, inTables, tableCount, tableScenes, VK, tableItems, furnTypes, tenIds, tenSet, tenRecipes,
+  const statCount = {};
+  for (const it of Object.values(I)) if (it[9]) for (const [k, v] of Object.entries(it[9])) if (STAT[k] && v) { const key = k + (v < 0 ? '-' : '+'); statCount[key] = (statCount[key] || 0) + 1; }
+  X = { statCount, R, makes, uses, fails, groupsOf, inTables, tableCount, tableScenes, VK, tableItems, furnTypes, tenIds, tenSet, tenRecipes,
         itemCats: [...new Set(Object.values(I).flatMap(i => i[2]))].sort(),
         rTypes: [...new Set(DB.recipes.map(r => r[2]))].sort(),
         fCats: [...new Set(Object.values(DB.furniture).map(f => f[1]))].sort() };
@@ -132,9 +147,13 @@ function rows() {
   const q = V.q.trim().toLowerCase(), m = s => !q || String(s).toLowerCase().includes(q);
   const I = DB.items;
   const itemRows = ids => {
-    let a = ids.filter(id => (m(I[id][0]) || String(id) === q) && (!V.f || I[id][2].includes(V.f)));
-    a.sort(V.sort === 'value' ? (x, y) => I[y][1] - I[x][1] : (x, y) => I[x][0].localeCompare(I[y][0]));
-    return a.map(id => [id, I[id][0], (X.inTables[id] ? '◆ ' : '') + (X.makes[id] ? '⚒ ' : '') + I[id][1] + ' OC', iIco(id)]);
+    const ek = V.e ? V.e.slice(0, -1) : '', ed = V.e ? V.e.slice(-1) : '';
+    let a = ids.filter(id => (m(I[id][0]) || String(id) === q) && (!V.f || I[id][2].includes(V.f)) && (!ek || (ed === '-' ? stat(id, ek) < 0 : stat(id, ek) > 0)));
+    const mag = id => Math.abs(stat(id, ek));
+    a.sort(ek && V.sort === 'eh' ? (x, y) => mag(y) - mag(x) || I[x][0].localeCompare(I[y][0])
+      : ek && V.sort === 'el' ? (x, y) => mag(x) - mag(y) || I[x][0].localeCompare(I[y][0])
+      : V.sort === 'value' ? (x, y) => I[y][1] - I[x][1] : (x, y) => I[x][0].localeCompare(I[y][0]));
+    return a.map(id => [id, I[id][0], (ek ? sgn(stat(id, ek)) + ' ' + STAT[ek][1].toLowerCase() : (X.inTables[id] ? '◆ ' : '') + (X.makes[id] ? '⚒ ' : '') + I[id][1] + ' OC'), iIco(id)]);
   };
   switch (V.sec) {
     case 'items': return itemRows(Object.keys(I).map(Number));
@@ -154,15 +173,21 @@ function rows() {
 }
 function filters() {
   const opt = (list, all) => `<select id="dbF"><option value="">${all}</option>${list.map(c => `<option ${V.f === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
-  const sort = `<select id="dbSort"><option value="name">A–Z</option><option value="value" ${V.sort === 'value' ? 'selected' : ''}>Price ↓</option></select>`;
-  if (V.sec === 'items' || V.sec === 'tenement') return opt(X.itemCats, 'All categories') + sort;
+  const so = (k, t) => `<option value="${k}" ${V.sort === k ? 'selected' : ''}>${t}</option>`;
+  const sort = `<select id="dbSort"><option value="name">A–Z</option>${so('value', 'Price ↓')}${V.sec === 'items' && V.e ? so('eh', 'Strongest effect first') + so('el', 'Weakest effect first') : ''}</select>`;
+  if (V.sec === 'items') {
+    const eo = STATS.flatMap(([k, , up, down]) => [[k + '+', up], [k + '-', down]]).filter(([key, t]) => t && X.statCount[key])
+      .map(([key, t]) => `<option value="${key}" ${V.e === key ? 'selected' : ''}>${esc(t)} (${X.statCount[key]})</option>`).join('');
+    return opt(X.itemCats, 'All categories') + sort + `<select id="dbE" title="Only items that change one of your stats"><option value="">Any effect</option>${eo}</select>`;
+  }
+  if (V.sec === 'tenement') return opt(X.itemCats, 'All categories') + sort;
   if (V.sec === 'recipes') return opt(X.rTypes, 'All stations');
   if (V.sec === 'furniture') return opt(X.fCats, 'All categories') + sort;
   if (V.sec === 'vendors') return `<select id="dbF"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   return '';
 }
 const INTRO = {
-  items: 'Every item in the game. ◆ can be found in containers or shops · ⚒ can be crafted.',
+  items: 'Every item in the game. ◆ can be found in containers or shops · ⚒ can be crafted. Use “Any effect” to find food, drink and medicine by what they do to depression, nutrition, thirst and more.',
   recipes: 'Every recipe with its ingredients, station, skill and time.',
   vendors: 'Shops, traders, stalls and vending machines placed in the world: what they sell and what they buy from you.',
   tenement: 'Building materials and wall coverings for fixing up your tenement, and the recipes that make them.',
@@ -174,10 +199,11 @@ function renderSide() {
   const el = $('#dbSide');
   const head = `<div class="dbnav">${SECTIONS.map(([k, t]) => `<a href="#/db/${k}" class="${V.sec === k ? 'on' : ''}">${secIcon(k)}${t}${k === 'notes' ? ` <b>${DB.notes.length}</b>` : ''}</a>`).join('')}</div>`;
   if (V.sec === 'notes') { el.innerHTML = head + `<p class="dbintro">${INTRO.notes}</p>`; return; }
-  el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p><div class="dbbar"><input id="dbQ" type="search" placeholder="Search ${esc(SECTIONS.find(s => s[0] === V.sec)[1].toLowerCase())}…" value="${esc(V.q)}" autocomplete="off">${filters()}</div><div id="dbList"></div>`;
+  el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p><div class="dbbar${V.sec === 'items' ? ' multi' : ''}"><input id="dbQ" type="search" placeholder="Search ${esc(SECTIONS.find(s => s[0] === V.sec)[1].toLowerCase())}…" value="${esc(V.q)}" autocomplete="off">${filters()}</div><div id="dbList"></div>`;
   const q = $('#dbQ'); q.oninput = () => { V.q = q.value; V.lim = 300; renderList(); };
   const f = $('#dbF'); if (f) f.onchange = () => { V.f = f.value; V.lim = 300; renderList(); };
   const s = $('#dbSort'); if (s) s.onchange = () => { V.sort = s.value; renderList(); };
+  const e = $('#dbE'); if (e) e.onchange = () => { V.e = e.value; V.lim = 300; V.sort = V.e ? 'eh' : 'name'; renderSide(); };
   renderList();
 }
 function renderList() {
@@ -195,6 +221,13 @@ function itemCard(id) {
   let h = `<div class="card"><div class="dbhead">${iIco(id, 1)}<div><h2>${esc(t)}</h2><div class="sub">ID ${id} · ${val} OC · stacks to ${stack}</div></div></div>`;
   if (desc) h += `<p>${esc(desc)}</p>`;
   h += `<div class="tags">${cats.map(c => `<a class="tag" href="#/db/items" data-cat="${esc(c)}">${esc(c)}</a>`).join('')}${eff.map(e => `<span class="tag teal">${e[0]} ${e[1]}</span>`).join('')}${wall ? `<span class="tag">${esc(wall)}</span>` : ''}</div>`;
+  const st = it[9];
+  if (st) {
+    const rows = STATS.filter(([k]) => st[k]).map(([k, lab, up, down]) => { const v = st[k], good = k === 'dep' || k === 'ble' ? v < 0 : k === 'tir' ? v < 0 : (k === 'nut' || k === 'thi' || k === 'hp' || k === 'hyg') ? v > 0 : null;
+      return `<span>${esc(lab)}</span><span class="${good == null ? '' : good ? 'good' : 'bad'}">${sgn(v)} <small class="muted">${esc((v > 0 ? up : down) || '')}</small></span>`; });
+    if (st.fx) rows.push(`<span>Special effect</span><span>${esc(st.fx)}${st.fxa ? ' ' + sgn(st.fxa) : ''}</span>`);
+    h += `<h3>When used</h3><div class="facts">${rows.join('')}</div><p class="muted">Base values. The game scales depression by your mood, and everything by freshness and quality.</p>`;
+  }
   if (grp.length) h += `<h3>Any of these counts · ${grp.length}</h3>${ul(grp.map(il))}`;
   if (X.groupsOf[id]) h += `<h3>Counts as</h3><p>${X.groupsOf[id].map(il).join(', ')}</p>`;
   // where to find
@@ -313,7 +346,7 @@ async function route() {
   const s = SECTIONS.some(x => x[0] === sec) ? sec : 'items';
   if (!DB) { $('#dbDetail').innerHTML = '<div class="card"><p>Opening the files…</p></div>'; try { await load(); } catch (e) { $('#dbDetail').innerHTML = '<div class="card"><h2>Could not load data/db.js</h2><p class="muted">Run tools/build_db.py.</p></div>'; return; } }
   const changed = s !== V.sec; V.sec = s; V.key = key ?? null;
-  if (changed) { V.q = ''; V.f = ''; V.sort = 'name'; V.lim = 300; renderSide(); } else if (!$('#dbList') && s !== 'notes') renderSide(); else renderList();
+  if (changed) { V.q = ''; V.f = ''; V.e = ''; V.sort = 'name'; V.lim = 300; renderSide(); } else if (!$('#dbList') && s !== 'notes') renderSide(); else renderList();
   if (s === 'notes') renderSide();
   renderDetail();
   const on = $('#dbList .row.on'); if (on) on.scrollIntoView({ block: 'nearest' });
@@ -327,7 +360,7 @@ function leave(slug, q) {
 document.addEventListener('click', e => {
   const m = e.target.closest('[data-map]'); if (m) { e.preventDefault(); leave(m.dataset.map, m.dataset.q); return; }
   const c = e.target.closest('#dbDetail [data-cat]');
-  if (c) { e.preventDefault(); V.sec = 'items'; V.q = ''; V.f = c.dataset.cat; V.key = null; history.pushState(null, '', '#/db/items'); renderSide(); renderDetail(); }
+  if (c) { e.preventDefault(); V.sec = 'items'; V.q = ''; V.f = c.dataset.cat; V.e = ''; if (V.sort === 'eh' || V.sort === 'el') V.sort = 'name'; V.key = null; history.pushState(null, '', '#/db/items'); renderSide(); renderDetail(); }
 });
 // Region tabs leave the database and go back to the map.
 $('#regionTabs').addEventListener('click', e => { if (isDb() && e.target.closest('[data-region]')) { document.body.classList.remove('dbmode'); $('#dbBtn').classList.remove('on'); history.replaceState(null, '', '#/'); } }, true);

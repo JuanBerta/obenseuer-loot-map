@@ -169,6 +169,8 @@ footer{border-top:1px solid #000;padding:6px 18px;font-size:0.8125rem;color:var(
 .dbbar{display:flex;gap:6px;padding:10px 14px 6px}
 .dbbar input,.dbbar select{background:var(--paper);color:var(--ink);border:1px solid #000;border-radius:3px;padding:7px 9px;font:0.8438rem var(--sans);min-width:0}
 .dbbar input{flex:1}.dbbar select{max-width:140px}
+.dbbar.multi{flex-wrap:wrap}.dbbar.multi input{flex:1 1 100%}.dbbar.multi select{flex:1 1 40%;max-width:none}.dbbar.multi #dbE{flex:1 1 100%}
+.facts .good{color:#2c6b2a;font-weight:600}.facts .bad{color:var(--red);font-weight:600}
 #dbList{overflow:auto;flex:1;padding-bottom:16px}
 #dbList .row{text-decoration:none;color:inherit}
 #dbList .row .ct{min-width:0;white-space:nowrap;max-width:46%;overflow:hidden;text-overflow:ellipsis}

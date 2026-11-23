@@ -19,6 +19,27 @@ def read_json(name):
         return json.loads('[' + t.rstrip(',') + ']')   # Characters.json: objects separated by commas, no brackets
 
 notes = []
+
+# What using an item does (base values, before the game scales them by your mood, freshness and quality). Only non-zero stats are kept.
+# Same sums as ItemConsumable.GetFood/GetDrink/GetNicotine/GetHygiene: the action's Amount counts as nutrition for Food, thirst for Drink, ...
+STAT_ACTIONS = ('Food', 'Drink', 'Medicine', 'Smoke', 'Bandage', 'Hygiene', 'Slaughter')
+def stats(it):
+    for a in it.get('Actions') or []:
+        if not isinstance(a, dict) or a.get('Type') not in STAT_ACTIONS: continue
+        t, amt = a['Type'], a.get('Amount', 0) or 0
+        v = dict(nut=a.get('Food', 0) + (amt if t == 'Food' else 0), thi=a.get('Drink', 0) + (amt if t == 'Drink' else 0),
+                 dep=a.get('Depression', 0), hp=a.get('Health', 0), ble=a.get('Bleeding', 0), tir=a.get('Tiredness', 0),
+                 hyg=a.get('Hygiene', 0) + (amt if t == 'Hygiene' else 0), alc=a.get('Intoxication', 0),
+                 nic=a.get('Nicotine', 0) + (amt if t == 'Smoke' else 0),
+                 high=a.get('High', 0) + a.get('HighOrange', 0) + a.get('HighOrangeBad', 0), smv=a.get('SMV', 0), smvr=a.get('SMVProgressionRate', 0),
+                 aal=a.get('AlcoholAddiction', 0), mad=a.get('MushroomAddiction', 0), sad=a.get('SmokingAddiction', 0),
+                 fxa=a.get('SpecialEffectAmount', 0))
+        out = {k: round(x, 4) for k, x in v.items() if x}
+        fx = a.get('SpecialEffectName')
+        if fx and fx != 'None': out['fx'] = fx
+        return out
+    return None
+
 # ---- items
 items = {}
 for it in read_json('Items.json'):
@@ -30,7 +51,7 @@ for it in read_json('Items.json'):
         if t.endswith('WallpaperData'): wall = m.get('surfaceArea')
     items[it['ID']] = [it['Title'].strip(), it.get('BaseValue', 0), it.get('Categories') or [], (it.get('Description') or '').strip(),
                        it.get('Stackable', 1), eff, grp, wall,
-                       sorted({str(m.get('$type', '')).split('.')[-1] for m in it.get('Meta') or [] if isinstance(m, dict)})]
+                       sorted({str(m.get('$type', '')).split('.')[-1] for m in it.get('Meta') or [] if isinstance(m, dict)}), stats(it)]
 # ---- recipes
 recipes = []
 kv = lambda l: [[x['Key']['ID'], x['Value']] for x in l or []]
