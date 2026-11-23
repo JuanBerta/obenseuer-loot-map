@@ -487,6 +487,7 @@ function whereIs(id) {
   if (!parts.length) parts.push('not found in the world data');
   return { parts, btn };
 }
+let modCode = '';
 function listCard() {
   const L = shopGet(), o = shopOpt(), up = n => Math.ceil(n - 1e-9);
   const rids = Object.keys(L).filter(id => X.R[id]).sort((a, b) => X.R[a][1].localeCompare(X.R[b][1]));
@@ -497,6 +498,7 @@ function listCard() {
   const E = expandNeeds(need, o), byName = a => a.sort((x, y) => iname(x[0]).localeCompare(iname(y[0])));
   const rawCost = Object.entries(E.raw).reduce((a, [id, n]) => a + X.unit(id) * up(n), 0);
   const crafted = E.order.length;
+  modCode = 'OBSLIST:' + JSON.stringify({ v: 1, recipes: rids.map(r => [X.R[r][1], L[r]]), steps: E.order.map(r => [X.R[r][1], up(E.steps[r]), E.outs[r]]), raw: Object.entries(E.raw).map(([id, n]) => [+id, up(n)]) });
   return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ${o.mode !== 'off' ? 'raw materials' : 'ingredients'} ≈ ${fmt(o.mode !== 'off' ? rawCost : cost)} OC · worth ≈ ${fmt(worth)} OC</div>
     <label class="shopopt">Ingredients <select data-shopmode aria-label="How far to break ingredients down"><option value="all" ${o.mode === 'all' ? 'selected' : ''}>Break down everything craftable</option><option value="missing" ${o.mode === 'missing' ? 'selected' : ''}>Only what can't be found or bought</option><option value="off" ${o.mode === 'off' ? 'selected' : ''}>Don't break down</option></select></label>
     <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span>${rl(rid)}</span><span class="qty"><button type="button" data-shop="${rid}" data-d="-1" aria-label="One less">−</button><b>× ${L[rid]}</b><button type="button" data-shop="${rid}" data-d="1" aria-label="One more">+</button><button type="button" class="x" data-shop="${rid}" data-d="-999" aria-label="Remove from the list">✕</button></span></div>`).join('')}
@@ -505,7 +507,8 @@ function listCard() {
     <h3>${o.mode !== 'off' ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = o.mode !== 'off' && bestRecipe(+id) && !(DB.items[id] && DB.items[id][6].length);
       return `<span>${il(id)} <small class="muted">× ${num(up(n))}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}`; }))}
     <h3>You will make</h3>${ul(byName(Object.entries(make)).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}</small>`))}
-    <button type="button" class="dbmore" data-shop="clear">Clear the list</button></div>`;
+    <button type="button" class="dbmore" data-copymod>Copy list for the mod</button> <button type="button" class="dbmore" data-shop="clear">Clear the list</button>
+    <p class="muted">In the game, open the Loot Map panel and press “Paste list from the website”: the mod shows what you still need and where to find it.</p></div>`;
 }
 function notesCard() {
   return `<div class="card"><h2>Data notes</h2><div class="sub">${DB.notes.length} findings</div>${ul(DB.notes.map(esc))}
@@ -554,6 +557,9 @@ function leave(slug, q) {
   window.OBS_MAP && window.OBS_MAP.show(slug, q);
 }
 document.addEventListener('click', e => {
+  const cm = e.target.closest('[data-copymod]');
+  if (cm) { const done = () => { cm.textContent = 'Copied ✓'; setTimeout(() => { cm.textContent = 'Copy list for the mod'; }, 1800); };
+    try { navigator.clipboard.writeText(modCode).then(done, () => fallbackCopy(modCode, done)); } catch (_) { fallbackCopy(modCode, done); } return; }
   const sb = e.target.closest('[data-shop]');
   if (sb) {
     e.preventDefault(); const v = sb.dataset.shop;
@@ -573,6 +579,7 @@ document.addEventListener('click', e => {
 });
 // Region tabs leave the database and go back to the map.
 $('#regionTabs').addEventListener('click', e => { if (isDb() && e.target.closest('[data-region]')) { document.body.classList.remove('dbmode'); $('#dbBtn').classList.remove('on'); history.replaceState(null, '', '#/'); } }, true);
+function fallbackCopy(t, ok) { const a = document.createElement('textarea'); a.value = t; a.style.position = 'fixed'; a.style.opacity = '0'; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); ok(); } catch (_) { } a.remove(); }
 document.addEventListener('change', e => { const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
 window.addEventListener('hashchange', () => { route(); setReport(); });
 // footer: game version, theme switch

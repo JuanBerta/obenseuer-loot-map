@@ -162,13 +162,23 @@ namespace ObenseuerLootMap
                 bool hov = (g - mouse).sqrMagnitude < 81f;
                 if (hov) { hoveredDoor = d; hoveredDoorAt = g; }
                 var oldC = GUI.color;
-                GUI.color = d.open == 1 ? new Color(0.1f, 0.09f, 0.08f) : new Color(0.45f, 0.43f, 0.4f);
+                string st = DoorState(d, CurrentScene);
+                GUI.color = DoorColor(st);
                 GUI.DrawTexture(new Rect(g.x - 5, g.y - 5, 10, 10), Texture2D.whiteTexture);
-                GUI.color = Paper; GUI.DrawTexture(new Rect(g.x - 1.5f, g.y - 3, 3, 6), Texture2D.whiteTexture);
+                GUI.color = Paper;
+                if (st == "open" || st == "closed") GUI.DrawTexture(new Rect(g.x - 1.5f, g.y - 3, 3, 6), Texture2D.whiteTexture);
+                else
+                {   // padlock: body and shackle
+                    GUI.DrawTexture(new Rect(g.x - 3f, g.y - 0.5f, 6, 4.5f), Texture2D.whiteTexture);
+                    GUI.DrawTexture(new Rect(g.x - 2f, g.y - 3.5f, 1.2f, 3.2f), Texture2D.whiteTexture);
+                    GUI.DrawTexture(new Rect(g.x + 0.8f, g.y - 3.5f, 1.2f, 3.2f), Texture2D.whiteTexture);
+                    GUI.DrawTexture(new Rect(g.x - 2f, g.y - 3.5f, 4f, 1.2f), Texture2D.whiteTexture);
+                    if (st == "blocked") { GUI.color = new Color(0.8f, 0.12f, 0.1f); GUI.DrawTexture(new Rect(g.x - 5, g.y - 0.6f, 10, 1.4f), Texture2D.whiteTexture); }
+                }
                 GUI.color = oldC;
                 if (Event.current.type == EventType.Repaint && (hov || zoom > 2.2f || Indoors))
                 {
-                    var c = new GUIContent(Db.SceneName(d.to));
+                    var c = new GUIContent(Db.SceneName(d.to) + DoorTag(st));
                     var sz = doorStyle.CalcSize(c);
                     doorStyle.Draw(new Rect(g.x + 8, g.y - sz.y / 2, sz.x, sz.y), c, false, false, false, false);
                 }
@@ -179,9 +189,11 @@ namespace ObenseuerLootMap
         {
             var d = hoveredDoor; var sb = new StringBuilder();
             sb.Append($"<b><size=15>{Db.SceneName(d.to)}</size></b>\n");
+            string dst = DoorState(d, CurrentScene);
             if (d.open == 0) sb.Append($"<color=#7a6f5c>{Loc.T("not open in this game version")}</color>");
             else if (Db.scenes.TryGetValue(d.to, out var s))
             {
+                if (dst != "open") sb.Append($"<color={(dst == "blocked" ? "#7a6f5c" : "#6b3fa0")}><b>{DoorText(dst)}</b>{(dst == "pick" && d.df > 0 ? " · " + DifficultyText(d.df) : "")}</color>\n");
                 sb.Append($"{s.free + s.steal} {Loc.T("loot")}: <color=#3f6b2f><b>{s.free} {Loc.T("free")}</b></color> · <color=#9b1c14><b>{s.steal} {Loc.T("stealing")}</b></color>");
                 if (s.vendors.Count > 0) sb.Append($"\n{Loc.T("Shops")}: {string.Join(", ", s.vendors.Select(v => v.n).Distinct().Take(4))}");
                 if (s.stations.Count > 0) sb.Append($"\n{Loc.T("Workstations")}: {string.Join(", ", s.stations.Select(v => v.n).Distinct().Take(6))}");
@@ -253,6 +265,8 @@ namespace ObenseuerLootMap
                     GUILayout.Label($"<color=#3ddc5a>■</color> {Loc.T("has it now")}   <color=#d98e04>■</color> {Loc.T("can drop it")}\n" +
                                     $"<color=#3d8bff>●</color> {Loc.T("sells it")}   <color=#ff7a2f>●</color> {Loc.T("buys it")}   <color=#b45cff>●</color> {Loc.T("sells & buys")}", smallStyle);
                 DrawShops();
+                GUILayout.Space(4);
+                DrawToolsPanel();
                 if (guide != null)
                 {
                     GUILayout.Space(4);
@@ -270,7 +284,13 @@ namespace ObenseuerLootMap
         string Summary()
         {
             int here = markers.Count(m => m.scene == CurrentScene);
-            if (!Searching) return $"{here} {Loc.T("markers in this place.")}";
+            if (!Searching)
+            {
+                int cl = markers.Count(m => m.scene == CurrentScene && m.p != null && m.p.k == "c" && m.p.live && !m.p.empty);
+                int ce = markers.Count(m => m.scene == CurrentScene && m.p != null && m.p.k == "c" && m.p.live && m.p.empty);
+                string extra = ce > 0 ? $" · {cl} {Loc.T("containers left")}, {ce} {Loc.T("emptied")}" + (cl == 0 ? " ✓ " + Loc.T("nothing left to search here") : "") : "";
+                return $"{here} {Loc.T("markers in this place.")}{extra}";
+            }
             int mh = markers.Count(m => m.match && m.scene == CurrentScene);
             int other = markers.Count(m => m.match && m.scene != CurrentScene);
             int places = markers.Where(m => m.match && m.scene != CurrentScene).Select(m => m.scene).Distinct().Count();
@@ -283,6 +303,18 @@ namespace ObenseuerLootMap
         List<(string scene, VendorData v, int mode)> shopHits; string shopKey;
         static string ModeText(int mode) => (mode & 4) != 0 ? "<color=#9fdc8a>" + Loc.T("in stock now") + "</color>" : mode == 3 ? "<color=#c99bff>" + Loc.T("sells & buys") + "</color>" :
                                             mode == 1 ? "<color=#7fb2ff>" + Loc.T("sells it") + "</color>" : "<color=#ffa070>" + Loc.T("buys it") + "</color>";
+        // price (when the search is about one item) and "closed now" for a shop in the list
+        string ShopExtra(VendorData v, int mode)
+        {
+            var sb = new StringBuilder(); int pid = PriceItem();
+            if (pid > 0)
+            {
+                if ((mode & 1) != 0 && BuyPrice(v, pid) > 0) sb.Append($" · <color=#7fb2ff>{BuyPrice(v, pid)} OC</color>");
+                if ((mode & 2) != 0 && SellPrice(v, pid) > 0) sb.Append($" · <color=#ffa070>{SellPrice(v, pid)} OC</color>");
+            }
+            if (IsClosedNow(v)) sb.Append($" · <color=#d98a7a>{Loc.T("closed now")}</color>");
+            return sb.ToString();
+        }
         void DrawShops()
         {
             if (!Searching) return;
@@ -292,6 +324,7 @@ namespace ObenseuerLootMap
                 shopKey = key;
                 shopHits = Db.scenes.SelectMany(kv => kv.Value.vendors.Select(v => (kv.Key, v, VendorMode(v)))).Where(x => x.Item3 != 0)
                     .OrderByDescending(x => (x.Item3 & 1) != 0).ThenByDescending(x => x.Item3 == 3).ThenByDescending(x => Db.scenes[x.Key].map == CurrentMap)
+                    .ThenBy(x => { int pid = PriceItem(); return pid > 0 && (x.Item3 & 1) != 0 && BuyPrice(x.v, pid) > 0 ? BuyPrice(x.v, pid) : int.MaxValue; })
                     .Take(8).ToList();
             }
             string cur = CurrentScene;
@@ -311,7 +344,7 @@ namespace ObenseuerLootMap
             GUILayout.Space(4);
             GUILayout.Label(Loc.T("Shops for this item"), headStyle);
             foreach (var (scene, v, mode) in shopHits)
-                if (GUILayout.Button($"{v.n} <color=#d9c7a2>· {Db.SceneName(scene)}</color> · {ModeText(mode)}", btnStyle))
+                if (GUILayout.Button($"{v.n} <color=#d9c7a2>· {Db.SceneName(scene)}</color> · {ModeText(mode)}{ShopExtra(v, mode)}", btnStyle))
                     SetGuide(scene, new Vector3(v.x, v.y, v.z), v.n);
         }
 
@@ -373,12 +406,15 @@ namespace ObenseuerLootMap
             {
                 var v = m.v;
                 sb.Append($"<b><size=15>{v.n}</size></b>  <color={dim}>{Loc.T("shop")}{(v.o != null ? " · " + v.o : "")}</color>\n");
+                var hrs = HoursText(v, out var isOpen);
+                if (hrs != null) sb.Append($"<color={(isOpen ? green : red)}><b>{hrs}</b></color>\n");
+                if (v.bm > 0) sb.Append($"<color={dim}>{Loc.T("You pay")} ×{v.bm:0.##} · {Loc.T("you get")} ×{v.sm:0.##}{(v.fp == 1 ? " · " + Loc.T("fixed prices") : "")}</color>\n");
                 var ids = MatchedIds;
                 if (ids != null && ids.Count > 0)
                 {
                     var sold = ids.Where(id => Db.Sells(v, id)).Take(6).ToList(); var bought = ids.Where(id => Db.Buys(v, id)).Take(6).ToList();
-                    if (sold.Count > 0) sb.Append($"<color=#1f5fd0><b>{Loc.T("Sells")}</b>: {string.Join(", ", sold.Select(Db.ItemName))}</color>\n");
-                    if (bought.Count > 0) sb.Append($"<color=#c2501a><b>{Loc.T("Buys")}</b>: {string.Join(", ", bought.Select(Db.ItemName))}</color>\n");
+                    if (sold.Count > 0) sb.Append($"<color=#1f5fd0><b>{Loc.T("Sells")}</b>: {string.Join(", ", sold.Select(i => Db.ItemName(i) + (BuyPrice(v, i) > 0 ? $" ({BuyPrice(v, i)} OC)" : "")))}</color>\n");
+                    if (bought.Count > 0) sb.Append($"<color=#c2501a><b>{Loc.T("Buys")}</b>: {string.Join(", ", bought.Select(i => Db.ItemName(i) + (SellPrice(v, i) > 0 ? $" ({SellPrice(v, i)} OC)" : "")))}</color>\n");
                 }
                 var stockNow = InStockNow(v);
                 if (stockNow.Count > 0)

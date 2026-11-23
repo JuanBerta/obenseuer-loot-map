@@ -10,6 +10,7 @@ namespace ObenseuerLootMap
     {
         class GuideTarget { public string scene, label; public Vector3 pos; }
         GuideTarget guide; float arrivedAt = -1;
+        List<GuideTarget> routeQueue = new List<GuideTarget>(); int routeTotal;
         Texture2D arrowTex, diamondTex, diamondEdgeTex;
         internal bool Guiding => guide != null;
 
@@ -18,8 +19,8 @@ namespace ObenseuerLootMap
             guide = new GuideTarget { scene = scene, pos = pos, label = label };
             arrivedAt = -1;
         }
-        internal void ClearGuide() { guide = null; arrivedAt = -1; }
-        internal string GuideLabel => guide == null ? null : guide.label + (guide.scene != CurrentScene ? " (" + Db.SceneName(guide.scene) + ")" : "");
+        internal void ClearGuide() { guide = null; arrivedAt = -1; routeQueue.Clear(); routeTotal = 0; }
+        internal string GuideLabel => guide == null ? null : (routeTotal > 0 ? $"{routeTotal - routeQueue.Count}/{routeTotal} · " : "") + guide.label + (guide.scene != CurrentScene ? " (" + Db.SceneName(guide.scene) + ")" : "");
 
         void UpdateGuide()
         {
@@ -27,6 +28,7 @@ namespace ObenseuerLootMap
             if (guide.scene == CurrentScene && Vector3.Distance(Camera.main.transform.position - Vector3.up * 1.2f, guide.pos) < 2.2f)
             {
                 if (arrivedAt < 0) arrivedAt = Time.unscaledTime;
+                else if (routeQueue.Count > 0) { if (Time.unscaledTime - arrivedAt > 1.2f) { guide = routeQueue[0]; routeQueue.RemoveAt(0); arrivedAt = -1; } }
                 else if (Time.unscaledTime - arrivedAt > 4f) ClearGuide();
             }
         }
@@ -40,16 +42,18 @@ namespace ObenseuerLootMap
             Db.scenes.TryGetValue(cur, out var here);
             var doors = here?.doors ?? new List<DoorData>();
             var cam = Camera.main; Vector3 me = cam != null ? cam.transform.position : Vector3.zero;
-            DoorData Nearest(IEnumerable<DoorData> ds) => ds.OrderBy(d => (new Vector3(d.x, d.y, d.z) - me).sqrMagnitude).FirstOrDefault();
+            // nearest door, but an open one beats a locked one that is not much closer, and blocked doors come last
+            DoorData Nearest(IEnumerable<DoorData> ds) => ds.OrderBy(d => (new Vector3(d.x, d.y, d.z) - me).magnitude + DoorPenalty(DoorState(d, cur))).FirstOrDefault();
+            string Note(DoorData d) { var st = DoorState(d, cur); return st == "open" ? "" : " · " + DoorText(st); }
             var direct = Nearest(doors.Where(d => d.to == guide.scene));
-            if (direct != null) { wp = new Vector3(direct.x, direct.y, direct.z); text = $"{Loc.T("Go through the door to")} {Db.SceneName(guide.scene)}"; return true; }
+            if (direct != null) { wp = new Vector3(direct.x, direct.y, direct.z); text = $"{Loc.T("Go through the door to")} {Db.SceneName(guide.scene)}{Note(direct)}"; return true; }
             // two hops: a door to a place that has a door to the target
             var hop = Nearest(doors.Where(d => Db.scenes.TryGetValue(d.to, out var s2) && s2.doors.Any(x => x.to == guide.scene)));
-            if (hop != null) { wp = new Vector3(hop.x, hop.y, hop.z); text = $"{Loc.T("Go through the door to")} {Db.SceneName(hop.to)} → {Db.SceneName(guide.scene)}"; return true; }
+            if (hop != null) { wp = new Vector3(hop.x, hop.y, hop.z); text = $"{Loc.T("Go through the door to")} {Db.SceneName(hop.to)} → {Db.SceneName(guide.scene)}{Note(hop)}"; return true; }
             if (Indoors)
             {
                 var outDoor = Nearest(doors.Where(d => d.to.StartsWith("Open Sewer")));
-                if (outDoor != null) { wp = new Vector3(outDoor.x, outDoor.y, outDoor.z); text = $"{Loc.T("Go outside")} → {Db.SceneName(guide.scene)}"; return true; }
+                if (outDoor != null) { wp = new Vector3(outDoor.x, outDoor.y, outDoor.z); text = $"{Loc.T("Go outside")} → {Db.SceneName(guide.scene)}{Note(outDoor)}"; return true; }
             }
             text = $"{Loc.T("Head to")} {Db.SceneName(guide.scene)}";
             return false;
@@ -95,6 +99,7 @@ namespace ObenseuerLootMap
             if (HudHidden()) return;
             EnsureHudTextures(); InitStyles();
             if ((Searching || TrashRoute) && cfgWorld.Value && cfgEnabled.Value) DrawWorldHighlights(cam);
+            DrawShopHud();
             if (guide == null) return;
             bool have = NextWaypoint(out var wp, out var text);
             float cx = Screen.width / 2f, top = 70f;

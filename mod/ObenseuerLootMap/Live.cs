@@ -76,6 +76,7 @@ namespace ObenseuerLootMap
                     };
                     if (p.s == 1 && st.StorageOwner != null && !string.IsNullOrEmpty(st.StorageOwner.name) && st.StorageOwner.name != "Default Male" && st.StorageOwner.name != "Name") p.o = st.StorageOwner.name;
                     p.restock = RestockText(st.spawnSettings, p.empty);
+                    RecordLooted(scene, p, st.spawnSettings);
                     pts.Add(p);
                 }
                 foreach (var sp in FindObjectsByType<CollectibleItemSpawner>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
@@ -131,6 +132,7 @@ namespace ObenseuerLootMap
                     shops.Add(ls);
                 }
                 liveFurnShops = shops;
+                ScanLiveDoors(scene);
                 livePoints = pts; liveStations = sts;
             }
             catch (Exception e)

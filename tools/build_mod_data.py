@@ -5,7 +5,17 @@ data_dir, ext_dir, out = sys.argv[1:4]
 site = sys.argv[4] if len(sys.argv) > 4 else None
 SA=os.path.join(data_dir,'StreamingAssets')
 scenes=json.load(open(os.path.join(ext_dir,'scenes_index.json')))
-items={it['ID']:[it['Title'],it.get('BaseValue',0),it.get('Categories') or [],sorted({str(m.get('$type','')).split('.')[-1] for m in (it.get('Meta') or []) if isinstance(m,dict)})] for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig'))}
+STAT_ACTIONS=('Food','Drink','Medicine','Smoke','Bandage','Hygiene','Slaughter')
+def stats(it):
+    for a in it.get('Actions') or []:
+        if not isinstance(a,dict) or a.get('Type') not in STAT_ACTIONS: continue
+        t,amt=a['Type'],a.get('Amount',0) or 0
+        v=dict(nut=a.get('Food',0)+(amt if t=='Food' else 0),thi=a.get('Drink',0)+(amt if t=='Drink' else 0),dep=a.get('Depression',0),hp=a.get('Health',0),
+               ble=a.get('Bleeding',0),tir=a.get('Tiredness',0),hyg=a.get('Hygiene',0)+(amt if t=='Hygiene' else 0),alc=a.get('Intoxication',0),
+               nic=a.get('Nicotine',0)+(amt if t=='Smoke' else 0))
+        return {k:round(x,3) for k,x in v.items() if x} or None
+    return None
+items={it['ID']:[it['Title'],it.get('BaseValue',0),it.get('Categories') or [],sorted({str(m.get('$type','')).split('.')[-1] for m in (it.get('Meta') or []) if isinstance(m,dict)}),stats(it)] for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig'))}
 loot={c['Name']:[c.get('ItemCommon') or [],c.get('ItemRare') or []] for c in json.load(open(os.path.join(SA,'StorageSpawnCategory.json'),encoding='utf-8-sig'))['$content']}
 raw=open(os.path.join(SA,'Recipes.json'),'rb').read()
 txt=raw.decode('utf-16') if raw[:2] in (b'\xff\xfe',b'\xfe\xff') else raw.decode('utf-8-sig')
@@ -81,7 +91,10 @@ for i,name in enumerate(scenes):
     for f in fe['features']:
         if f['kind']!='door' or not f.get('to') or f['to']==name: continue
         if any(d['to']==f['to'] and abs(d['x']-f['x'])<4 and abs(d['z']-f['z'])<4 for d in D): continue
-        D.append(dict(to=f['to'],n=names.get(f['to']) or f.get('title') or f['to'],x=f['x'],y=f['y'],z=f['z'],open=1 if f['to'] in scenes else 0))
+        e=dict(to=f['to'],n=names.get(f['to']) or f.get('title') or f['to'],x=f['x'],y=f['y'],z=f['z'],open=1 if f['to'] in scenes else 0)
+        if f.get('lock'): e['lk']=f['lock']
+        if f.get('diff') is not None: e['df']=f['diff']
+        D.append(e)
     V=[]
     for f in sorted(fe['features'], key=lambda f: bool(f.get('furnShop'))):   # traders first, furniture shops merge into them
         if f['kind']!='vendor' or not f.get('active'): continue
@@ -106,6 +119,10 @@ for i,name in enumerate(scenes):
         if f.get('items'): e['i']=f['items']; need.update(f['items'])
         if f.get('trader'):
             e['b']=1
+            if f.get('hours'): e['h']=f['hours']
+            if f.get('sellMult') is not None: e['sm']=f['sellMult']
+            if f.get('buyMult') is not None: e['bm']=f['buyMult']
+            if f.get('fixedPrices'): e['fp']=1
             if f.get('buyAllow'): e['ba']=f['buyAllow']
             if f.get('buyForbid'): e['bf']=f['buyForbid']
             if f.get('buysStolen'): e['bs']=1
@@ -118,7 +135,7 @@ for i,name in enumerate(scenes):
 used=set(t for s in S.values() for t in [p.get('t') for p in s['points']] if t)|used_stock
 for t in used_stock: need.update(loot[t][0]); need.update(loot[t][1])
 for r in recipe_inputs.values(): need.update(r[2])
-data=dict(version=6,furniture=furniture,typeSkills=type_skills,recipeInputs=recipe_inputs,scenes=S,loot={k:v for k,v in loot.items() if k in used},
+data=dict(version=7,furniture=furniture,typeSkills=type_skills,recipeInputs=recipe_inputs,scenes=S,loot={k:v for k,v in loot.items() if k in used},
           items={str(k):v for k,v in items.items()},recipes=recipes)
 os.makedirs(os.path.dirname(os.path.abspath(out)),exist_ok=True)
 json.dump(data,open(out,'w',encoding='utf-8'),separators=(',',':'),ensure_ascii=False)

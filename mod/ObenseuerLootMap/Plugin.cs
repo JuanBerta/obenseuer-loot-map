@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap
 {
-    [BepInPlugin(Guid, "Loot Map", "0.5.1")]
+    [BepInPlugin(Guid, "Loot Map", "0.6.0")]
     public partial class LootMapPlugin : BaseUnityPlugin
     {
         public const string Guid = "com.juanberta.obenseuer.lootmap";
@@ -52,10 +52,12 @@ namespace ObenseuerLootMap
             cfgTrashRoute = Config.Bind("Filters", "TrashRoute", false, "With the Scavenger mod: show only trash containers on this map, highlighting the ones you haven't searched today.");
             cfgPanelX = Config.Bind("Display", "PanelX", 20f, "Panel position (x).");
             cfgPanelY = Config.Bind("Display", "PanelY", 110f, "Panel position (y).");
+            BindToolsConfig();
             try
             {
                 var path = Path.Combine(Path.GetDirectoryName(Info.Location), "lootmap-data.json");
                 Db = LootDb.Load(path);
+                ToolsLoad();
                 Logger.LogInfo($"Loaded loot data v{Db.version}: {Db.scenes.Count} scenes, {Db.scenes.Values.Sum(s => s.points.Count)} loot points, {Db.scenes.Values.Sum(s => s.vendors.Count)} shops.");
             }
             catch (Exception e) { Logger.LogError("Could not load lootmap-data.json: " + e); }
@@ -98,6 +100,7 @@ namespace ObenseuerLootMap
             if (search != appliedSearch && (Time.unscaledTime - searchChangedAt > 0.35f || search.Length == 0)) { appliedSearch = search; if (search.Length > 0) searchIds = null; }
 
             UpdateSlotHighlights();
+            ToolsTick();
             bool open = MapOpen;
             if (open || Guiding || ((Searching || TrashRoute) && cfgWorld.Value)) ScanLive(false);
             if (CurrentScene != langScene) { langScene = CurrentScene; Loc.Detect(cfgLanguage.Value); }
@@ -118,7 +121,7 @@ namespace ObenseuerLootMap
             }
             string key = string.Join("|", CurrentScene, CurrentMap, appliedSearch, searchIdsLabel, cfgEnabled.Value, cfgContainers.Value, cfgPickups.Value,
                 cfgStations.Value, cfgShops.Value, cfgFreeOnly.Value, cfgFloorOnly.Value, cfgWholeMap.Value, cfgMarkerSize.Value, floorBand, LiveKey(), Loc.Lang,
-                TrashRoute, ScavengerBridge.SearchedTodayCount);
+                TrashRoute, ScavengerBridge.SearchedTodayCount, lootedVersion, cfgHideEmpty.Value, HourKey());
             if (layer == null || key != builtKey) { Rebuild(); builtKey = key; }
             KeepMarkerSize();
         }
@@ -395,6 +398,7 @@ namespace ObenseuerLootMap
                     }
                     if (p.k == "p" ? !cfgPickups.Value : !cfgContainers.Value) continue;
                     if (cfgFreeOnly.Value && p.s == 1) continue;
+                    if (cfgHideEmpty.Value && IsEmptied(sn, p)) continue;
                     if (floorFilter && Mathf.Abs(p.y - py) > 2.2f) continue;
                     bool m = PointMatches(p);
                     if (!here && (!m || others >= MaxOtherMatches)) continue;
@@ -449,7 +453,7 @@ namespace ObenseuerLootMap
             var rt = mk.rt; rt.gameObject.SetActive(true);
             rt.localPosition = MapLocal(info, w, h, world);
             bool pickup = p != null && p.k == "p", searchedTrash = SearchedToday(p, scene);
-            bool empty = p != null && ((p.live && p.empty) || searchedTrash);
+            bool empty = p != null && ((p.live && p.empty) || searchedTrash || (!p.live && IsLooted(scene, p)));
             var spr = pickup || v != null ? circle : square;
             mk.edge.sprite = spr; mk.fill.sprite = empty ? ring : spr;
 
@@ -465,6 +469,7 @@ namespace ObenseuerLootMap
             bool routeTodo = TrashRoute && IsTrash(p) && !searchedTrash;
             if (routeTodo) { fc = ColTrash; mk.fill.sprite = spr; }
             float alpha = TrashRoute ? (routeTodo ? 1f : 0.45f) : (Searching && !match ? 0.28f : (empty ? 0.75f : 1f));
+            if (v != null && !(Searching && match) && IsClosedNow(v)) alpha = Mathf.Min(alpha, 0.5f);
             fc.a = Mathf.Min(fc.a, alpha); ec.a = Mathf.Min(ec.a, alpha);
             mk.fill.color = fc; mk.edge.color = ec;
             float s = cfgMarkerSize.Value * (Searching && match ? 1.5f : 1f) * (routeTodo ? 1.35f : 1f) * (st != null || v != null ? 1.15f : 1f) * (hasNow ? 1.25f : 1f);

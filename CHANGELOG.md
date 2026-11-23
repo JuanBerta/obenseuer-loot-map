@@ -1,5 +1,14 @@
 # Changelog - Loot Map (in-game mod)
 
+## 0.6.0
+- Doors show whether you can get through: open, locked (lockpick it, with a difficulty hint), locked (needs a key), locked (opens another way) or blocked. The state is read live from the game when you are in that place, so a door you already unlocked shows as open. "Guide me there" prefers open doors and tells you when the route goes through a locked one.
+- Containers you have emptied are remembered between places (until they restock), shown hollow, and can be hidden with "Hide emptied containers". The panel says how many are left and when nothing is left to search.
+- Find by value: highlight everything that can drop, or that shops sell or buy, above a chosen value.
+- Find by effect: nutrition, thirst, depression (lowers), health, hygiene or alcohol above a chosen amount.
+- Shopping list: press "Copy list for the mod" on the website's Shopping list, then "Paste list from the website" in the panel. The list (with the full crafting chain) appears as a checklist on screen, counts what is in your inventory, and "Find the missing items" highlights where to get what you still need.
+- Route planner: with a search active, "Plan a route" walks you through the matching containers and shops in this place, nearest first, one stop at a time.
+- Shops: opening hours (open now / opens at), the price factors (what you pay, what you get) and, when you search one item, its price at each shop, cheapest first.
+
 ## 0.5.1
 - With Diegetic UI installed (its LootMapPaperLook option on), the panel on the map page uses its paper look: a manila sheet with ink text, cardboard buttons and a white search field. Without it, nothing changes.
 

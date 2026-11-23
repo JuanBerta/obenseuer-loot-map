@@ -285,6 +285,14 @@ def features(sf):
                 if d.get('allowedCategories'): e['buyAllow']=d['allowedCategories']
                 if d.get('forbiddenCategories'): e['buyForbid']=d['forbiddenCategories']
                 if d.get('buysStolen'): e['buysStolen']=True
+                try:
+                    ot=d.get('openingTimes') or {}
+                    days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+                    if ot and d.get('autoOpenClose',True): e['hours']=[[ot['opensOn'+x],ot['closesOn'+x]] for x in days]
+                    if d.get('baseSellPrice') is not None: e['sellMult']=round(d['baseSellPrice'],3)
+                    if d.get('basePurchasePrice') is not None: e['buyMult']=round(d['basePurchasePrice'],3)
+                    if d.get('fixedPrices'): e['fixedPrices']=True
+                except Exception: pass
                 ow=(d.get('owner') or {}).get('name') or ''
                 if ow.strip().lower() not in PLACEHOLDER_OWNERS: e['owner']=ow.strip()
                 if go[1] in stock: e['stock']=stock[go[1]]

@@ -62,6 +62,13 @@ namespace ObenseuerLootMap
             return t;
         }
 
+        public int ValueOf(int id) =>
+            items.TryGetValue(id.ToString(), out var v) && v.Count > 1 ? (int)System.Convert.ToDouble(v[1]) : 0;
+
+        // What using an item does ("nut", "thi", "dep", "hp", "hyg", "alc"...), from the game's base values.
+        public float Stat(int id, string key) =>
+            items.TryGetValue(id.ToString(), out var v) && v.Count > 4 && v[4] is JObject o && o[key] != null ? (float)o[key] : 0f;
+
         public string ItemName(int id) =>
             items.TryGetValue(id.ToString(), out var v) && v.Count > 0 ? Loc.Item(v[0].ToString()) : "Item #" + id;
 
@@ -166,6 +173,8 @@ namespace ObenseuerLootMap
         public string n;      // friendly name of that place
         public float x, y, z;
         public int open;      // 0 = leads to a scene that is not in this game version
+        public string lk;     // locked: "pick" (lockpickable), "key", "locked" (opens another way), "blocked"
+        public float df;      // lockpick difficulty
     }
 
     public class VendorData
@@ -177,6 +186,9 @@ namespace ObenseuerLootMap
         public int b;         // 1 = trader that buys from the player
         public List<string> ba, bf;   // buy rules: allowed / forbidden (category, _item_<Title>, _Meta_<MetaType>)
         public int bs;        // 1 = buys stolen goods
+        public List<List<int>> h;   // opening hours, Monday..Sunday: [opens, closes]
+        public float sm, bm;  // price factors: what you get when you sell, what you pay when you buy
+        public int fp;        // 1 = fixed prices
         public List<int> fs;  // furniture for sale
         public JToken fb;     // furniture it buys: "any", "same" (its own stock) or a list of furniture ids
     }
