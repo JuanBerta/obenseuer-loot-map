@@ -189,6 +189,20 @@ def _recipe_types():
         for j,f,nm,sig in a.fields(ti):
             if j in consts: RECIPE_TYPES[struct.unpack('<i',consts[j][:4])[0]]=a.str(nm)
     return RECIPE_TYPES
+def door_lock(sf,pid):
+    """Lock state of a DoorChangelevel: None = open, else 'pick' / 'key' / 'locked' / 'blocked' (+ lockpick difficulty)."""
+    r,go,sc,nm=usf.mb_head(sf,pid)
+    td=ser.TD(ser.asm(ser.index()['DoorChangelevel'][0]),ser.index()['DoorChangelevel'][1])
+    ser.read_obj(r,td,0,'Delay')
+    r.fs(1); r.str(); r.align()                    # a float and the door's id string sit between Delay and _Lock
+    msg=r.str(); locked=r.u8(); r.align(); pick=r.u8(); r.align(); key=r.pptr()
+    r.fs(1); r.i32(); r.u8(); r.align(); r.fs(1); diff=r.fs(1)[0]
+    if locked not in (0,1) or pick not in (0,1) or not (0<=diff<=2.01) or len(msg)>80: return None, None
+    msg=msg.strip().lower()
+    if not locked: return None, None
+    if msg.startswith('blocked') or msg.startswith('not yet'): return 'blocked', None
+    if pick: return 'pick', round(diff,2)
+    return ('key' if key[-1] else 'locked'), None
 def features(sf):
     gos,trs,go2tr,W,path_of=scene(sf)
     out=[]; mapinfo=None; vend=[]; fshops=[]; fdisp=[]
@@ -243,6 +257,9 @@ def features(sf):
         if e['kind']=='door':
             e['to']=d.get('OtherLevel') or None
             if not e['to']: continue
+            if cls=='DoorChangelevel':
+                try: e['lock'],e['diff']=door_lock(sf,pid)
+                except Exception: pass
         out.append({k:v for k,v in e.items() if v is not None})
     # vendors: Trade (stock = loot table of the Storage on the same object) and VendingMachine (fixed list)
     stock={}
@@ -368,6 +385,7 @@ if __name__=='__main__':
     g=usf.load('globalgamemanagers'); r=g.reader(g.of(141)[0]); n=r.i32()
     scenes=[os.path.splitext(os.path.basename(r.str()))[0] for _ in range(n)]
     json.dump(dict(extracted=datetime.date.today().isoformat(),unity=g.uver),open(os.path.join(out,'meta.json'),'w'))
+    json.dump(scenes,open(os.path.join(out,'scenes_index.json'),'w'))
     if not os.path.exists(os.path.join(out,'furniture_assets.json')):
         import subprocess
         subprocess.check_call([sys.executable,os.path.join(HERE,'scan_furniture.py'),data_dir,out])

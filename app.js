@@ -19,6 +19,8 @@ for (const [n, t] of Object.entries(LOOT)) tableText[n] = (n + '\n' + [...t.comm
 const TOTALS = {};
 for (const s of IDX.scenes) for (const [c, k] of Object.entries(s.cats)) TOTALS[c] = (TOTALS[c] || 0) + k;
 const IMG = {};
+const DOOR = { open: ['#2b2a27', 'open'], pick: ['#6b3fa0', 'locked · lockpick it'], key: ['#2c6fa6', 'locked · needs a key'], locked: ['#b0651a', 'locked · opens another way'], blocked: ['#8c8577', 'not accessible'], closed: ['#8c8577', 'not open in this version of the game'] };
+const doorState = f => !f.toSlug ? 'closed' : (f.lock || 'open');
 function img(src) {
   if (!IMG[src]) { const i = new Image(); i.onload = () => draw(); i.src = src; IMG[src] = i; }
   return IMG[src].complete && IMG[src].naturalWidth ? IMG[src] : null;
@@ -339,12 +341,15 @@ function drawNow() {
   if (L.doors) for (const f of d.doors) {
     if (!onFloor(f)) continue;
     const [x, y] = toScreen(f.x, f.z); if (x < -40 || y < -20 || x > W + 40 || y > H + 20) continue;
-    const ok = !!f.toSlug, hov = S.hover && S.hover.f === f;
-    ctx.fillStyle = ok ? '#2b2a27' : '#8c8577'; ctx.strokeStyle = '#f4eddd'; ctx.lineWidth = 1.5;
+    const st = doorState(f), ok = !!f.toSlug, hov = S.hover && S.hover.f === f;
+    ctx.fillStyle = DOOR[st][0]; ctx.strokeStyle = '#f4eddd'; ctx.lineWidth = 1.5;
     const ds = s < 5 ? 4.5 : 6.5;
     ctx.beginPath(); ctx.roundRect(x - ds, y - ds, ds * 2, ds * 2, 2); ctx.fill(); ctx.stroke();
-    if (ds > 5) { ctx.fillStyle = '#f4eddd'; ctx.fillRect(x - 2, y - 3.5, 4.5, 7.5); }
-    if (hov || s > (meta.outdoor ? 7 : 13)) label(f.toName + (ok ? '' : ' (closed)'), x + 10, y, { font: '600 11.5px "IBM Plex Sans", sans-serif' });
+    if (st === 'open' || st === 'closed') { if (ds > 5) { ctx.fillStyle = '#f4eddd'; ctx.fillRect(x - 2, y - 3.5, 4.5, 7.5); } }
+    else { ctx.fillStyle = ctx.strokeStyle = '#f4eddd'; ctx.lineWidth = 1.3; const k = ds > 5 ? 1 : 0.7;   // padlock
+      ctx.fillRect(x - 3 * k, y - 0.5 * k, 6 * k, 4.5 * k); ctx.beginPath(); ctx.arc(x, y - 0.5 * k, 2.2 * k, Math.PI, 0); ctx.stroke();
+      if (st === 'blocked') { ctx.strokeStyle = '#c81e18'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - ds, y - ds); ctx.lineTo(x + ds, y + ds); ctx.stroke(); } }
+    if (hov || s > (meta.outdoor ? 7 : 13)) label(f.toName + (st === 'open' ? '' : st === 'closed' ? ' (closed)' : st === 'pick' ? ' (lockpick)' : st === 'key' ? ' (key)' : st === 'blocked' ? ' (blocked)' : ' (locked)'), x + 10, y, { font: '600 11.5px "IBM Plex Sans", sans-serif' });
     S._hits.push({ x, y, r: 11, f });
   }
   for (const l of lms) {
@@ -443,7 +448,8 @@ function hoverAt(x, y) {
   const tip = $('#tip'); if (!h) { tip.classList.add('hidden'); return; }
   let html;
   if (h.p) { const p = h.p; html = `<b>${esc(hasTable(p.category) ? p.category : (p.title || p.type || p.name))}</b><br><small>${p.kind === 'pickup' ? 'Pickup spot' : esc(p.title || p.type || 'Container')}${p.locked ? ' · locked' : ''}${p.owner ? ' · owned by ' + esc(p.owner) : ''} — click for loot</small>`; }
-  else if (h.f && h.f.kind === 'door') html = h.f.toSlug ? `<b>Door → ${esc(h.f.toName)}</b><br><small>${SC[h.f.toSlug].lootContainers} loot containers inside · click to enter</small>` : `<b>${esc(h.f.toName)}</b><br><small>Not open in this version of the game</small>`;
+  else if (h.f && h.f.kind === 'door') { const f = h.f, st = doorState(f), note = st === 'pick' && f.diff != null ? ` · difficulty ${f.diff < 0.25 ? 'easy' : f.diff < 0.5 ? 'moderate' : f.diff < 1 ? 'challenging' : 'difficult'}` : '';
+    html = f.toSlug ? `<b>Door → ${esc(f.toName)}</b><br><small>${DOOR[st][1]}${note} · ${SC[f.toSlug].lootContainers} loot containers inside · click to enter</small>` : `<b>${esc(f.toName)}</b><br><small>${DOOR[st][1]}</small>`; }
   else if (h.f) {
     const f = h.f, own = f.owned ? `<br><small style="color:#f39a88">Owned${f.owner ? ' by ' + esc(f.owner) : ''} — taking its items counts as stealing</small>` : '';
     const extra = f.kind === 'station' ? esc((f.types || []).join(', ')) + ' · click for recipes' : f.kind === 'bed' ? (f.safe ? 'Safe place to sleep' : 'You can sleep here') + (f.arrest ? ' · you can be arrested here' : '') : svcOf(f.kind)[1];
