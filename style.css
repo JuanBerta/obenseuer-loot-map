@@ -187,10 +187,25 @@ footer{border-top:1px solid #000;padding:6px 18px;font-size:0.8125rem;color:var(
 table.dbt{border-collapse:collapse;width:100%;font-size:0.8125rem}
 table.dbt th,table.dbt td{border:1px solid var(--paperline);padding:3px 6px;text-align:center}
 table.dbt th{font-weight:500;color:#564c3b}
+/* back link: phones only */
+.dbback{display:none}
 @media (max-width:820px){
   #db{flex-direction:column}
-  #dbSide{width:auto;max-height:46vh;border-right:none;border-bottom:1px solid #000}
-  .dbtab{order:7}
+  #dbSide{width:auto;flex:1;min-height:0;border-right:none}
+  .dbtab{order:7;flex:none}
+  /* phone: one pane at a time. The list, or the entry you picked with a Back link */
+  .dbmode:not(.dbpick) #dbDetail{display:none}
+  .dbmode.dbpick #dbSide{display:none}
+  .dbmode .brand{flex-basis:100%}
+  .dbmode .tabs{flex:1 1 0;min-width:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .dbmode .tab{flex:none;white-space:nowrap}
+  .dbnav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:8px 10px}
+  .dbnav a{flex:none;white-space:nowrap}
+  .dbintro{display:none}
+  .dbbar{padding:8px 10px 4px}
+  #dbDetail{padding:4px 4px 30px}
+  #dbDetail .card{margin:8px auto}
+  .dbback{display:inline-block;margin:8px 10px 0;padding:8px 12px;background:#2a2620;color:#eadcbc;border:1px solid var(--line);border-radius:3px;text-decoration:none;font:0.875rem var(--sans)}
 }
 /* in-game icons: 48 px sprite-sheet cells shown at --s */
 .ic{--s:24px;display:inline-block;flex:none;width:var(--s);height:var(--s);vertical-align:middle;margin-right:7px;background-repeat:no-repeat;

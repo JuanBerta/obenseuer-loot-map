@@ -329,10 +329,12 @@ function notesCard() {
 const missing = () => `<div class="card"><h2>Not found</h2><p class="muted">This entry isn't in the current data.</p></div>`;
 function renderDetail() {
   const el = $('#dbDetail'), k = V.key;
+  const back = `<a class="dbback" href="#/db/${V.sec === 'notes' ? 'items' : V.sec}">← Back to the list</a>`;
   const home = { items: 'items', recipes: 'recipes', vendors: 'vendors', tenants: 'tenants', furniture: 'pieces of furniture' };
   if (V.sec === 'notes') el.innerHTML = notesCard();
   else if (k == null) el.innerHTML = V.sec === 'tenement' ? tenementHome() : `<div class="card"><h2>${esc(SECTIONS.find(s => s[0] === V.sec)[1])}</h2><p class="muted">${rows().length} ${home[V.sec]}. Pick one on the left.</p></div>`;
   else el.innerHTML = { items: itemCard, tenement: itemCard, recipes: recipeCard, vendors: vendorCard, tenants: tenantCard, furniture: furnCard }[V.sec](k);
+  if (k != null || V.sec === 'notes') el.insertAdjacentHTML('afterbegin', back);
   el.scrollTop = 0;
 }
 
@@ -346,6 +348,7 @@ async function route() {
   const s = SECTIONS.some(x => x[0] === sec) ? sec : 'items';
   if (!DB) { $('#dbDetail').innerHTML = '<div class="card"><p>Opening the files…</p></div>'; try { await load(); } catch (e) { $('#dbDetail').innerHTML = '<div class="card"><h2>Could not load data/db.js</h2><p class="muted">Run tools/build_db.py.</p></div>'; return; } }
   const changed = s !== V.sec; V.sec = s; V.key = key ?? null;
+  document.body.classList.toggle('dbpick', V.key != null || s === 'notes');   // phones: show the list or the entry, not both
   if (changed) { V.q = ''; V.f = ''; V.e = ''; V.sort = 'name'; V.lim = 300; renderSide(); } else if (!$('#dbList') && s !== 'notes') renderSide(); else renderList();
   if (s === 'notes') renderSide();
   renderDetail();
