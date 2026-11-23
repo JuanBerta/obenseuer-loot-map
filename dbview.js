@@ -480,7 +480,9 @@ function whereIs(id) {
   if (it && it[6].length) return { parts: ['any of ' + it[6].length + ' items'], btn };
   const tabs = [...new Set([...(X.inTables[id] || [])].map(k => k.split('\u0000')[0]).filter(n => X.tableCount[n]))].sort((a, b) => X.tableCount[b] - X.tableCount[a]);
   if (tabs.length) { parts.push('in ' + tabs.reduce((a, n) => a + X.tableCount[n], 0) + ' containers'); btn = mapBtn(X.tableScenes[tabs[0]][0][0], iname(id), 'Find on the map'); }
-  const sv = DB.vendors.filter(v => sells(v, +id)); if (sv.length) parts.push('sold by ' + sv.length + ' shop' + (sv.length > 1 ? 's' : ''));
+  const sv = DB.vendors.filter(v => sells(v, +id));
+  if (sv.length) { parts.push('sold by ' + sv.slice(0, 3).map(v => `<span class="lk">${link('vendors', v.key, v.n)}</span> <small>(${esc(sceneName(v.sc))})</small>`).join(', ') + (sv.length > 3 ? ' and ' + (sv.length - 3) + ' more' : ''));
+    btn += mapBtn(sv[0].sc, sv[0].n, 'Find the shop'); }
   if (X.makes[id]) parts.push('craftable');
   if (!parts.length) parts.push('not found in the world data');
   return { parts, btn };
