@@ -8,10 +8,10 @@ const IDX = window.OBS_INDEX;
 const SCN = Object.fromEntries(IDX.scenes.map(s => [s.slug, s]));
 const SECTIONS = [
   ['items', 'Items'], ['recipes', 'Recipes'], ['vendors', 'Vendors'], ['tenement', 'Tenement'],
-  ['tenants', 'Tenants'], ['furniture', 'Furniture'], ['notes', 'Data notes'],
+  ['tenants', 'Tenants'], ['furniture', 'Furniture'], ['list', 'Shopping list'], ['notes', 'Data notes'],
 ];
 let DB = null, X = null;                       // raw data, derived indexes
-const V = { sec: 'items', key: null, q: '', f: '', e: '', sort: 'name', lim: 300 };
+const V = { sec: 'items', key: null, q: '', f: '', e: '', e2: '', min: '', w: '', view: 'list', col: '', dir: 1, sort: 'name', lim: 300, init: false };
 // What using an item does (data/db.js item[9], base values). [key, label, text when positive, text when negative, shown first in the filter list]
 const STATS = [
   ['nut', 'Nutrition', 'Fills you up', 'Makes you hungrier'], ['thi', 'Thirst', 'Quenches thirst', 'Makes you thirstier'],
@@ -60,6 +60,20 @@ function index() {
         itemCats: [...new Set(Object.values(I).flatMap(i => i[2]))].sort(),
         rTypes: [...new Set(DB.recipes.map(r => r[2]))].sort(),
         fCats: [...new Set(Object.values(DB.furniture).map(f => f[1]))].sort() };
+  // economics from base values: what a recipe's ingredients are worth against what it makes (a group ingredient counts as its cheapest member)
+  const unit = id => { const it = I[id]; if (!it) return 0; const g = it[6].map(m => I[m] ? I[m][1] : Infinity); const lo = Math.min(...g); return g.length && isFinite(lo) ? lo : it[1]; };
+  X.unit = unit; X.RC = {}; X.craftCost = {}; X.craftProfit = {};
+  for (const r of DB.recipes) {
+    const cost = r[7].reduce((a, x) => a + unit(x[0]) * x[1], 0), worth = r[8].reduce((a, x) => a + (I[x[0]] ? I[x[0]][1] : 0) * x[1], 0);
+    X.RC[r[0]] = { cost, worth, profit: worth - cost };
+    for (const o of r[8]) {
+      const per = cost / Math.max(o[1], 1), pr = (I[o[0]] ? I[o[0]][1] : 0) - per;
+      if (X.craftCost[o[0]] == null || per < X.craftCost[o[0]]) X.craftCost[o[0]] = per;
+      if (X.craftProfit[o[0]] == null || pr > X.craftProfit[o[0]]) X.craftProfit[o[0]] = pr;
+    }
+  }
+  X.sold = new Set(Object.keys(I).map(Number).filter(id => DB.vendors.some(v => sells(v, id))));
+  X.placed = new Set(Object.keys(X.inTables).map(Number).filter(id => [...X.inTables[id]].some(k => X.tableCount[k.split('\u0000')[0]])));
 }
 
 // ---------- rules (same as the mod's Data.cs) ----------
@@ -142,24 +156,70 @@ const ul = a => a.length ? '<ul class="items">' + a.map(x => `<li>${x}</li>`).jo
 const recipesOf = set => set && set.size ? [...set].sort((a, b) => X.R[a][1].localeCompare(X.R[b][1])).map(rl) : [];
 const skillsFor = types => [...new Set(types.flatMap(t => DB.typeSkills[t] || []))];
 
+// ---------- shared helpers: numbers, URL state, shopping list ----------
+const fmt = n => String(+(+n).toFixed(1));
+const goodStat = (k, v) => k === 'dep' || k === 'ble' || k === 'tir' ? v < 0 : (k === 'nut' || k === 'thi' || k === 'hp' || k === 'hyg') ? v > 0 : null;
+const wide = () => !matchMedia('(max-width:820px)').matches;
+const tableOn = () => V.sec === 'items' && V.view === 'table' && wide();
+const PARAMS = [['c', 'f'], ['e', 'e'], ['e2', 'e2'], ['min', 'min'], ['w', 'w'], ['s', 'sort'], ['q', 'q'], ['v', 'view'], ['col', 'col']];
+const DEFAULTS = { f: '', e: '', e2: '', min: '', w: '', sort: 'name', q: '', view: 'list', col: '' };
+function qsOf() { const p = new URLSearchParams(); for (const [k, f] of PARAMS) if (V[f] !== DEFAULTS[f] && V[f] != null) p.set(k, V[f]); if (V.col && V.dir < 0) p.set('dir', 'd'); return p.toString(); }
+function applyQs(qs) { const p = new URLSearchParams(qs); for (const [k, f] of PARAMS) V[f] = p.get(k) ?? DEFAULTS[f]; V.dir = p.get('dir') === 'd' ? -1 : 1; V.lim = 300; }
+function setReport() {
+  const a = $('#report'); if (!a) return;
+  a.href = 'https://github.com/JuanBerta/obenseuer-loot-map/issues/new?title=' + encodeURIComponent('Data problem: ' + document.title) + '&body=' + encodeURIComponent('Page: ' + location.href + '\n\nWhat looks wrong?\n');
+}
+function syncUrl() {
+  if (!isDb()) return;
+  const qs = qsOf();
+  history.replaceState(null, '', '#/db/' + V.sec + (V.key != null ? '/' + encodeURIComponent(V.key) : '') + (qs ? '?' + qs : ''));
+  setReport();
+}
+const SHOP = 'obs-shop';
+let shopMem = null;
+const shopGet = () => { if (!shopMem) { try { shopMem = JSON.parse(localStorage.getItem(SHOP) || '{}') || {}; } catch (e) { shopMem = {}; } } return shopMem; };
+const shopSave = () => { try { localStorage.setItem(SHOP, JSON.stringify(shopMem)); } catch (e) {} };
+const shopCount = () => Object.keys(shopGet()).length;
+const shopBadge = () => { const b = $('#shopN'); if (b) b.textContent = shopCount(); };
+function shopChange(rid, d) { const L = shopGet(), n = Math.max(0, (L[rid] || 0) + d); if (n) L[rid] = n; else delete L[rid]; shopSave(); shopBadge(); }
+const shopBtn = rid => `<button type="button" class="shopbtn" data-shop="${rid}" data-d="1">+ Shopping list</button>`;
+const econText = rid => { const e = X.RC[rid]; return `Ingredients ≈ ${fmt(e.cost)} OC · worth ≈ ${fmt(e.worth)} OC · <b class="${e.profit >= 0 ? 'good' : 'bad'}">${e.profit >= 0 ? '+' : '−'}${fmt(Math.abs(e.profit))} OC</b>`; };
+const fxLine = id => { const st = DB.items[id] && DB.items[id][9]; if (!st) return ''; const t = STATS.filter(([k]) => st[k]).slice(0, 4).map(([k, l]) => `${l} ${sgn(st[k])}`); return t.length ? `<br><small class="muted">${t.join(' · ')}</small>` : ''; };
+
 // ---------- lists ----------
 function rows() {
   const q = V.q.trim().toLowerCase(), m = s => !q || String(s).toLowerCase().includes(q);
   const I = DB.items;
   const itemRows = ids => {
     const ek = V.e ? V.e.slice(0, -1) : '', ed = V.e ? V.e.slice(-1) : '';
-    let a = ids.filter(id => (m(I[id][0]) || String(id) === q) && (!V.f || I[id][2].includes(V.f)) && (!ek || (ed === '-' ? stat(id, ek) < 0 : stat(id, ek) > 0)));
-    const mag = id => Math.abs(stat(id, ek));
-    a.sort(ek && V.sort === 'eh' ? (x, y) => mag(y) - mag(x) || I[x][0].localeCompare(I[y][0])
-      : ek && V.sort === 'el' ? (x, y) => mag(x) - mag(y) || I[x][0].localeCompare(I[y][0])
-      : V.sort === 'value' ? (x, y) => I[y][1] - I[x][1] : (x, y) => I[x][0].localeCompare(I[y][0]));
-    return a.map(id => [id, I[id][0], (ek ? sgn(stat(id, ek)) + ' ' + STAT[ek][1].toLowerCase() : (X.inTables[id] ? '◆ ' : '') + (X.makes[id] ? '⚒ ' : '') + I[id][1] + ' OC'), iIco(id)]);
+    const e2 = V.e2 ? [V.e2.slice(0, -1), V.e2.slice(-1)] : null, min = parseFloat(V.min) || 0, w = V.w;
+    const has = (id, k, d) => d === '-' ? stat(id, k) < 0 : stat(id, k) > 0;
+    let a = ids.filter(id => (m(I[id][0]) || String(id) === q) && (!V.f || I[id][2].includes(V.f))
+      && (!ek || (has(id, ek, ed) && Math.abs(stat(id, ek)) >= min)) && (!e2 || has(id, e2[0], e2[1]))
+      && (!w.includes('c') || X.makes[id]) && (!w.includes('f') || X.placed.has(id)) && (!w.includes('s') || X.sold.has(id)));
+    if (V.sort === 'cost' || V.sort === 'profit') a = a.filter(id => X.craftCost[id] != null);
+    const mag = id => ek ? Math.abs(stat(id, ek)) : 0, per = id => I[id][1] > 0 ? mag(id) / I[id][1] : -1, BIG = 1e12;
+    const name = (x, y) => I[x][0].localeCompare(I[y][0]);
+    const cmp = { eh: (x, y) => mag(y) - mag(x), el: (x, y) => mag(x) - mag(y), ep: (x, y) => per(y) - per(x), value: (x, y) => I[y][1] - I[x][1],
+      cost: (x, y) => (X.craftCost[x] ?? BIG) - (X.craftCost[y] ?? BIG), profit: (x, y) => (X.craftProfit[y] ?? -BIG) - (X.craftProfit[x] ?? -BIG) }[V.sort];
+    a.sort(cmp ? (x, y) => cmp(x, y) || name(x, y) : name);
+    return a.map(id => {
+      const parts = [];
+      if (ek) parts.push(sgn(stat(id, ek)) + ' ' + STAT[ek][1].toLowerCase());
+      if (V.sort === 'ep' && ek) parts.push(per(id) < 0 ? '–' : +per(id).toFixed(2) + '/OC');
+      if (V.sort === 'cost') parts.push('costs ' + fmt(X.craftCost[id]) + ' OC');
+      if (V.sort === 'profit') parts.push((X.craftProfit[id] >= 0 ? '+' : '−') + fmt(Math.abs(X.craftProfit[id])) + ' OC');
+      if (!parts.length) parts.push((X.inTables[id] ? '◆ ' : '') + (X.makes[id] ? '⚒ ' : '') + I[id][1] + ' OC');
+      return [id, I[id][0], parts.join(' · '), iIco(id)];
+    });
   };
   switch (V.sec) {
     case 'items': return itemRows(Object.keys(I).map(Number));
     case 'tenement': return itemRows(X.tenIds);
     case 'recipes': return DB.recipes.filter(r => (m(r[1]) || r[8].some(x => m(iname(x[0])))) && (!V.f || r[2] === V.f))
-      .sort((a, b) => a[1].localeCompare(b[1])).map(r => [r[0], r[1], r[2], rIco(r[0])]);
+      .sort(V.sort === 'profit' ? (a, b) => X.RC[b[0]].profit - X.RC[a[0]].profit || a[1].localeCompare(b[1])
+        : V.sort === 'cost' ? (a, b) => X.RC[a[0]].cost - X.RC[b[0]].cost || a[1].localeCompare(b[1]) : (a, b) => a[1].localeCompare(b[1]))
+      .map(r => [r[0], r[1], V.sort === 'profit' ? (X.RC[r[0]].profit >= 0 ? '+' : '−') + fmt(Math.abs(X.RC[r[0]].profit)) + ' OC' : V.sort === 'cost' ? fmt(X.RC[r[0]].cost) + ' OC' : r[2], rIco(r[0])]);
     case 'vendors': return DB.vendors.filter(v => m(v.n) || m(v.o || '') || m(sceneName(v.sc)) || (q.length > 2 && (v.t && m(v.t))))
       .filter(v => !V.f || (V.f === 'items' ? (v.t || v.i) : V.f === 'buys' ? v.b : V.f === 'furniture' ? (v.fs || v.fb) : V.f === 'vending' ? /vending|soda fountain/i.test(v.n) : true))
       .sort((a, b) => a.n.localeCompare(b.n) || sceneName(a.sc).localeCompare(sceneName(b.sc)))
@@ -176,12 +236,17 @@ function filters() {
   const so = (k, t) => `<option value="${k}" ${V.sort === k ? 'selected' : ''}>${t}</option>`;
   const sort = `<select id="dbSort"><option value="name">A–Z</option>${so('value', 'Price ↓')}${V.sec === 'items' && V.e ? so('eh', 'Strongest effect first') + so('el', 'Weakest effect first') : ''}</select>`;
   if (V.sec === 'items') {
-    const eo = STATS.flatMap(([k, , up, down]) => [[k + '+', up], [k + '-', down]]).filter(([key, t]) => t && X.statCount[key])
-      .map(([key, t]) => `<option value="${key}" ${V.e === key ? 'selected' : ''}>${esc(t)} (${X.statCount[key]})</option>`).join('');
-    return opt(X.itemCats, 'All categories') + sort + `<select id="dbE" title="Only items that change one of your stats"><option value="">Any effect</option>${eo}</select>`;
+    const effOpts = cur => STATS.flatMap(([k, , up, down]) => [[k + '+', up], [k + '-', down]]).filter(([key, t]) => t && X.statCount[key])
+      .map(([key, t]) => `<option value="${key}" ${cur === key ? 'selected' : ''}>${esc(t)} (${X.statCount[key]})</option>`).join('');
+    const sortI = `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('value', 'Price ↓')}${so('cost', 'Cheapest to make')}${so('profit', 'Best craft profit')}${V.e ? so('eh', 'Strongest effect first') + so('el', 'Weakest effect first') + so('ep', 'Best effect per OC') : ''}</select>`;
+    const chips = [['c', 'Craftable'], ['f', 'In containers'], ['s', 'Sold in shops']].map(([k, t]) => `<button type="button" class="tg${V.w.includes(k) ? ' on' : ''}" data-w="${k}" aria-pressed="${V.w.includes(k)}">${t}</button>`).join('')
+      + `<button type="button" class="tg deskonly${V.view === 'table' ? ' on' : ''}" id="dbView" aria-pressed="${V.view === 'table'}">Table view</button>`;
+    return opt(X.itemCats, 'All categories') + sortI + `<select id="dbE" aria-label="Effect" title="Only items that change one of your stats"><option value="">Any effect</option>${effOpts(V.e)}</select>`
+      + (V.e ? `<select id="dbE2" aria-label="Second effect" title="Also require this effect"><option value="">…and also</option>${effOpts(V.e2)}</select><input id="dbMin" type="number" min="0" step="any" inputmode="decimal" placeholder="Min strength" aria-label="Minimum strength" value="${esc(V.min)}">` : '')
+      + `<div class="chips">${chips}</div>`;
   }
   if (V.sec === 'tenement') return opt(X.itemCats, 'All categories') + sort;
-  if (V.sec === 'recipes') return opt(X.rTypes, 'All stations');
+  if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('profit', 'Best craft profit')}${so('cost', 'Cheapest ingredients')}</select>`;
   if (V.sec === 'furniture') return opt(X.fCats, 'All categories') + sort;
   if (V.sec === 'vendors') return `<select id="dbF"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   return '';
@@ -193,17 +258,27 @@ const INTRO = {
   tenement: 'Building materials and wall coverings for fixing up your tenement, and the recipes that make them.',
   tenants: 'People who can rent a flat from you, what they pay and what the flat needs.',
   furniture: 'Every piece of furniture, its price, the shops that sell and buy it, and what it lets you craft.',
+  list: 'Recipes you plan to make, with everything you need and where to find it.',
   notes: 'Things in the game data that look wrong or inconsistent. Some may be intentional.',
 };
 function renderSide() {
   const el = $('#dbSide');
-  const head = `<div class="dbnav">${SECTIONS.map(([k, t]) => `<a href="#/db/${k}" class="${V.sec === k ? 'on' : ''}">${secIcon(k)}${t}${k === 'notes' ? ` <b>${DB.notes.length}</b>` : ''}</a>`).join('')}</div>`;
-  if (V.sec === 'notes') { el.innerHTML = head + `<p class="dbintro">${INTRO.notes}</p>`; return; }
+  const head = `<div class="dbnav">${SECTIONS.map(([k, t]) => `<a href="#/db/${k}" class="${V.sec === k ? 'on' : ''}">${secIcon(k)}${t}${k === 'notes' ? ` <b>${DB.notes.length}</b>` : k === 'list' ? ` <b id="shopN">${shopCount()}</b>` : ''}</a>`).join('')}</div>`;
+  if (V.sec === 'notes' || V.sec === 'list') { el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p>`; return; }
   el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p><div class="dbbar${V.sec === 'items' ? ' multi' : ''}"><input id="dbQ" type="search" placeholder="Search ${esc(SECTIONS.find(s => s[0] === V.sec)[1].toLowerCase())}…" value="${esc(V.q)}" autocomplete="off">${filters()}</div><div id="dbList"></div>`;
   const q = $('#dbQ'); q.oninput = () => { V.q = q.value; V.lim = 300; renderList(); };
   const f = $('#dbF'); if (f) f.onchange = () => { V.f = f.value; V.lim = 300; renderList(); };
   const s = $('#dbSort'); if (s) s.onchange = () => { V.sort = s.value; renderList(); };
-  const e = $('#dbE'); if (e) e.onchange = () => { V.e = e.value; V.lim = 300; V.sort = V.e ? 'eh' : 'name'; renderSide(); };
+  const e = $('#dbE'); if (e) e.onchange = () => {
+    V.e = e.value; V.lim = 300; if (!V.e) { V.e2 = ''; V.min = ''; }
+    V.sort = V.e ? 'eh' : (['eh', 'el', 'ep'].includes(V.sort) ? 'name' : V.sort); renderSide();
+  };
+  const e2 = $('#dbE2'); if (e2) e2.onchange = () => { V.e2 = e2.value; V.lim = 300; renderList(); };
+  const mn = $('#dbMin'); if (mn) mn.oninput = () => { V.min = mn.value; V.lim = 300; renderList(); };
+  el.querySelectorAll('[data-w]').forEach(b => b.onclick = () => {
+    const k = b.dataset.w; V.w = V.w.includes(k) ? V.w.replace(k, '') : V.w + k; b.classList.toggle('on'); b.setAttribute('aria-pressed', V.w.includes(k)); V.lim = 300; renderList();
+  });
+  const vw = $('#dbView'); if (vw) vw.onclick = () => { V.view = V.view === 'table' ? 'list' : 'table'; vw.classList.toggle('on', V.view === 'table'); vw.setAttribute('aria-pressed', V.view === 'table'); renderDetail(); syncUrl(); };
   renderList();
 }
 function renderList() {
@@ -212,13 +287,15 @@ function renderList() {
     `<a class="row ${String(V.key) === String(k) ? 'on' : ''}" href="#/db/${V.sec}/${encodeURIComponent(k)}">${ic || ''}<span class="nm">${esc(a)}</span><span class="ct">${esc(b)}</span></a>`).join('')
     + (r.length > V.lim ? `<button class="dbmore" id="dbMore">Show ${r.length - V.lim} more</button>` : '') : '<div class="empty">Nothing matches.</div>');
   const mo = $('#dbMore'); if (mo) mo.onclick = () => { V.lim += 600; renderList(); };
+  if (tableOn() && V.key == null) renderDetail();
+  syncUrl();
 }
 
 // ---------- detail cards ----------
 function itemCard(id) {
   const it = DB.items[id]; if (!it) return missing();
   const [t, val, cats, desc, stack, eff, grp, wall] = it;
-  let h = `<div class="card"><div class="dbhead">${iIco(id, 1)}<div><h2>${esc(t)}</h2><div class="sub">ID ${id} · ${val} OC · stacks to ${stack}</div></div></div>`;
+  let h = `<div class="card"><div class="dbhead">${iIco(id, 1)}<div><h2>${esc(t)}</h2><div class="sub">ID ${id} · ${val} OC · stacks to ${stack}${X.craftCost[id] != null ? ' · costs ≈ ' + fmt(X.craftCost[id]) + ' OC to make' : ''}</div></div></div>`;
   if (desc) h += `<p>${esc(desc)}</p>`;
   h += `<div class="tags">${cats.map(c => `<a class="tag" href="#/db/items" data-cat="${esc(c)}">${esc(c)}</a>`).join('')}${eff.map(e => `<span class="tag teal">${e[0]} ${e[1]}</span>`).join('')}${wall ? `<span class="tag">${esc(wall)}</span>` : ''}</div>`;
   const st = it[9];
@@ -259,17 +336,19 @@ function craftBlock(rid, forItem) {
   const r = X.R[rid], [, n, type, skill, minS, fail, time, inp, out] = r;
   const mk = out.find(x => x[0] === +forItem), more = mk && mk[1] > 1 ? ` <small class="muted">makes ${num(mk[1])}</small>` : '';
   return `<div class="craft"><div class="ch">${rl(rid)}${more}</div><div class="ci">${inp.map(x => `<span>${il(x[0])} <small class="muted">× ${num(x[1])}</small></span>`).join('')}</div>
-    <div class="cm muted">${esc(skill)}${minS ? ' ' + minS + '+' : ''} · ${hrs(time)} · ${Math.round(fail * 100)}% fail</div></div>`;
+    <div class="cm muted">${esc(skill)}${minS ? ' ' + minS + '+' : ''} · ${hrs(time)} · ${Math.round(fail * 100)}% fail</div>
+    <div class="cm">${econText(rid)}</div>${shopBtn(rid)}</div>`;
 }
 function recipeCard(id) {
   const r = X.R[id]; if (!r) return missing();
   const [, n, type, skill, minS, fail, time, inp, out, fout, cond, tags, req] = r;
   const io = a => ul(a.map(x => `<span>${il(x[0])}</span><small>× ${num(x[1])}</small>`));
+  const ioOut = a => ul(a.map(x => `<span>${il(x[0])}${fxLine(x[0])}</span><small>× ${num(x[1])}</small>`));
   const st = DB.stations[type] || [], furn = (X.furnTypes[type] || []).map(Number);
-  let h = `<div class="card"><div class="dbhead">${rIco(id, 1)}<div><h2>${esc(n)}</h2><div class="sub">Recipe #${id} · ${esc(type)}</div></div></div>
-    <h3>Ingredients</h3>${io(inp)}<h3>Makes</h3>${io(out)}${fout.length ? `<h3>If it fails</h3>${io(fout)}` : ''}
+  let h = `<div class="card"><div class="dbhead">${rIco(id, 1)}<div><h2>${esc(n)}</h2><div class="sub">Recipe #${id} · ${esc(type)}</div></div></div>${shopBtn(id)}
+    <h3>Ingredients</h3>${io(inp)}<h3>Makes</h3>${ioOut(out)}${fout.length ? `<h3>If it fails</h3>${io(fout)}` : ''}
     <h3>Details</h3><div class="facts"><span>Skill</span><span>${esc(skill)}${minS ? ' · min ' + minS : ''}</span><span>Fail chance</span><span>${Math.round(fail * 100)}%</span>
-    <span>Time</span><span>${hrs(time)}</span><span>Recipe needed</span><span>${req ? 'yes, learn it first' : 'no'}</span>
+    <span>Time</span><span>${hrs(time)}</span><span>Recipe needed</span><span>${req ? 'yes, learn it first' : 'no'}</span><span>Value</span><span>${econText(id)}</span>
     ${cond.length ? `<span>Station must be</span><span>${cond.map(esc).join(', ')}</span>` : ''}${tags.length ? `<span>Learned from</span><span>${tags.map(esc).join(', ')}</span>` : ''}</div>`;
   h += `<h3>Where to make it</h3>`;
   h += st.length ? `<p>Workstations on the map: ${st.map(esc).join(', ')}</p>` : '';
@@ -330,19 +409,66 @@ function tenementHome() {
     <p>Pick a material on the left to see where to find it, who sells it and how to make it.</p>${mapBtn('interior-player-tenement', '', 'Open your tenement on the map')}
     <h3>Recipes that make materials or furniture</h3>${ul(recs.map(rl))}</div>`;
 }
+const foundCount = id => [...new Set([...(X.inTables[id] || [])].map(k => k.split('\u0000')[0]))].reduce((a, n) => a + (X.tableCount[n] || 0), 0);
+const COLS = [
+  ['name', 'Name', id => DB.items[id][0]], ['val', 'Value', id => DB.items[id][1] || null], ['nut', 'Nutrition', id => stat(id, 'nut') || null],
+  ['thi', 'Thirst', id => stat(id, 'thi') || null], ['dep', 'Depression', id => stat(id, 'dep') || null], ['hp', 'Health', id => stat(id, 'hp') || null],
+  ['cost', 'Cost to make', id => X.craftCost[id] ?? null], ['made', 'Made by', id => (X.makes[id] || { size: 0 }).size || null],
+  ['used', 'Used in', id => (X.uses[id] || { size: 0 }).size || null], ['found', 'Found in', id => foundCount(id) || null],
+];
+const STATCOL = new Set(['nut', 'thi', 'dep', 'hp']);
+function tableCard() {
+  let ids = rows().map(r => r[0]);
+  const c = COLS.find(c => c[0] === V.col);
+  if (c) ids.sort((x, y) => { const a = c[2](x), b = c[2](y); if (a == null && b == null) return 0; if (a == null) return 1; if (b == null) return -1; return (typeof a === 'string' ? a.localeCompare(b) : a - b) * V.dir; });
+  const head = COLS.map(([k, t]) => `<th scope="col"><button type="button" class="sortb${V.col === k ? ' on' : ''}" data-col="${k}">${t}${V.col === k ? (V.dir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`).join('');
+  const body = ids.slice(0, V.lim).map(id => `<tr data-go="${id}"><td>${iIco(id)}${link('items', id, iname(id))}</td>${COLS.slice(1).map(([k, , g]) => {
+    const v = g(id); if (v == null) return '<td class="muted">–</td>';
+    if (STATCOL.has(k)) { const good = goodStat(k, v); return `<td class="${good == null ? '' : good ? 'good' : 'bad'}">${sgn(v)}</td>`; }
+    return `<td>${fmt(v)}</td>`; }).join('')}</tr>`).join('');
+  return `<div class="card wide"><div class="dbhead"><div><h2>Items</h2><div class="sub">${ids.length} match · click a column to sort, a row to open it</div></div></div>
+    <div class="tblwrap"><table class="tbl"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+    ${ids.length > V.lim ? `<button type="button" class="dbmore" id="tblMore">Show ${Math.min(600, ids.length - V.lim)} more</button>` : ''}
+    <p class="muted">Base values. Nutrition, thirst, depression and health are what the item does when used.</p></div>`;
+}
+function whereIs(id) {
+  const it = DB.items[id], parts = []; let btn = '';
+  if (it && it[6].length) return { parts: ['any of ' + it[6].length + ' items'], btn };
+  const tabs = [...new Set([...(X.inTables[id] || [])].map(k => k.split('\u0000')[0]).filter(n => X.tableCount[n]))].sort((a, b) => X.tableCount[b] - X.tableCount[a]);
+  if (tabs.length) { parts.push('in ' + tabs.reduce((a, n) => a + X.tableCount[n], 0) + ' containers'); btn = mapBtn(X.tableScenes[tabs[0]][0][0], iname(id), 'Find on the map'); }
+  const sv = DB.vendors.filter(v => sells(v, +id)); if (sv.length) parts.push('sold by ' + sv.length + ' shop' + (sv.length > 1 ? 's' : ''));
+  if (X.makes[id]) parts.push('craftable');
+  if (!parts.length) parts.push('not found in the world data');
+  return { parts, btn };
+}
+function listCard() {
+  const L = shopGet(), rids = Object.keys(L).filter(id => X.R[id]).sort((a, b) => X.R[a][1].localeCompare(X.R[b][1]));
+  if (!rids.length) return `<div class="card"><h2>Shopping list</h2><p class="muted">Nothing here yet. Open a recipe, or the “How to craft” box on an item, and press “+ Shopping list”. The list adds up every ingredient and tells you where to find it. It is saved in this browser only.</p></div>`;
+  const need = {}, make = {}; let cost = 0, worth = 0;
+  for (const rid of rids) { const n = L[rid], r = X.R[rid]; r[7].forEach(x => { need[x[0]] = (need[x[0]] || 0) + x[1] * n; }); r[8].forEach(x => { make[x[0]] = (make[x[0]] || 0) + x[1] * n; }); cost += X.RC[rid].cost * n; worth += X.RC[rid].worth * n; }
+  const byName = o => Object.entries(o).sort((a, b) => iname(a[0]).localeCompare(iname(b[0])));
+  return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ingredients ≈ ${fmt(cost)} OC · worth ≈ ${fmt(worth)} OC</div>
+    <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span>${rl(rid)}</span><span class="qty"><button type="button" data-shop="${rid}" data-d="-1" aria-label="One less">−</button><b>× ${L[rid]}</b><button type="button" data-shop="${rid}" data-d="1" aria-label="One more">+</button></span></div>`).join('')}
+    <h3>You will need</h3>${ul(byName(need).map(([id, n]) => { const w = whereIs(id); return `<span>${il(id)} <small class="muted">× ${num(n)}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}`; }))}
+    <h3>You will make</h3>${ul(byName(make).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}</small>`))}
+    <button type="button" class="dbmore" data-shop="clear">Clear the list</button></div>`;
+}
 function notesCard() {
   return `<div class="card"><h2>Data notes</h2><div class="sub">${DB.notes.length} findings</div>${ul(DB.notes.map(esc))}
     <p class="muted">Regenerated by <code>tools/build_db.py</code> after each game patch.</p></div>`;
 }
 const missing = () => `<div class="card"><h2>Not found</h2><p class="muted">This entry isn't in the current data.</p></div>`;
 function renderDetail() {
-  const el = $('#dbDetail'), k = V.key;
-  const back = `<a class="dbback" href="#/db/${V.sec === 'notes' ? 'items' : V.sec}">← Back to the list</a>`;
+  const el = $('#dbDetail'), k = V.key, bare = V.sec === 'notes' || V.sec === 'list', tbl = tableOn();
+  const back = `<a class="dbback${tbl && V.sec === 'items' ? ' show' : ''}" href="#/db/${bare ? 'items' : V.sec}">${tbl && V.sec === 'items' ? '← Back to the table' : '← Back to the list'}</a>`;
   const home = { items: 'items', recipes: 'recipes', vendors: 'vendors', tenants: 'tenants', furniture: 'pieces of furniture' };
   if (V.sec === 'notes') el.innerHTML = notesCard();
+  else if (V.sec === 'list') el.innerHTML = listCard();
+  else if (k == null && tbl) el.innerHTML = tableCard();
   else if (k == null) el.innerHTML = V.sec === 'tenement' ? tenementHome() : `<div class="card"><h2>${esc(SECTIONS.find(s => s[0] === V.sec)[1])}</h2><p class="muted">${rows().length} ${home[V.sec]}. Pick one on the left.</p></div>`;
   else el.innerHTML = { items: itemCard, tenement: itemCard, recipes: recipeCard, vendors: vendorCard, tenants: tenantCard, furniture: furnCard }[V.sec](k);
-  if (k != null || V.sec === 'notes') el.insertAdjacentHTML('afterbegin', back);
+  if (k != null || bare) el.insertAdjacentHTML('afterbegin', back);
+  const more = $('#tblMore'); if (more) more.onclick = () => { V.lim += 600; renderDetail(); };
   el.scrollTop = 0;
 }
 
@@ -352,16 +478,21 @@ async function route() {
   if (!isDb()) { document.body.classList.remove('dbmode'); return; }
   document.body.classList.add('dbmode');
   $('#dbBtn').classList.add('on');
-  const [, sec, key] = location.hash.slice(2).split('/').map(decodeURIComponent);
+  const raw = location.hash.slice(2), qi = raw.indexOf('?'), qs = qi < 0 ? '' : raw.slice(qi + 1);
+  const [, sec, key] = (qi < 0 ? raw : raw.slice(0, qi)).split('/').map(decodeURIComponent);
   const s = SECTIONS.some(x => x[0] === sec) ? sec : 'items';
   if (!DB) { $('#dbDetail').innerHTML = '<div class="card"><p>Opening the files…</p></div>'; try { await load(); } catch (e) { $('#dbDetail').innerHTML = '<div class="card"><h2>Could not load data/db.js</h2><p class="muted">Run tools/build_db.py.</p></div>'; return; } }
-  const changed = s !== V.sec; V.sec = s; V.key = key ?? null;
-  document.body.classList.toggle('dbpick', V.key != null || s === 'notes');   // phones: show the list or the entry, not both
-  if (changed) { V.q = ''; V.f = ''; V.e = ''; V.sort = 'name'; V.lim = 300; renderSide(); } else if (!$('#dbList') && s !== 'notes') renderSide(); else renderList();
-  if (s === 'notes') renderSide();
+  const changed = s !== V.sec || !V.init, bare = s === 'notes' || s === 'list';
+  V.sec = s; V.key = key ?? null;
+  document.body.classList.toggle('dbpick', V.key != null || bare);   // phones: show the list or the entry, not both
+  if (changed) { V.q = ''; V.f = ''; V.e = ''; V.e2 = ''; V.min = ''; V.w = ''; V.sort = 'name'; V.view = 'list'; V.col = ''; V.dir = 1; V.lim = 300; }
+  const applied = !!qs && (changed || qs !== qsOf()); if (applied) applyQs(qs);
+  V.init = true;
+  if (bare || changed || applied || !$('#dbList')) renderSide(); else renderList();
   renderDetail();
   const on = $('#dbList .row.on'); if (on) on.scrollIntoView({ block: 'nearest' });
   document.title = 'Obenseuer Loot Map · ' + SECTIONS.find(x => x[0] === s)[1];
+  syncUrl();
 }
 function leave(slug, q) {
   document.body.classList.remove('dbmode'); $('#dbBtn').classList.remove('on'); document.title = 'Obenseuer Loot Map';
@@ -369,12 +500,31 @@ function leave(slug, q) {
   window.OBS_MAP && window.OBS_MAP.show(slug, q);
 }
 document.addEventListener('click', e => {
+  const sb = e.target.closest('[data-shop]');
+  if (sb) {
+    e.preventDefault(); const v = sb.dataset.shop;
+    if (v === 'clear') { shopMem = {}; shopSave(); shopBadge(); } else shopChange(v, +sb.dataset.d || 1);
+    if (V.sec === 'list') renderDetail(); else sb.textContent = 'On the list ✓ × ' + (shopGet()[v] || 0);
+    return;
+  }
+  const sc = e.target.closest('[data-col]');
+  if (sc) { const k = sc.dataset.col; if (V.col === k) V.dir = -V.dir; else { V.col = k; V.dir = k === 'name' ? 1 : -1; } renderDetail(); syncUrl(); return; }
+  const tr = e.target.closest('tr[data-go]');
+  if (tr && !e.target.closest('a')) { location.hash = '#/db/items/' + tr.dataset.go; return; }
   const m = e.target.closest('[data-map]'); if (m) { e.preventDefault(); leave(m.dataset.map, m.dataset.q); return; }
   const c = e.target.closest('#dbDetail [data-cat]');
-  if (c) { e.preventDefault(); V.sec = 'items'; V.q = ''; V.f = c.dataset.cat; V.e = ''; if (V.sort === 'eh' || V.sort === 'el') V.sort = 'name'; V.key = null; history.pushState(null, '', '#/db/items'); renderSide(); renderDetail(); }
+  if (c) { e.preventDefault(); V.sec = 'items'; V.q = ''; V.f = c.dataset.cat; V.e = ''; V.e2 = ''; V.min = ''; if (['eh', 'el', 'ep'].includes(V.sort)) V.sort = 'name'; V.key = null; history.pushState(null, '', '#/db/items'); renderSide(); renderDetail(); }
 });
 // Region tabs leave the database and go back to the map.
 $('#regionTabs').addEventListener('click', e => { if (isDb() && e.target.closest('[data-region]')) { document.body.classList.remove('dbmode'); $('#dbBtn').classList.remove('on'); history.replaceState(null, '', '#/'); } }, true);
-window.addEventListener('hashchange', route);
+window.addEventListener('hashchange', () => { route(); setReport(); });
+// footer: game version, theme switch
+fetch('data/meta.json?v=1').then(r => r.json()).then(m => {
+  const g = $('#gver'); if (g && m.version) g.textContent = ' · Game version ' + m.version + (m.build ? ' (Steam build ' + m.build + (m.updated ? ', ' + m.updated : '') + ')' : '');
+}).catch(() => {});
+const themeBtn = $('#themeBtn');
+function paintTheme() { const l = document.documentElement.dataset.theme === 'light'; if (themeBtn) { themeBtn.textContent = l ? 'Dark theme' : 'Light theme'; themeBtn.setAttribute('aria-pressed', l); } }
+if (themeBtn) themeBtn.onclick = () => { const t = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'; document.documentElement.dataset.theme = t; try { localStorage.setItem('obs-theme', t); } catch (e) {} paintTheme(); };
+paintTheme(); setReport();
 route();
 })();

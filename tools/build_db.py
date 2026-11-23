@@ -142,6 +142,24 @@ landmark_icons = {l['t']: l['icon'] for l in IDX['landmarks'] if l.get('icon') a
 db = dict(icons=icons, landmarkIcons=landmark_icons, items={str(k): v for k, v in items.items()}, recipes=recipes, loot=loot, vendors=vendors, furniture=furniture,
           typeSkills=M.get('typeSkills', {}), stations=stations, sceneCats=scene_cats, tenants=tenants, people=people,
           notes=sorted(set(notes)))
+# ---- game version and Steam build for the footer (optional: needs the Steam appmanifest next to the game folder)
+import glob, datetime
+mp = os.path.join(site, 'data', 'meta.json')
+meta = json.load(open(mp, encoding='utf-8')) if os.path.exists(mp) else {}   # keeps the build number when the Steam manifest can't be reached
+try:
+    gm = open(os.path.join(src, 'globalgamemanagers'), 'rb').read()
+    m = re.search(rb'(?<![\d.])0\.\d{1,2}\.\d{1,3}(?![\d.])', gm)
+    if m: meta['version'] = m.group().decode()
+except OSError: pass
+for acf in glob.glob(os.path.join(os.path.normpath(os.path.join(src, '..', '..', '..')), 'appmanifest_*.acf')):
+    t = open(acf, encoding='utf-8', errors='replace').read()
+    if re.search(r'"installdir"\s+"Obenseuer"', t):
+        b, u = re.search(r'"buildid"\s+"(\d+)"', t), re.search(r'"LastUpdated"\s+"(\d+)"', t)
+        if b: meta['build'] = int(b.group(1))
+        if u: meta['updated'] = datetime.datetime.fromtimestamp(int(u.group(1)), datetime.timezone.utc).strftime('%Y-%m-%d')
+if meta:
+    with open(mp, 'w', encoding='utf-8') as f: json.dump(meta, f)
+    print('game', meta)
 out = os.path.join(site, 'data', 'db.js')
 with open(out, 'w', encoding='utf-8') as f:
     f.write('window.OBS_DB=' + json.dumps(db, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/') + ';\n')
