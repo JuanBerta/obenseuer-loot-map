@@ -219,6 +219,9 @@ footer a{color:var(--ochre3)}
 .shopctl{display:inline-flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px}
 .shopctl button,.qty .x{min-width:34px;height:34px;border:1px solid var(--paperline);background:#fff8;border-radius:3px;cursor:pointer;font-size:0.9375rem;color:var(--ink);padding:0 8px}
 .shopctl .x{color:var(--red)}.qty .x{color:var(--red);width:auto}
+.shopopt{display:flex;gap:8px;align-items:center;margin:10px 0 0;font-size:0.875rem}
+.shopopt select{background:var(--paper);color:var(--ink);border:1px solid #000;border-radius:3px;padding:6px 8px;font:inherit;max-width:100%}
+.shopbtn.mini{margin:0 0 0 8px;padding:4px 9px;white-space:nowrap}
 .card .dbmore:hover{background:#3a342b}
 @media (max-width:820px){
   #db{flex-direction:column}

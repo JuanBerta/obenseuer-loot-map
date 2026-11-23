@@ -187,6 +187,41 @@ const shopSave = () => { try { localStorage.setItem(SHOP, JSON.stringify(shopMem
 const shopCount = () => Object.keys(shopGet()).length;
 const shopBadge = () => { const b = $('#shopN'); if (b) b.textContent = shopCount(); };
 function shopChange(rid, d) { const L = shopGet(), n = Math.max(0, (L[rid] || 0) + d); if (n) L[rid] = n; else delete L[rid]; shopSave(); shopBadge(); }
+let optMem = null;
+const shopOpt = () => {
+  if (!optMem) { try { optMem = JSON.parse(localStorage.getItem('obs-shop-opt') || 'null'); } catch (e) {} if (!optMem || typeof optMem !== 'object') optMem = {}; }
+  if (!['all', 'missing', 'off'].includes(optMem.mode)) optMem.mode = 'all'; if (!optMem.pref || typeof optMem.pref !== 'object') optMem.pref = {};   // pref: item id -> 'craft' or 'buy', overriding the default
+  return optMem;
+};
+const optSave = () => { try { localStorage.setItem('obs-shop-opt', JSON.stringify(optMem)); } catch (e) {} };
+// The cheapest recipe that makes an item (by its ingredients' base value), ignoring recipes that need the item itself.
+const bestMemo = {};
+function bestRecipe(id) {
+  if (id in bestMemo) return bestMemo[id];
+  let best = null, bc = Infinity;
+  for (const rid of X.makes[id] || []) {
+    const r = X.R[rid]; if (r[7].some(x => x[0] === +id)) continue;
+    const out = r[8].find(x => x[0] === +id), c = X.RC[rid].cost / Math.max(out[1], 1);
+    if (c < bc) { bc = c; best = rid; }
+  }
+  return bestMemo[id] = best;
+}
+// Break the ingredients down: 'all' crafts everything craftable, 'missing' only what nothing in the world drops or sells, 'off' none. The buttons override this per item.
+const wantCraft = (id, opt) => { const p = opt.pref[id]; return opt.mode !== 'off' && (p === 'craft' || (p !== 'buy' && (opt.mode === 'all' || (!X.placed.has(id) && !X.sold.has(id))))); };
+function expandNeeds(base, opt) {
+  const raw = {}, steps = {}, outs = {}, order = [];
+  const visit = (id, n, stack) => {
+    id = +id; const it = DB.items[id];
+    const rid = wantCraft(id, opt) && !(it && it[6].length) && stack.length < 8 && !stack.includes(id) ? bestRecipe(id) : null;
+    if (!rid) { raw[id] = (raw[id] || 0) + n; return; }
+    const r = X.R[rid], per = r[8].find(x => x[0] === id)[1], b = n / per;
+    r[7].forEach(x => visit(x[0], x[1] * b, stack.concat(id)));
+    if (!(rid in steps)) { order.push(rid); outs[rid] = id; }
+    steps[rid] = (steps[rid] || 0) + b;
+  };
+  Object.entries(base).forEach(([id, n]) => visit(id, n, []));
+  return { raw, steps, outs, order };
+}
 const shopCtl = rid => { const n = shopGet()[rid] || 0; return n
   ? `<span class="shopctl"><button type="button" data-shop="${rid}" data-d="-1" aria-label="One less">−</button><span>On the list × ${n}</span><button type="button" data-shop="${rid}" data-d="1" aria-label="One more">+</button><button type="button" class="x" data-shop="${rid}" data-d="-999">Remove</button></span>`
   : `<button type="button" class="shopbtn" data-shop="${rid}" data-d="1">+ Shopping list</button>`; };
@@ -451,15 +486,23 @@ function whereIs(id) {
   return { parts, btn };
 }
 function listCard() {
-  const L = shopGet(), rids = Object.keys(L).filter(id => X.R[id]).sort((a, b) => X.R[a][1].localeCompare(X.R[b][1]));
-  if (!rids.length) return `<div class="card"><h2>Shopping list</h2><p class="muted">Nothing here yet. Open a recipe, or the “How to craft” box on an item, and press “+ Shopping list”. The list adds up every ingredient and tells you where to find it. It is saved in this browser only.</p></div>`;
+  const L = shopGet(), o = shopOpt(), up = n => Math.ceil(n - 1e-9);
+  const rids = Object.keys(L).filter(id => X.R[id]).sort((a, b) => X.R[a][1].localeCompare(X.R[b][1]));
+  if (!rids.length) return `<div class="card"><h2>Shopping list</h2><p class="muted">Nothing here yet. Open a recipe, or the “How to craft” box on an item, and press “+ Shopping list”. The list adds up every ingredient, including what it takes to craft the ingredients, and tells you where to find it. It is saved in this browser only.</p></div>`;
   const need = {}, make = {}; let cost = 0, worth = 0;
   for (const rid of rids) { const n = L[rid], r = X.R[rid]; r[7].forEach(x => { need[x[0]] = (need[x[0]] || 0) + x[1] * n; }); r[8].forEach(x => { make[x[0]] = (make[x[0]] || 0) + x[1] * n; }); cost += X.RC[rid].cost * n; worth += X.RC[rid].worth * n; }
-  const byName = o => Object.entries(o).sort((a, b) => iname(a[0]).localeCompare(iname(b[0])));
-  return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ingredients ≈ ${fmt(cost)} OC · worth ≈ ${fmt(worth)} OC</div>
+  for (const id of Object.keys(need)) { if (make[id]) need[id] = Math.max(0, need[id] - make[id]); if (!need[id]) delete need[id]; }   // a recipe on the list may already make what another needs
+  const E = expandNeeds(need, o), byName = a => a.sort((x, y) => iname(x[0]).localeCompare(iname(y[0])));
+  const rawCost = Object.entries(E.raw).reduce((a, [id, n]) => a + X.unit(id) * up(n), 0);
+  const crafted = E.order.length;
+  return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ${o.mode !== 'off' ? 'raw materials' : 'ingredients'} ≈ ${fmt(o.mode !== 'off' ? rawCost : cost)} OC · worth ≈ ${fmt(worth)} OC</div>
+    <label class="shopopt">Ingredients <select data-shopmode aria-label="How far to break ingredients down"><option value="all" ${o.mode === 'all' ? 'selected' : ''}>Break down everything craftable</option><option value="missing" ${o.mode === 'missing' ? 'selected' : ''}>Only what can't be found or bought</option><option value="off" ${o.mode === 'off' ? 'selected' : ''}>Don't break down</option></select></label>
     <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span>${rl(rid)}</span><span class="qty"><button type="button" data-shop="${rid}" data-d="-1" aria-label="One less">−</button><b>× ${L[rid]}</b><button type="button" data-shop="${rid}" data-d="1" aria-label="One more">+</button><button type="button" class="x" data-shop="${rid}" data-d="-999" aria-label="Remove from the list">✕</button></span></div>`).join('')}
-    <h3>You will need</h3>${ul(byName(need).map(([id, n]) => { const w = whereIs(id); return `<span>${il(id)} <small class="muted">× ${num(n)}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}`; }))}
-    <h3>You will make</h3>${ul(byName(make).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}</small>`))}
+    ${crafted ? `<h3>Craft these first · ${crafted}</h3>${ul(E.order.map(rid => { const out = E.outs[rid], per = X.R[rid][8].find(x => x[0] === out)[1], b = up(E.steps[rid]);
+      return `<span>${rl(rid)} <small class="muted">× ${b} → ${num(per * b)} ${esc(iname(out))}</small></span><button type="button" class="shopbtn mini" data-pref="${out}:buy" title="Find or buy it instead of crafting it">Find or buy instead</button>`; }))}` : ''}
+    <h3>${o.mode !== 'off' ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = o.mode !== 'off' && bestRecipe(+id) && !(DB.items[id] && DB.items[id][6].length);
+      return `<span>${il(id)} <small class="muted">× ${num(up(n))}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}`; }))}
+    <h3>You will make</h3>${ul(byName(Object.entries(make)).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}</small>`))}
     <button type="button" class="dbmore" data-shop="clear">Clear the list</button></div>`;
 }
 function notesCard() {
@@ -516,6 +559,8 @@ document.addEventListener('click', e => {
     if (V.sec === 'list') renderDetail(); else document.querySelectorAll('.shopwrap').forEach(w => { if (w.dataset.rid === v) w.innerHTML = shopCtl(v); });
     return;
   }
+  const ko = e.target.closest('[data-pref]');
+  if (ko) { const [id, how] = ko.dataset.pref.split(':'); shopOpt().pref[id] = how; optSave(); renderDetail(); return; }
   const sc = e.target.closest('[data-col]');
   if (sc) { const k = sc.dataset.col; if (V.col === k) V.dir = -V.dir; else { V.col = k; V.dir = k === 'name' ? 1 : -1; } renderDetail(); syncUrl(); return; }
   const tr = e.target.closest('tr[data-go]');
@@ -526,6 +571,7 @@ document.addEventListener('click', e => {
 });
 // Region tabs leave the database and go back to the map.
 $('#regionTabs').addEventListener('click', e => { if (isDb() && e.target.closest('[data-region]')) { document.body.classList.remove('dbmode'); $('#dbBtn').classList.remove('on'); history.replaceState(null, '', '#/'); } }, true);
+document.addEventListener('change', e => { const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
 window.addEventListener('hashchange', () => { route(); setReport(); });
 // footer: game version, theme switch
 fetch('data/meta.json?v=1').then(r => r.json()).then(m => {
