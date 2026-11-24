@@ -440,6 +440,7 @@ namespace ObenseuerLootMap
                 foreach (JArray x in (JArray)r[4])
                 {
                     int id = (int)x[0]; float n = (float)x[1]; var c = Cheap(id); row.ids.Add(id);
+                    if (r.Count > 10 && Convert.ToInt32(r[10]) == 1) n /= Db.UsesOf(id);   // ammo-type input: one use per unit, so a bottle of ink covers 50 crafts
                     if (c.v != null) { row.cost += c.p * n; if (!buyAt.Contains(c.v.n)) buyAt.Add(c.v.n); }
                     else { int val = Db.ValueOf(id); if (val <= 0) { bad = true; break; } row.cost += val * n; row.estimated = true; }
                 }

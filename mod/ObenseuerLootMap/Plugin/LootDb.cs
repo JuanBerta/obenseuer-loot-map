@@ -78,6 +78,12 @@ public class LootDb
 		return new List<string>();
 	}
 
+	// Uses per item for multi-use items (a bottle of ink = 50); 1 for ordinary items.
+	public int UsesOf(int id)
+	{
+		return (items.TryGetValue(id.ToString(), out var v) && v.Count > 5 && v[5] != null && !(v[5] is JArray) && Convert.ToDouble(v[5]) > 1) ? (int)Convert.ToDouble(v[5]) : 1;
+	}
+
 	public int ValueOf(int id)
 	{
 		return (items.TryGetValue(id.ToString(), out var v) && v.Count > 1) ? (int)Convert.ToDouble(v[1]) : 0;

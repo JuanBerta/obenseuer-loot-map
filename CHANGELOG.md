@@ -1,5 +1,8 @@
 # Changelog - Loot Map (in-game mod)
 
+## Next
+- Multi-use items count per use: a Bottle of Ink is 50 uses, so a recipe that spends one use is charged about 1/50 of the bottle in the Profit finder, the website's profit and the shopping list (which buys whole items, rounded up).
+
 ## 0.7.6
 - Profit counts quality: what you craft is priced by the quality your skill gives it (the Profit finder uses your live skill levels; the website has a "Your skills" page to enter them).
 - Profit finder (More tools): ranks every recipe by what it earns at real shop prices (cheapest shop for the ingredients, best buyer for the products, after the fail chance), by profit or by profit per hour, and shows where to buy and sell. "Find" highlights the ingredients and products on the map.

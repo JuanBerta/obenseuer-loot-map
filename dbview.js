@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=6';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=7';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -62,9 +62,11 @@ function index() {
         fCats: [...new Set(Object.values(DB.furniture).map(f => f[1]))].sort() };
   // economics from base values: what a recipe's ingredients are worth against what it makes (a group ingredient counts as its cheapest member)
   const unit = id => { const it = I[id]; if (!it) return 0; const g = it[6].map(m => I[m] ? I[m][1] : Infinity); const lo = Math.min(...g); return g.length && isFinite(lo) ? lo : it[1]; };
+  // multi-use items (a bottle of ink is 50 uses): a recipe that spends ammo takes one use per unit, not the whole item
+  X.div = (r, id) => { const it = I[id]; return r[13] && r[13][3] && it && it[10] > 1 ? it[10] : 1; };
   X.unit = unit; X.RC = {}; X.craftCost = {}; X.craftProfit = {};
   for (const r of DB.recipes) {
-    const cost = r[7].reduce((a, x) => a + unit(x[0]) * x[1], 0), worth = r[8].reduce((a, x) => a + (I[x[0]] ? I[x[0]][1] : 0) * x[1], 0);
+    const cost = r[7].reduce((a, x) => a + unit(x[0]) * x[1] / X.div(r, x[0]), 0), worth = r[8].reduce((a, x) => a + (I[x[0]] ? I[x[0]][1] : 0) * x[1], 0);
     X.RC[r[0]] = { cost, worth, profit: worth - cost };
     for (const o of r[8]) {
       const per = cost / Math.max(o[1], 1), pr = (I[o[0]] ? I[o[0]][1] : 0) - per;
@@ -157,9 +159,9 @@ function skillsCard() {
 const RPmemo = {};
 function realProfit(rid) {
   if (RPmemo[rid]) return RPmemo[rid];
-  const r = X.R[rid], ing = r[7].map(x => Object.assign({ id: x[0], n: x[1] }, buyCost(x[0], x[1])));
+  const r = X.R[rid], ing = r[7].map(x => Object.assign({ id: x[0], n: x[1], div: X.div(r, x[0]) }, buyCost(x[0], x[1])));
   const q = qualityOf(r), outs = r[8].map(x => { const b = buyersOf(x[0])[0], qv = hasQuality(x[0]) ? qualityValue(q) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv)) : 0, v: b ? b.v : null, q: qv !== 1 || hasQuality(x[0]) ? q : null }; });
-  const cost = ing.reduce((a, x) => a + x.p * x.n, 0), rev = outs.reduce((a, x) => a + x.p * x.n, 0) * (1 - (r[5] || 0)), profit = rev - cost;
+  const cost = ing.reduce((a, x) => a + x.p * x.n / x.div, 0), rev = outs.reduce((a, x) => a + x.p * x.n, 0) * (1 - (r[5] || 0)), profit = rev - cost;
   return RPmemo[rid] = { q, ing, outs, cost, rev, profit, hour: r[6] > 0 ? profit * 3600 / r[6] : null, sellable: outs.some(o => o.v), estimated: ing.some(x => !x.shop) };
 }
 const profitTxt = n => (n >= 0 ? '+' : '−') + fmt(Math.abs(n)) + ' OC';
@@ -167,7 +169,7 @@ const realText = rid => { const p = realProfit(rid); if (!p.sellable) return '<s
   return `At shops: pay ≈ ${fmt(p.cost)} OC${p.estimated ? '*' : ''} · get ≈ ${fmt(p.rev)} OC · <b class="${p.profit >= 0 ? 'good' : 'bad'}">${profitTxt(p.profit)}</b>${p.hour != null ? ` · ${profitTxt(p.hour)}/h` : ''}`; };
 function tradeBlock(rid) {
   const p = realProfit(rid), r = X.R[rid];
-  const buy = p.ing.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.shop ? `${fmt(x.p)} OC each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : `not sold · ≈ ${fmt(x.p)} OC`}</small>`);
+  const buy = p.ing.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}${x.div > 1 ? ` use${x.n === 1 ? '' : 's'} of ${x.div}` : ''}</small></span><small>${x.shop ? `${fmt(x.p)} OC ${x.div > 1 ? `per item (≈ ${fmt(x.p / x.div)} OC per use)` : 'each'} at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : `not sold · ≈ ${fmt(x.p)} OC`}</small>`);
   const sell = p.outs.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.v ? `${fmt(x.p)} OC each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : 'no shop buys it'}</small>`);
   return `<h3>Trade at shops</h3><p>${realText(rid)}</p><h3>Buy the ingredients</h3>${ul(buy)}<h3>Sell what it makes</h3>${ul(sell)}
     <p class="muted">Real shop prices: base value × the shop's multiplier. ${p.estimated ? '* Ingredients no shop sells are counted at base value. ' : ''}Counts the ${Math.round((r[5] || 0) * 100)}% fail chance and the quality of what you make (${p.outs.some(o => o.q != null) ? 'quality ≈ ' + (+p.q.toFixed(2)) : 'these items have no quality'}, at ${skillSelect(r[3])}). Ignores the quality of bought ingredients and what the shop stocks that day.</p>`;
@@ -327,7 +329,7 @@ function expandNeeds(base, opt) {
     const rid = wantCraft(id, opt) && !(it && it[6].length) && stack.length < 8 && !stack.includes(id) ? bestRecipe(id) : null;
     if (!rid) { raw[id] = (raw[id] || 0) + n; return; }
     const r = X.R[rid], per = r[8].find(x => x[0] === id)[1], b = n / per;
-    r[7].forEach(x => visit(x[0], x[1] * b, stack.concat(id)));
+    r[7].forEach(x => visit(x[0], x[1] * b / X.div(r, x[0]), stack.concat(id)));
     if (!(rid in steps)) { order.push(rid); outs[rid] = id; }
     steps[rid] = (steps[rid] || 0) + b;
   };
@@ -677,7 +679,7 @@ function listCard() {
   const rids = Object.keys(L).filter(id => X.R[id]).sort((a, b) => X.R[a][1].localeCompare(X.R[b][1]));
   if (!rids.length) return `<div class="card"><h2>Shopping list</h2><p class="muted">Nothing here yet. Open a recipe, or the “How to craft” box on an item, and press “+ Shopping list”. The list adds up every ingredient, including what it takes to craft the ingredients, and tells you where to find it. It is saved in this browser only.</p></div>`;
   const need = {}, make = {}; let cost = 0, worth = 0;
-  for (const rid of rids) { const n = L[rid], r = X.R[rid]; r[7].forEach(x => { need[x[0]] = (need[x[0]] || 0) + x[1] * n; }); r[8].forEach(x => { make[x[0]] = (make[x[0]] || 0) + x[1] * n; }); cost += X.RC[rid].cost * n; worth += X.RC[rid].worth * n; }
+  for (const rid of rids) { const n = L[rid], r = X.R[rid]; r[7].forEach(x => { need[x[0]] = (need[x[0]] || 0) + x[1] * n / X.div(r, x[0]); }); r[8].forEach(x => { make[x[0]] = (make[x[0]] || 0) + x[1] * n; }); cost += X.RC[rid].cost * n; worth += X.RC[rid].worth * n; }
   for (const id of Object.keys(need)) { if (make[id]) need[id] = Math.max(0, need[id] - make[id]); if (!need[id]) delete need[id]; }   // a recipe on the list may already make what another needs
   const E = expandNeeds(need, o), byName = a => a.sort((x, y) => iname(x[0]).localeCompare(iname(y[0])));
   const rawCost = Object.entries(E.raw).reduce((a, [id, n]) => a + (o.pref[id] === 'find' ? 0 : X.unit(id) * up(n)), 0);

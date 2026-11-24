@@ -51,7 +51,8 @@ for it in read_json('Items.json'):
         if t.endswith('WallpaperData'): wall = m.get('surfaceArea')
     items[it['ID']] = [it['Title'].strip(), it.get('BaseValue', 0), it.get('Categories') or [], (it.get('Description') or '').strip(),
                        it.get('Stackable', 1), eff, grp, wall,
-                       sorted({str(m.get('$type', '')).split('.')[-1] for m in it.get('Meta') or [] if isinstance(m, dict)}), stats(it)]
+                       sorted({str(m.get('$type', '')).split('.')[-1] for m in it.get('Meta') or [] if isinstance(m, dict)}), stats(it),
+                       next((int(m.get('maxAmmo', 0)) for m in it.get('Meta') or [] if isinstance(m, dict) and str(m.get('$type', '')).endswith('ItemAmmodata') and m.get('maxAmmo', 0) > 1 and not (m.get('ammoItems') or m.get('ammoItemcategories'))), 0)]   # [10]: uses per item (ink = 50), 0 = single use
 # ---- recipes
 recipes = []
 kv = lambda l: [[x['Key']['ID'], x['Value']] for x in l or []]
@@ -60,7 +61,8 @@ for r in read_json('Recipes.json')['Recipes']:
     rec = [r['ID'], (r.get('Name') or '').strip(), r.get('Type'), r.get('RelevantSkill'), r.get('MinimumSkill', 0), r.get('FailChance', 0),
            r.get('ProcessTime', 0), kv(r.get('input')), kv(r.get('output')), kv(r.get('outputFail')), r.get('RequiredConditions') or [],
            [t for t in r.get('RecipeTags') or [] if t != 'NONE'], 1 if r.get('RecipeRequired') else 0,
-           [r.get('SkillFactor', 1), (r.get('metaSettings') or {}).get('qualityFactor', 1), (r.get('metaSettings') or {}).get('fixedQuality', 0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0]]   # [13]: skill factor, quality factor, fixed output quality (0 = none)
+           [r.get('SkillFactor', 1), (r.get('metaSettings') or {}).get('qualityFactor', 1), (r.get('metaSettings') or {}).get('fixedQuality', 0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0,
+            1 if (r.get('metaSettings') or {}).get('useAmmoAsInput') else 0]]   # [13]: skill factor, quality factor, fixed output quality (0 = none), 1 = ammo-type inputs spend one use per unit
     for x in rec[7] + rec[8] + rec[9]:
         if x[0] not in items: notes.append(f'Recipe #{rec[0]} “{rec[1]}” uses unknown item ID {x[0]}')
     recipes.append(rec)
