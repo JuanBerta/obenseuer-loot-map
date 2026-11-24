@@ -19,7 +19,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap;
 
-[BepInPlugin("com.juanberta.obenseuer.lootmap", "Loot Map", "0.7.2")]
+[BepInPlugin("com.juanberta.obenseuer.lootmap", "Loot Map", "0.7.3")]
 public partial class LootMapPlugin : BaseUnityPlugin
 {
 	private class GuideTarget
@@ -29,6 +29,8 @@ public partial class LootMapPlugin : BaseUnityPlugin
 		public string label;
 
 		public Vector3 pos;
+
+		public bool sure;
 	}
 
 	internal class LiveFurnShop

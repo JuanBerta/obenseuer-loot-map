@@ -302,6 +302,18 @@ namespace ObenseuerLootMap
             if (shopListMsg != null) GUILayout.Label(shopListMsg, smallStyle);
         }
 
+        // The route visits exactly what the map marks for this search: same kinds switched on, no containers you already emptied, same floor and "only where it is now" rules.
+        bool RouteStop(string cur, PointData p, bool trash)
+        {
+            if (trash) return IsTrash(p) && !SearchedToday(p, cur);
+            if (!PointMatches(p)) return false;
+            if (p.k == "r" ? !cfgRecipes.Value : p.k == "p" ? !cfgPickups.Value : !cfgContainers.Value) return false;
+            if ((p.live && p.empty) || IsEmptied(cur, p)) return false;
+            if (cfgFreeOnly.Value && p.s == 1) return false;
+            if (cfgOnlyNow.Value && Searching && !HasNow(p)) return false;
+            if (Indoors && cfgFloorOnly.Value && Mathf.Abs(p.y - PlayerY()) > 2.2f) return false;
+            return true;
+        }
         // ---------------- route planner ----------------
         internal void PlanRoute()
         {
@@ -310,12 +322,10 @@ namespace ObenseuerLootMap
             var cand = new List<GuideTarget>(); bool route = TrashRoute;
             foreach (var p in PointsOf(cur))
             {
-                if (route ? (!IsTrash(p) || SearchedToday(p, cur)) : !PointMatches(p)) continue;
-                if (p.live && p.empty) continue;
-                if (cfgFreeOnly.Value && p.s == 1) continue;
-                cand.Add(new GuideTarget { scene = cur, pos = new Vector3(p.x, p.y, p.z), label = p.t ?? p.n ?? Loc.T(p.k == "p" ? "Pickup spot" : "Container") });
+                if (!RouteStop(cur, p, route)) continue;
+                cand.Add(new GuideTarget { scene = cur, pos = new Vector3(p.x, p.y, p.z), label = p.t ?? p.n ?? Loc.T(p.k == "p" ? "Pickup spot" : "Container"), sure = !route && HasNow(p) });
             }
-            if (!route && Db.scenes.TryGetValue(cur, out var sd))
+            if (!route && cfgShops.Value && Db.scenes.TryGetValue(cur, out var sd))
                 foreach (var v in sd.vendors) if (VendorMode(v) != 0) cand.Add(new GuideTarget { scene = cur, pos = new Vector3(v.x, v.y, v.z), label = v.n });
             if (cand.Count == 0) { shopListMsg = Loc.T("Nothing to visit here"); return; }
             var order = new List<GuideTarget>(); var at = me;
@@ -324,7 +334,7 @@ namespace ObenseuerLootMap
                 int bi = 0; float bc = float.MaxValue;
                 for (int i = 0; i < cand.Count; i++)
                 {
-                    var d = cand[i].pos - at; float c = new Vector2(d.x, d.z).magnitude + Mathf.Abs(d.y) * 4f;
+                    var d = cand[i].pos - at; float c = (new Vector2(d.x, d.z).magnitude + Mathf.Abs(d.y) * 4f) * (cand[i].sure ? 0.4f : 1f);
                     if (c < bc) { bc = c; bi = i; }
                 }
                 order.Add(cand[bi]); at = cand[bi].pos; cand.RemoveAt(bi);
@@ -338,11 +348,10 @@ namespace ObenseuerLootMap
             int n = 0; bool route = TrashRoute;
             foreach (var p in PointsOf(cur))
             {
-                if (route ? (!IsTrash(p) || SearchedToday(p, cur)) : !PointMatches(p)) continue;
-                if (p.live && p.empty) continue;
+                if (!RouteStop(cur, p, route)) continue;
                 n++;
             }
-            if (!route && Db.scenes.TryGetValue(cur, out var sd)) n += sd.vendors.Count(v => VendorMode(v) != 0);
+            if (!route && cfgShops.Value && Db.scenes.TryGetValue(cur, out var sd)) n += sd.vendors.Count(v => VendorMode(v) != 0);
             return n;
         }
 
