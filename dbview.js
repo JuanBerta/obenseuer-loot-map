@@ -110,6 +110,34 @@ const qualityValue = q => q > 1 ? q * q : 0.5 * q * q + 0.25 * q + 0.25;
 const hasQuality = id => !!(DB.items[id] && DB.items[id][8].includes('ItemQualityData'));
 const skillSelect = sk => `<select data-skill="${esc(sk)}" aria-label="Your ${esc(sk)} level" title="Your ${esc(sk)} level: sets the quality of what you craft, which sets what shops pay">${Array.from({ length: 16 }, (_, i) => `<option value="${i}" ${i === lvlOf(sk) ? 'selected' : ''}>${esc(sk)} ${i}</option>`).join('')}</select>`;
 function setSkill(sk, v) { skillLv[sk] = v; try { localStorage.setItem('obs-skills', JSON.stringify(skillLv)); } catch (e) {} for (const k in RPmemo) delete RPmemo[k]; if (V.sec === 'recipes') renderList(); renderDetail(); }
+// ---------- skills from a save (Globals.tnmt: the game's skills; mod skills keep their XP in their own save entries; Woodcutting in woodcutting.json) ----------
+const MODSK = [['Scavenging', 'ScavengeTimer_Stash_001'], ['Haggling', 'JuanBerta_Haggling_Save_001'], ['Stealth', 'JuanBerta_Stealth_Save_001'], ['Fraud', 'JuanBerta_ScamArtist_Save_001']];
+const modLevel = xp => xp > 0 ? Math.floor(Math.min(10, 1 + xp / 1000)) : 0;   // the Skills Pack: learned at the first XP, 1000 XP per level, up to 10
+let saveInfo = null; try { saveInfo = JSON.parse(localStorage.getItem('obs-saveinfo') || 'null'); } catch (e) {}
+let saveMsg = '';
+async function loadSaves(files) {
+  const info = { name: '', game: {}, mods: [], at: new Date().toLocaleString() }; const notes = [];
+  for (const f of files) {
+    let j; try { j = JSON.parse((await f.text()).replace(/^\uFEFF/, '')); } catch (e) { notes.push(f.name + ' could not be read.'); continue; }
+    if (j && Array.isArray(j.Data)) {
+      info.name = [j.CharacterName, j.SaveName].filter(Boolean).join(' · ');
+      const by = {}; j.Data.forEach(x => { if (x && x.GUID) by[x.GUID] = x.Data || {}; });
+      const sk = by.PlayerStats && by.PlayerStats.Skills;
+      if (Array.isArray(sk)) sk.forEach(x => { if (x && x.Type && x.Type !== 'None') info.game[x.Type] = Math.floor(x.Skill || 0); }); else notes.push(f.name + ' has no player skills.');
+      for (const [n, g] of MODSK) if (by[g] && typeof by[g].skillXp === 'number') info.mods.push({ n, xp: by[g].skillXp, lvl: modLevel(by[g].skillXp) });
+    } else if (j && typeof j.xp === 'number' && 'level' in j) info.mods.push({ n: 'Woodcutting', xp: j.xp, lvl: Math.max(0, j.level | 0) });
+    else notes.push(f.name + ' is not a save file (pick Globals.tnmt, and woodcutting.json if you use Woodcutting).');
+  }
+  const old = saveInfo && saveInfo.mods || [];   // keep mod skills from an earlier pick when this pick has none of that skill
+  info.mods = info.mods.concat(old.filter(o => !info.mods.some(m => m.n === o.n)));
+  if (!Object.keys(info.game).length && saveInfo) { info.game = saveInfo.game; info.name = info.name || saveInfo.name; }
+  const used = new Set(DB.recipes.map(r => r[3]));
+  let n = 0; for (const [k, v] of Object.entries(info.game)) if (used.has(k)) { skillLv[k] = Math.max(0, Math.min(15, v)); n++; }
+  try { localStorage.setItem('obs-skills', JSON.stringify(skillLv)); localStorage.setItem('obs-saveinfo', JSON.stringify(info)); } catch (e) {}
+  saveInfo = info; for (const k in RPmemo) delete RPmemo[k];
+  saveMsg = (n ? n + ' crafting skill levels loaded from your save. ' : '') + notes.join(' ');
+  renderDetail();
+}
 function skillsCard() {
   const names = [...new Set(DB.recipes.map(r => r[3]).filter(x => x && x !== 'None'))].sort();
   const cnt = sk => DB.recipes.filter(r => r[3] === sk).length;
@@ -117,6 +145,13 @@ function skillsCard() {
     <p>Enter your level in each skill. The quality of what you craft depends on it, and shops pay more for higher quality, so the profit shown on recipes uses these levels (a skill left alone counts as level 5). Quality ≈ level × 0.2 × the recipe's skill factor × (1 − fail chance), between 0.05 and 2.</p>
     <div class="facts">${names.map(sk => `<span>${esc(sk)} <small class="muted">${cnt(sk)} recipes</small></span><span><input type="number" min="0" max="15" step="1" inputmode="numeric" data-skillin="${esc(sk)}" value="${lvlOf(sk)}" aria-label="${esc(sk)} level" style="width:5em"></span>`).join('')}</div>
     <button type="button" class="dbmore" data-skillreset>Reset all to 5</button>
+    <h3>Load from a save</h3>
+    <p>Pick <b>Globals.tnmt</b> from a save slot (and <b>woodcutting.json</b> from the character's folder if you use Woodcutting). Everything is read here in your browser and never uploaded. Your saves are in <code>C:\Users\&lt;you&gt;\AppData\LocalLow\Loiste Interactive\Obenseuer\Saves\&lt;character&gt;\&lt;slot&gt;</code>.</p>
+    <label class="dbmore" style="display:inline-block;cursor:pointer">Choose save files…<input type="file" data-saveinput multiple accept=".tnmt,.json,application/json" hidden></label>
+    ${saveMsg ? `<p class="good">${esc(saveMsg)}</p>` : ''}
+    ${saveInfo ? `<p class="muted">Loaded ${esc(saveInfo.name || 'a save')} · ${esc(saveInfo.at)}</p>
+      ${saveInfo.mods.length ? `<h3>Skills from mods</h3><div class="facts">${saveInfo.mods.map(m => `<span>${esc(m.n)} <small class="muted">mod</small></span><span><b>Level ${m.lvl}</b> <small class="muted">${m.n === 'Woodcutting' ? '' : fmt(m.xp) + ' XP'}</small></span>`).join('')}</div><p class="muted">Mod skills do not change recipe quality; they are shown for reference (Scavenging, Haggling, Stealth, Fraud and Woodcutting come from the Skills Pack).</p>` : ''}
+      ${Object.keys(saveInfo.game).length ? `<h3>Other game skills</h3><div class="facts">${Object.entries(saveInfo.game).filter(([k]) => !names.includes(k)).sort().map(([k, v]) => `<span>${esc(k)}</span><span>Level ${v}</span>`).join('')}</div>` : ''}` : ''}
     <p class="muted">The game caps skills at 15. Your levels are kept in this browser only.</p></div>`;
 }
 const RPmemo = {};
@@ -735,6 +770,7 @@ function fallbackCopy(t, ok) { const a = document.createElement('textarea'); a.v
 document.addEventListener('change', e => { const q = e.target.closest('[data-shopset]'); if (q) { shopSet(q.dataset.shopset, q.value); if (V.sec === 'list') renderDetail(); else document.querySelectorAll('.shopwrap').forEach(w => { if (w.dataset.rid === q.dataset.shopset) w.innerHTML = shopCtl(q.dataset.shopset); }); return; }
   const sk = e.target.closest('[data-skill]'); if (sk) { setSkill(sk.dataset.skill, +sk.value); return; }
   const si = e.target.closest('[data-skillin]'); if (si) { setSkill(si.dataset.skillin, Math.max(0, Math.min(15, Math.round(+si.value || 0)))); return; }
+  const sf = e.target.closest('[data-saveinput]'); if (sf) { if (sf.files.length) loadSaves([...sf.files]); return; }
   const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
 window.addEventListener('hashchange', () => { route(); setReport(); });
 // footer: game version, theme switch
