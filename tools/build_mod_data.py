@@ -74,7 +74,7 @@ for i,name in enumerate(scenes):
         if nm: e['n']=nm
         if p.get('steal'): e['s']=1
         if p.get('locked'): e['l']=1
-        if p.get('guid') and p.get('category') in TRASH: e['g']=p['guid']   # for Scavenger's "searched today"
+        if p.get('guid'): e['g']=p['guid']   # for Scavenger's "searched today"
         ow=(p.get('owner') or '').strip()
         if ow and ow.lower() not in OWNER_PLACEHOLDER and p.get('steal'): e['o']=ow
         fx=(p.get('customItems') or [])+(p.get('startItems') or [])
@@ -95,6 +95,11 @@ for i,name in enumerate(scenes):
         if f.get('lock'): e['lk']=f['lock']
         if f.get('diff') is not None: e['df']=f['diff']
         D.append(e)
+    # doors inside the building (with their lock) and stairs / ladders / elevator stops
+    ID=[dict(x=round(f['x'],1),y=round(f['y'],1),z=round(f['z'],1),**({'lk':f['lock']} if f.get('lock') else {}),**({'df':f['diff']} if f.get('diff') is not None else {}))
+        for f in fe['features'] if f['kind']=='idoor' and f.get('active') and not (f['x']==0 and f['z']==0)]
+    VT=[dict(k=f['sub'][0],x=round(f['x'],1),y=round(f['y'],1),z=round(f['z'],1)) for f in fe['features'] if f['kind']=='vert']
+    VT+=[dict(k='w',x=round(f['x'],1),y=round(f['y'],1),z=round(f['z'],1)) for f in fe['features'] if f['kind']=='wood' and f.get('active')]   # tree debris (wood piles)
     V=[]
     for f in sorted(fe['features'], key=lambda f: bool(f.get('furnShop'))):   # traders first, furniture shops merge into them
         if f['kind']!='vendor' or not f.get('active'): continue
@@ -130,7 +135,7 @@ for i,name in enumerate(scenes):
     mk=None
     if fe.get('map') and fe['map'].get('sprite'): mk=fe['map']['sprite'][1]
     if P or F or V or D:
-        S[name]=dict(name=names.get(name,name),map=mk,points=P,stations=F,doors=D,vendors=V,
+        S[name]=dict(name=names.get(name,name),map=mk,points=P,stations=F,doors=D,vendors=V,idoors=ID,verts=VT,
                      free=sum(1 for p in P if not p.get('s')),steal=sum(1 for p in P if p.get('s')))
 used=set(t for s in S.values() for t in [p.get('t') for p in s['points']] if t)|used_stock
 for t in used_stock: need.update(loot[t][0]); need.update(loot[t][1])

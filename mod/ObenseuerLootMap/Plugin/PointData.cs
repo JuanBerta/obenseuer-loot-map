@@ -28,6 +28,9 @@ public class PointData
 	public string g;
 
 	[JsonIgnore]
+	public bool mem;
+
+	[JsonIgnore]
 	public bool live;
 
 	[JsonIgnore]

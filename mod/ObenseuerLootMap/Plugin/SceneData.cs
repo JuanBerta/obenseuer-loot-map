@@ -19,4 +19,8 @@ public class SceneData
 	public List<DoorData> doors = new List<DoorData>();
 
 	public List<VendorData> vendors = new List<VendorData>();
+
+	public List<InnerDoorData> idoors = new List<InnerDoorData>();
+
+	public List<VertData> verts = new List<VertData>();
 }

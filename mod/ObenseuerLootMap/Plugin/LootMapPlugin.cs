@@ -19,7 +19,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap;
 
-[BepInPlugin("com.juanberta.obenseuer.lootmap", "Loot Map", "0.7.3")]
+[BepInPlugin("com.juanberta.obenseuer.lootmap", "Loot Map", "0.7.5")]
 public partial class LootMapPlugin : BaseUnityPlugin
 {
 	private class GuideTarget
@@ -1697,6 +1697,10 @@ public partial class LootMapPlugin : BaseUnityPlugin
 		{
 			DrawDoors();
 		}
+		if (cfgEnabled.Value && cfgInside.Value)
+		{
+			DrawInside();
+		}
 		if (cfgPanel.Value)
 		{
 			Vector2 position = panelRect.position;
@@ -1731,6 +1735,10 @@ public partial class LootMapPlugin : BaseUnityPlugin
 				SetGuide(CurrentScene, new Vector3(hoveredDoor.x, hoveredDoor.y, hoveredDoor.z), Db.SceneName(hoveredDoor.to));
 				current.Use();
 			}
+			else if (InsideHovered && InsideClick())
+			{
+				current.Use();
+			}
 			else if (hovered != null)
 			{
 				SetGuide(hovered.scene, hovered.world, MarkerTitle(hovered));
@@ -1746,6 +1754,10 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			else if (hoveredDoor != null)
 			{
 				DrawDoorTooltip(mousePosition);
+			}
+			else if (InsideHovered)
+			{
+				ShowTip(mousePosition, InsideTip());
 			}
 		}
 	}
@@ -2073,6 +2085,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			cfgStations.Value = GUILayout.Toggle(cfgStations.Value, " " + Loc.T("Workstations"), Array.Empty<GUILayoutOption>());
 			cfgShops.Value = GUILayout.Toggle(cfgShops.Value, " " + Loc.T("Shops"), Array.Empty<GUILayoutOption>());
 			cfgDoors.Value = GUILayout.Toggle(cfgDoors.Value, " " + Loc.T("Doors"), Array.Empty<GUILayoutOption>());
+			cfgInside.Value = GUILayout.Toggle(cfgInside.Value, " " + Loc.T("Inside doors, stairs, lifts"), Array.Empty<GUILayoutOption>());
 			cfgFreeOnly.Value = GUILayout.Toggle(cfgFreeOnly.Value, " " + Loc.T("Only free to take"), Array.Empty<GUILayoutOption>());
 			cfgOnlyNow.Value = GUILayout.Toggle(cfgOnlyNow.Value, " " + Loc.T("Searching: only where it is now"), Array.Empty<GUILayoutOption>());
 			cfgFloorOnly.Value = GUILayout.Toggle(cfgFloorOnly.Value, " " + Loc.T("Indoors: only my floor"), Array.Empty<GUILayoutOption>());
@@ -2421,17 +2434,17 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			}
 			if (HasNow(p))
 			{
-				stringBuilder.Append("<color=#1f8a3a><b>✔ " + Loc.T("Has it now") + "</b></color>\n");
+				stringBuilder.Append("<color=#1f8a3a><b>✔ " + Loc.T(p.mem ? "Probably has it" : "Has it now") + "</b></color>\n");
 			}
 			if (p.live)
 			{
 				if (p.empty)
 				{
-					stringBuilder.Append("<color=#7a6f5c><b>" + Loc.T("Empty right now") + "</b></color>\n");
+					stringBuilder.Append("<color=#7a6f5c><b>" + Loc.T(p.mem ? "Probably empty (from your save)" : "Empty right now") + "</b></color>\n");
 				}
 				else
 				{
-					stringBuilder.Append("<b>" + Loc.T("Contains now") + "</b>: " + string.Join(", ", from h in p.have.Take(12)
+					stringBuilder.Append("<b>" + Loc.T(p.mem ? "Probably contains (from your save)" : "Contains now") + "</b>: " + string.Join(", ", from h in p.have.Take(12)
 						select HiId(h.Key) + ((h.Value > 1) ? $" ×{h.Value}" : "")) + "\n");
 				}
 				if (p.restock != null)
@@ -2914,6 +2927,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			{
 				return remembered ?? new List<PointData>();
 			}
+			WithMemory(scene, value.points);
 			if (remembered == null || remembered.Count == 0)
 			{
 				return value.points;

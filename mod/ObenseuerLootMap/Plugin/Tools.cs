@@ -18,6 +18,8 @@ namespace ObenseuerLootMap
 
         void BindToolsConfig()
         {
+            BindInsideConfig();
+            BindMemoryConfig();
             cfgHideEmpty = Config.Bind("Filters", "HideEmptiedContainers", false, "Hide containers you have already emptied (they are shown hollow otherwise).");
             cfgShopHud = Config.Bind("Display", "ShoppingListOnScreen", true, "Show the shopping list (from the website) as a checklist on screen.");
             cfgMoreTools = Config.Bind("Display", "ShowMoreTools", true, "Show the value / effect / shopping list / route tools in the panel.");
@@ -31,6 +33,7 @@ namespace ObenseuerLootMap
             if (lootedDirty && Time.unscaledTime > nextLootedSave) SaveLooted();
             if (Time.unscaledTime < nextToolsTick) return;
             nextToolsTick = Time.unscaledTime + 1f;
+            MemoryTick();
             if (shopList != null)
             {
                 RefreshHave();
