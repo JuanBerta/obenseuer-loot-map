@@ -133,7 +133,8 @@ function secIcon(k) {
     case 'recipes': return rIco(0);
     case 'vendors': return imgIco(placeIcon('One Stop Shop'));
     case 'tenement': return imgIco(placeIcon('Tenement'));
-    case 'tenants': { const t = DB.tenants.find(t => DB.icons && DB.icons.people && DB.icons.people[t[0]] != null); return t ? pIco(t[0]) : imgIco(placeIcon('Open Homes Company')); }
+    case 'tenants': return RT.r.filter(r => (m(r.n) || r.w.some(m) || r.at.some(m)) && (!V.f || (V.f === 'OC' ? r.oc : V.f === 'RM' ? r.rm : r.sz.includes(V.f))))
+      .sort((a, b) => a.n.localeCompare(b.n)).map(r => [r.n, r.n, rentLine(r), pIco(r.n)]);
     case 'furniture': return imgIco(placeIcon('Möbelmann Furnitures', 'Commercial Furniture Shop'));
     case 'notes': { const r = Object.keys(DB.items).find(id => DB.items[id][2].includes('Readable')); return r ? iIco(r) : ''; }
   }
@@ -299,7 +300,7 @@ function filters() {
   }
   if (V.sec === 'tenement') return opt(X.itemCats, 'All categories') + sort;
   if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('profit', 'Best craft profit')}${so('cost', 'Cheapest ingredients')}</select>`;
-  if (V.sec === 'tenants') return `<select id="dbF" aria-label="Who to list"><option value="">Only people who rent a flat</option><option value="all" ${V.f === 'all' ? 'selected' : ''}>Everyone (family and other residents too)</option></select>`;
+  if (V.sec === 'tenants') return `<select id="dbF" aria-label="Filter tenants"><option value="">All tenants</option>${[['Small', 'Accept a small apartment'], ['Medium', 'Accept a medium apartment'], ['Large', 'Accept a large apartment'], ['OC', 'Pay OC'], ['RM', 'Pay RM']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   if (V.sec === 'furniture') return opt(X.fCats, 'All categories') + sort;
   if (V.sec === 'vendors') return `<select id="dbF"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   return '';
@@ -309,7 +310,7 @@ const INTRO = {
   recipes: 'Every recipe with its ingredients, station, skill and time.',
   vendors: 'Shops, traders, stalls and vending machines placed in the world: what they sell and what they buy from you.',
   tenement: 'Building materials and wall coverings for fixing up your tenement, and the recipes that make them.',
-  tenants: 'The people who rent a flat from you: what they pay and what the flat needs. Switch the filter to Everyone to also list the family who move in and the other residents, who never pay rent.',
+  tenants: 'The tenants the game can offer for your apartments: who moves in with them, which apartment sizes they accept, their base rent per rent period and what they demand before moving in.',
   furniture: 'Every piece of furniture, its price, the shops that sell and buy it, and what it lets you craft.',
   list: 'Recipes you plan to make, with everything you need and where to find it.',
   notes: 'Things in the game data that look wrong or inconsistent. Some may be intentional.',
@@ -430,26 +431,23 @@ function vendorCard(key) {
   if (v.fb) h += `<h3>Buys furniture</h3><p>${v.fb === 'any' ? 'Any furniture.' : v.fb === 'same' ? 'The pieces it sells.' : v.fb.map(fl).join(', ')}</p>`;
   return h + '</div>';
 }
+const RT = window.OBS_RENTERS || { cats: [], r: [] };
+const money = (v, c) => v ? `${fmt(v)} ${c}` : '–';
+const rentLine = r => r.oc || r.rm ? [r.oc ? fmt(r.oc) + ' OC' : '', r.rm ? fmt(r.rm) + ' RM' : ''].filter(Boolean).join(' + ') : 'no rent';
+const needName = ([c, t]) => { const k = RT.cats[c]; return k ? `${k[0]}: ${k[1][t] || t}` : ''; };
 function tenantCard(name) {
-  const t = DB.tenants.find(t => t[0] === name);
-  if (!t) {
-    const p = DB.people[name]; if (!p) return missing();
-    const host = DB.tenants.find(x => x[15].includes(name)), who2 = [p[1], p[2] != null && p[2] >= 0 && p[2] < 200 ? p[2] + ' years' : null, p[3], p[4]].filter(Boolean).map(esc).join(' · ');
-    return `<div class="card"><div class="dbhead">${pIco(name, 1)}<div><h2>${esc(name)}</h2><div class="sub">${who2 || 'Character'}</div></div></div>
-      ${host ? `<p>Moves in with <a href="#/db/tenants/${encodeURIComponent(host[0])}">${esc(host[0])}</a> when they rent a flat from you.</p>` : '<p class="muted">This character has no rent table, so they never ask you for a flat. They live in the world as a neighbour, shopkeeper or story character.</p>'}
-      <p class="muted">Character ID ${p[0]}</p></div>`;
-  }
-  const [n, rid, inc, meth, cmin, cmax, small, big, fmin, fmax, bath, el, heat, kit, wat, fam] = t, p = DB.people[n] || [];
-  const yn = b => b ? '<b>needed</b>' : '<span class="muted">not needed</span>';
-  const who = x => [x[1], x[2] != null && x[2] >= 0 && x[2] < 200 ? x[2] + ' years' : null, x[3], x[4]].filter(Boolean).map(esc).join(' · ');
-  let h = `<div class="card"><div class="dbhead">${pIco(n, 1)}<div><h2>${esc(n)}</h2><div class="sub">${who(p) || 'Not in Characters.json'}</div></div></div>
-    <h3>Rent they will pay · ${meth === 'RM' ? 'Real Money (RM)' : meth === 'OC' ? 'Obenseuer Coins (OC)' : esc(meth)}</h3><table class="dbt"><tr>${inc.map((_, i) => `<th>Level ${i + 1}</th>`).join('')}</tr><tr>${inc.map(x => `<td><b>${x} ${esc(meth)}</b></td>`).join('')}</tr></table>
-    <p class="muted">Six amounts, one per rent level (Income1–6 in the game's rent table), all paid in ${meth === 'RM' ? 'RM, the game\'s real-money currency, not OC' : esc(meth)}. Between ${Math.min(...inc)} and ${Math.max(...inc)} ${esc(meth)}${new Set(inc).size === 1 ? ' (the same at every level)' : ''}.</p>
-    <h3>The flat they want</h3><div class="facts"><span>Condition</span><span>${esc(cmin)} to ${esc(cmax)}</span><span>Size</span><span>${esc(small)} to ${esc(big)}</span>
-    <span>Floor</span><span>${fmin || fmax ? fmin + '–' + fmax : 'any'}</span><span>Bathroom</span><span>${esc(bath)}</span><span>Heating</span><span>${esc(heat)}</span>
-    <span>Electricity</span><span>${yn(el)}</span><span>Kitchen</span><span>${yn(kit)}</span><span>Water</span><span>${yn(wat)}</span></div>`;
-  if (fam.length) h += `<h3>Moves in with</h3>${ul(fam.map(f => `<span>${pIco(f)}${esc(f)}</span><small>${who(DB.people[f] || [])}</small>`))}`;
-  h += `<p class="muted">Rent table id ${rid}${p[0] != null ? ' · character ID ' + p[0] : ''}</p>${mapBtn('interior-player-tenement', '', 'Open your tenement on the map')}`;
+  const r = RT.r.find(x => x.n === name); if (!r) return missing();
+  const p = DB.people[name] || [], who = [p[1], p[2] != null && p[2] >= 0 && p[2] < 200 ? p[2] + ' years' : null, p[3], p[4]].filter(Boolean).map(esc).join(' · ');
+  const building = r.needs.filter(n => n[0] < 14), flat = r.needs.filter(n => n[0] >= 14);
+  const where = r.at.length ? r.at.map(esc).join(', ') : r.start ? 'Starts in apartment ' + r.start : r.relay ? 'Moved into apartment ' + r.relay + ' by a scene relay' : '';
+  let h = `<div class="card"><div class="dbhead">${pIco(name, 1)}<div><h2>${esc(name)}</h2><div class="sub">${who || 'Tenant'}</div></div></div>
+    <h3>Base rent per rent period</h3><div class="facts"><span>Obenseuer Coins</span><span><b>${money(r.oc, 'OC')}</b>${r.oc ? '' : ' <small class="muted">never pays OC</small>'}</span><span>Real Money</span><span><b>${money(r.rm, 'RM')}</b>${r.rm ? '' : ' <small class="muted">never pays RM</small>'}</span></div>
+    <p class="muted">${r.oc || r.rm ? 'The apartment’s value adds to this base rent.' : 'Pays no rent.'}</p>
+    <h3>Moves in</h3><div class="facts"><span>Apartment sizes</span><span>${r.sz.join(', ')}</span><span>Household</span><span>${r.w.length ? 'with ' + r.w.map(esc).join(', ') + ' (' + (r.w.length + 1) + ' people)' : 'lives alone'}</span>${where ? `<span>Found at</span><span>${where}</span>` : ''}</div>`;
+  if (flat.length) h += `<h3>Demands in the apartment</h3>${ul(flat.map(n => `<span>${esc(needName(n))}</span>`))}`;
+  if (building.length) h += `<h3>Demands of the building</h3>${ul(building.map(n => `<span>${esc(needName(n))}</span>`))}`;
+  if (!r.needs.length) h += `<p class="muted">Makes no demands.</p>`;
+  h += `<p class="muted">Rented through their own conversation once you hold the “Tenement blueprint” task item. Data checked against the <a href="https://obenseuer-viewer.pages.dev/#/renters" target="_blank" rel="noopener">Obenseuer viewer</a>.</p>${mapBtn('interior-player-tenement', '', 'Open your tenement on the map')}`;
   return h + '</div>';
 }
 function furnCard(id) {
