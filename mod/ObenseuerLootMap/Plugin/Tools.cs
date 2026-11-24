@@ -398,7 +398,8 @@ namespace ObenseuerLootMap
 
         // ---------------- profit finder: recipes ranked by what they earn at real shop prices ----------------
         class TradeRow { public string name; public float cost, rev, profit, perHour; public bool estimated; public string route; public HashSet<int> ids = new HashSet<int>(); }
-        List<TradeRow> tradeAll; bool tradeOpen; int tradeSort;
+        List<TradeRow> tradeAll; bool tradeOpen; int tradeSort; List<VendorData> tradeVendors;
+        readonly Dictionary<int, (float p, VendorData v)> tradeCheap = new Dictionary<int, (float p, VendorData v)>(), tradeBest = new Dictionary<int, (float p, VendorData v)>();
         static string Money(float x) => (x >= 0 ? "+" : "−") + Mathf.Abs(x).ToString("0.#");
         float PayAt(VendorData v, int id) => Mathf.Max(1f, Mathf.Round(Db.ValueOf(id) * (v.bm > 0 ? v.bm : 1.1f)));
         float GetAt(VendorData v, int id) => Mathf.Max(1f, Mathf.Round(Db.ValueOf(id) * (v.sm > 0 ? v.sm : 0.9f)));
@@ -414,8 +415,8 @@ namespace ObenseuerLootMap
         }
         List<TradeRow> BuildTrade()
         {
-            var vendors = Db.scenes.Values.SelectMany(sc => sc.vendors).ToList();
-            var cheapest = new Dictionary<int, (float p, VendorData v)>(); var best = new Dictionary<int, (float p, VendorData v)>();
+            var vendors = tradeVendors ??= Db.scenes.Values.SelectMany(sc => sc.vendors).ToList();
+            var cheapest = tradeCheap; var best = tradeBest;   // shop prices never change, so they are kept between rebuilds
             (float p, VendorData v) Cheap(int id)
             {
                 if (cheapest.TryGetValue(id, out var c)) return c;
