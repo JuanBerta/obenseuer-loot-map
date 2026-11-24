@@ -19,7 +19,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap;
 
-[BepInPlugin("com.juanberta.obenseuer.lootmap", "Loot Map", "0.7.1")]
+[BepInPlugin("com.juanberta.obenseuer.lootmap", "Loot Map", "0.7.2")]
 public partial class LootMapPlugin : BaseUnityPlugin
 {
 	private class GuideTarget
@@ -749,22 +749,54 @@ public partial class LootMapPlugin : BaseUnityPlugin
 		GUI.Box(new Rect(num - num5 / 2f, num2 + 26f, num5, num6), val4, tipStyle);
 	}
 
+	private static System.Reflection.FieldInfo loadOpField;
+	private static float loadingHoldUntil, loadingSince;
+	private static bool SceneIsLoading()
+	{
+		try
+		{
+			LoadingScreen ls = LoadingScreen.instance;
+			if ((Object)(object)ls == (Object)null)
+			{
+				return Time.unscaledTime < loadingHoldUntil;
+			}
+			if (loadOpField == null)
+			{
+				loadOpField = typeof(LoadingScreen).GetField("operation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+			}
+			AsyncOperation val = loadOpField != null ? (AsyncOperation)loadOpField.GetValue(ls) : null;
+			if (val == null || val.isDone)
+			{
+				loadingSince = 0f;
+			}
+			else
+			{
+				if (loadingSince == 0f)
+				{
+					loadingSince = Time.unscaledTime;
+				}
+				if (Time.unscaledTime - loadingSince < 90f)
+				{
+					loadingHoldUntil = Time.unscaledTime + 1.2f;
+					return true;
+				}
+			}
+		}
+		catch
+		{
+		}
+		return Time.unscaledTime < loadingHoldUntil;
+	}
+
 	private static bool HudHidden()
 	{
 		if (Time.timeScale < 0.01f)
 		{
 			return true;
 		}
-		try
+		if (SceneIsLoading())
 		{
-			LoadingScreen ls = LoadingScreen.instance;
-			if ((Object)(object)ls != (Object)null && (ls.Active || ls.Fading))
-			{
-				return true;
-			}
-		}
-		catch
-		{
+			return true;
 		}
 		try
 		{
