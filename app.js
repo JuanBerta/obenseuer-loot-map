@@ -20,6 +20,7 @@ const TOTALS = {};
 for (const s of IDX.scenes) for (const [c, k] of Object.entries(s.cats)) TOTALS[c] = (TOTALS[c] || 0) + k;
 const IMG = {};
 const DOOR = { open: ['#2b2a27', 'open'], pick: ['#6b3fa0', 'locked · lockpick it'], key: ['#2c6fa6', 'locked · needs a key'], locked: ['#b0651a', 'locked · opens another way'], blocked: ['#8c8577', 'not accessible'], closed: ['#8c8577', 'not open in this version of the game'] };
+const tenantOf = n => ((window.OBS_RENTERS || {}).r || []).find(r => r.n === n);
 const VERT = { stairs: 'Stairs', ladder: 'Ladder', elevator: 'Elevator' };
 const doorState = f => f.kind === 'idoor' ? (f.lock || 'open') : !f.toSlug ? 'closed' : (f.lock || 'open');
 function img(src) {
@@ -40,20 +41,22 @@ const S = { scene: null, data: null, q: '', cat: null, sel: null, floor: -1, flo
 const RECIPES = IDX.recipes || {}, STYPES = IDX.stationTypes || {};
 function stationText(title) { const t = STYPES[title] || []; return (title + '\n' + t.join('\n') + '\n' + t.flatMap(x => RECIPES[x] || []).join('\n')).toLowerCase(); }
 const STEXT = {}; for (const t of Object.keys(STYPES)) STEXT[t] = stationText(t);
-const stationMatches = f => !S.cat && qTerm() && (f.kind === 'vendor' ? ((f.title || '').toLowerCase().includes(qTerm()) || (f.items || []).some(id => itemName(id).toLowerCase().includes(qTerm())))
-  : f.kind === 'station' && f.title && (STEXT[f.title] || f.title.toLowerCase()).includes(qTerm()));
+const stationMatches = f => !S.cat && qTerm() && (f.kind === 'vendor' ? ((f.title || '').toLowerCase().has(qTerm()) || (f.items || []).some(id => itemName(id).toLowerCase().has(qTerm())))
+  : f.kind === 'station' && f.title && (STEXT[f.title] || f.title.toLowerCase()).has(qTerm()));
 const cache = {};
 
 // ---------- search ----------
 const qTerm = () => S.q.trim().toLowerCase();
+// Several searches at once: "duct tape | rope" matches either (used by "find the ingredients on the map").
+String.prototype.has = function (q) { if (!q) return true; return q.split('|').some(t => { t = t.trim(); return t && this.includes(t); }); };
 const searching = () => !!(S.cat || qTerm());
-function tableMatches(c) { if (S.cat) return c === S.cat; const q = qTerm(); return !q || !!(tableText[c] && tableText[c].includes(q)); }
+function tableMatches(c) { if (S.cat) return c === S.cat; const q = qTerm(); return !q || !!(tableText[c] && tableText[c].has(q)); }
 function pointMatches(p) {
   if (S.cat) return p.category === S.cat;
   const q = qTerm(); if (!q) return true;
   if (hasTable(p.category) && tableMatches(p.category)) return true;
-  if ([p.category, p.type, p.title, p.name, p.owner].filter(Boolean).join('\n').toLowerCase().includes(q)) return true;
-  return [...(p.customItems || []), ...(p.startItems || [])].some(id => itemName(id).toLowerCase().includes(q));
+  if ([p.category, p.type, p.title, p.name, p.owner].filter(Boolean).join('\n').toLowerCase().has(q)) return true;
+  return [...(p.customItems || []), ...(p.startItems || [])].some(id => itemName(id).toLowerCase().has(q));
 }
 function sceneHits(sc) { let n = 0; for (const [c, k] of Object.entries(sc.cats)) if (hasTable(c) && tableMatches(c)) n += k; return n; }
 
@@ -83,21 +86,21 @@ function renderSide() {
   if (searching()) {
     const label = S.cat ? `“${S.cat}” containers` : `“${S.q.trim()}”`;
     const ranked = IDX.scenes.map(s => [s, sceneHits(s)]).filter(x => x[1]).sort((a, b) => b[1] - a[1]);
-    const placeHits = q && !S.cat ? IDX.scenes.filter(s => s.name.toLowerCase().includes(q)) : [];
-    const lmHits = q && !S.cat ? LM_GROUPS.filter(l => l.titles.join(' ').toLowerCase().includes(q)) : [];
+    const placeHits = q && !S.cat ? IDX.scenes.filter(s => s.name.toLowerCase().has(q)) : [];
+    const lmHits = q && !S.cat ? LM_GROUPS.filter(l => l.titles.join(' ').toLowerCase().has(q)) : [];
     let tables = '';
     if (!S.cat && q) {
-      const hits = Object.keys(LOOT).filter(c => tableText[c].includes(q) && TOTALS[c]).sort((a, b) => TOTALS[b] - TOTALS[a]).slice(0, 10);
+      const hits = Object.keys(LOOT).filter(c => tableText[c].has(q) && TOTALS[c]).sort((a, b) => TOTALS[b] - TOTALS[a]).slice(0, 10);
       tables = hits.length ? '<div class="sec">Containers that can drop it</div>' + hits.map(c => {
-        const t = LOOT[c], m = id => itemName(id).toLowerCase().includes(q);
+        const t = LOOT[c], m = id => itemName(id).toLowerCase().has(q);
         const r = t.rare.some(m), cm = t.common.some(m);
-        const how = c.toLowerCase().includes(q) ? 'container type' : cm && r ? 'common & rare drop' : cm ? 'common drop' : 'rare drop';
+        const how = c.toLowerCase().has(q) ? 'container type' : cm && r ? 'common & rare drop' : cm ? 'common drop' : 'rare drop';
         return `<div class="row" data-cat="${esc(c)}"><span class="ico blank"></span><span class="nm">${esc(c)}<small>${how}</small></span><span class="ct">${TOTALS[c]}</span></div>`;
       }).join('') : '';
     }
     let wsec = '';
     if (!S.cat && q) {
-      const titles = Object.keys(STYPES).filter(t => STEXT[t].includes(q));
+      const titles = Object.keys(STYPES).filter(t => STEXT[t].has(q));
       const rows = IDX.scenes.map(s => [s, titles.reduce((a, t) => a + ((s.stations || {})[t] || 0), 0), titles.filter(t => (s.stations || {})[t])]).filter(x => x[1]).sort((a, b) => b[1] - a[1]);
       if (rows.length) wsec = '<div class="sec">Workstations that match</div>' + rows.slice(0, 25).map(([s, k, ts]) =>
         `<div class="row" data-slug="${s.slug}"><span class="ico blank"></span><span class="nm">${esc(ts.slice(0, 3).join(', '))}<small>in ${esc(s.name)}</small></span><span class="ct">${k}</span></div>`).join('');
@@ -141,7 +144,7 @@ function loadScene(slug) {
   if (loading[slug]) return loading[slug].p;
   const w = loading[slug] = {};
   w.p = new Promise((res, rej) => { w.res = res; w.rej = rej; });
-  const s = document.createElement('script'); s.src = `data/scenes/${slug}.js?v=3`;
+  const s = document.createElement('script'); s.src = `data/scenes/${slug}.js?v=4`;
   s.onerror = () => { delete loading[slug]; s.remove(); w.rej(new Error('scene ' + slug)); };
   document.head.appendChild(s);
   return w.p;
@@ -156,7 +159,7 @@ function prep(d) {
   const doors = [];
   for (const f of d.features.filter(f => f.kind === 'door'))
     if (!doors.find(g => g.to === f.to && Math.hypot(g.x - f.x, g.z - f.z) < 4)) doors.push(f);
-  d.doors = doors; d.idoors = d.features.filter(f => f.kind === 'idoor'); d.verts = d.features.filter(f => f.kind === 'vert'); d.services = d.features.filter(f => f.kind !== 'door' && f.kind !== 'idoor' && f.kind !== 'vert');
+  d.doors = doors; d.idoors = d.features.filter(f => f.kind === 'idoor'); d.verts = d.features.filter(f => f.kind === 'vert'); d.people = d.features.filter(f => f.kind === 'npc'); d.services = d.features.filter(f => f.kind !== 'door' && f.kind !== 'idoor' && f.kind !== 'vert' && f.kind !== 'npc');
   return d;
 }
 function computeFloors(d) {
@@ -193,7 +196,7 @@ async function openScene(slug, keepView) {
   S.floors = computeFloors(S.data); if (S.floor >= S.floors.length) S.floor = -1;
   S.layers.plan = S.userPlan ?? !(meta.outdoor && meta.map); $('#lyPlan').checked = S.layers.plan;
   buildPaths(); renderFloors();
-  if (S.pendingShop) { const t = S.pendingShop; S.pendingShop = null; const f = S.data.services.find(x => x.kind === 'vendor' && x.title === t); if (f) { S.selF = f; S.pendingFocus = f; } }
+  if (S.pendingShop) { const t = S.pendingShop; S.pendingShop = null; const f = S.data.services.find(x => x.kind === 'vendor' && x.title === t) || (S.data.people || []).find(x => x.name === t); if (f) { S.selF = f; S.pendingFocus = f; } }
   if (S.pendingFocus) { const f = S.pendingFocus; S.pendingFocus = null; S.view = { cx: f.x, cz: f.z, s: 9 }; S.autoFit = false; }
   else if (!keepView) fit();
   renderDetail(); draw(); saveHash();
@@ -419,6 +422,19 @@ function drawNow() {
     const [x, y] = toScreen(p.x, p.z); if (x < 0 || y < 0 || x > W || y > H) continue;
     label(hasTable(p.category) ? p.category : (p.title || p.type || p.name), x + r + 4, y, { font: '13px "IBM Plex Sans", sans-serif' });
   }
+  if (L.people) for (const f of d.people || []) {   // people placed in the scene; tenants you can rent to get a gold ring
+    if (!onFloor(f) || (!f.active && !L.inactive)) continue;
+    const [x, y] = toScreen(f.x, f.z); if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
+    const t = tenantOf(f.name), hov = S.hover && S.hover.f === f, r = s < 5 ? 5 : s < 13 ? 6.5 : 8;
+    ctx.globalAlpha = f.active ? 1 : 0.5;
+    ctx.fillStyle = '#6d4c8f'; ctx.strokeStyle = t ? '#f2b630' : '#f4eddd'; ctx.lineWidth = t ? 2.2 : 1.3;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#f4eddd'; ctx.beginPath(); ctx.arc(x, y - r * 0.28, r * 0.28, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y + r * 0.62, r * 0.46, Math.PI, 0); ctx.fill();
+    ctx.globalAlpha = 1;
+    if (hov || s > (meta.outdoor ? 12 : 16)) label(f.name + (t ? ' (tenant)' : ''), x + r + 3, y, { font: '600 11px "IBM Plex Sans", sans-serif', bg: 'rgba(80,52,110,0.92)' });
+    S._hits.push({ x, y, r: r + 3, f });
+  }
   for (const [p, c] of [[S.hover && S.hover.p, '#241d14'], [S.sel != null ? d.points[S.sel] : null, '#b3261e']]) {
     if (!p) continue; const [x, y] = toScreen(p.x, p.z);
     ctx.strokeStyle = c; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, r + 8, 0, 7); ctx.stroke();
@@ -484,6 +500,7 @@ function hoverAt(x, y) {
     html = f.toSlug ? `<b>Door → ${esc(f.toName)}</b><br><small>${DOOR[st][1]}${note} · ${SC[f.toSlug].lootContainers} loot containers inside · click to enter</small>` : `<b>${esc(f.toName)}</b><br><small>${DOOR[st][1]}</small>`; }
   else if (h.f && h.f.kind === 'idoor') { const f = h.f, st = doorState(f), note = st === 'pick' && f.diff != null ? ` · difficulty ${f.diff < 0.25 ? 'easy' : f.diff < 0.5 ? 'moderate' : f.diff < 1 ? 'challenging' : 'difficult'}` : '';
     html = `<b>Door</b><br><small>${DOOR[st][1]}${note}${f.active ? '' : ' · appears after an event'}</small>`; }
+  else if (h.f && h.f.kind === 'npc') { const t = tenantOf(h.f.name); html = `<b>${esc(h.f.name)}</b><br><small>${t ? 'Tenant you can rent to · ' : 'Person · '}${h.f.active ? 'where they stand at the start' : 'appears after an event'} — click for details</small>`; }
   else if (h.f && h.f.kind === 'vert') html = `<b>${VERT[h.f.sub]}</b><br><small>${h.f.sub === 'elevator' ? 'Elevator stop on this floor' : h.f.sub === 'ladder' ? 'Ladder — goes up or down from here' : 'Stairs — go up or down from here'}</small>`;
   else if (h.f) {
     const f = h.f, own = f.owned ? `<br><small style="color:#f39a88">Owned${f.owner ? ' by ' + esc(f.owner) : ''} — taking its items counts as stealing</small>` : '';
@@ -508,13 +525,23 @@ function lootList(ids, label, q) {
   const cnt = new Map(); ids.forEach(id => cnt.set(id, (cnt.get(id) || 0) + 1));
   const rows = [...cnt.entries()].sort((a, b) => itemName(a[0]).localeCompare(itemName(b[0])));
   return `<h3>${label} · ${rows.length}</h3><ul class="items">` + rows.map(([id, n]) => {
-    const nm = itemName(id), hit = q && nm.toLowerCase().includes(q);
+    const nm = itemName(id), hit = q && nm.toLowerCase().has(q);
     return `<li class="${hit ? 'hit' : ''}"><span>${esc(nm)}${n > 1 ? `<em>×${n}</em>` : ''}</span><small>${ITEMS[id] ? ITEMS[id][1] + ' OC' : ''}</small></li>`;
   }).join('') + '</ul>';
 }
 function renderDetail() {
   const el = $('#detail'), d = S.data; if (!d) { el.innerHTML = ''; return; }
   const meta = SC[S.scene], q = S.cat ? '' : qTerm();
+  if (S.selF && (d.people || []).includes(S.selF)) {
+    const f = S.selF, t = tenantOf(f.name), rl = r => r.oc || r.rm ? [r.oc ? r.oc + ' OC' : '', r.rm ? r.rm + ' RM' : ''].filter(Boolean).join(' + ') : 'no rent';
+    let h = `<button class="back" id="backBtn">← ${esc(meta.name)}</button><div class="card"><h2>${esc(f.name)}</h2><div class="sub">${t ? 'Tenant' : 'Person'} · ${esc(meta.name)}</div>`;
+    h += `<p>${f.active ? 'Placed here when the scene loads. People walk around, so this is where they start, not where they always are.' : 'Appears here after an event.'}</p>`;
+    if (t) h += `<h3>Moves into your apartments</h3><div class="facts"><span>Base rent</span><span>${rl(t)}</span><span>Apartment sizes</span><span>${t.sz.join(', ')}</span><span>Household</span><span>${t.w.length ? 'with ' + t.w.map(esc).join(', ') : 'lives alone'}</span></div>`;
+    h += `<p><a class="dbl" href="#/db/tenants/${encodeURIComponent(f.name)}">${t ? 'Open the tenant page' : ''}</a></p>`;
+    el.innerHTML = h + '</div>';
+    $('#backBtn').onclick = () => { S.selF = null; renderDetail(); draw(); };
+    return;
+  }
   if (S.selF && d.services.includes(S.selF)) {
     const f = S.selF, types = f.types || [];
     let h = `<button class="back" id="backBtn">← ${esc(meta.name)}</button><div class="card"><h2>${esc(f.title || svcOf(f.kind)[1])}</h2><div class="sub">${esc(svcOf(f.kind)[1])} · ${esc(meta.name)}</div>`;
@@ -525,7 +552,7 @@ function renderDetail() {
     if (f.kind === 'station') {
       for (const t of types) {
         const r = RECIPES[t] || [];
-        h += `<h3>${esc(t)} · ${r.length} recipes</h3>` + (r.length ? `<ul class="recipes">${r.map(n => `<li${q && n.toLowerCase().includes(q) ? ' style="background:#f0cf86"' : ''}>${esc(n)}</li>`).join('')}</ul>` : '<p class="muted">No recipes listed.</p>');
+        h += `<h3>${esc(t)} · ${r.length} recipes</h3>` + (r.length ? `<ul class="recipes">${r.map(n => `<li${q && n.toLowerCase().has(q) ? ' style="background:#f0cf86"' : ''}>${esc(n)}</li>`).join('')}</ul>` : '<p class="muted">No recipes listed.</p>');
       }
     }
     el.innerHTML = h + '</div>';
@@ -608,7 +635,7 @@ function refresh() { renderSide(); renderDetail(); draw(); saveHash(); }
 let qt; $('#q').addEventListener('input', e => { S.q = e.target.value; clearTimeout(qt); qt = setTimeout(() => { if (S.cat) setCat(null); else refresh(); }, 120); });
 $('#catChip').onclick = () => setCat(null);
 document.querySelectorAll('input[name=own]').forEach(r => r.addEventListener('change', () => { S.own = r.value; refresh(); }));
-const LAYERS = { furniture: 'lyFurniture', loot: 'lyLoot', pickups: 'lyPickups', noloot: 'lyNoLoot', inactive: 'lyInactive', landmarks: 'lyLandmarks', doors: 'lyDoors', services: 'lyServices', art: 'lyArt', plan: 'lyPlan' };
+const LAYERS = { furniture: 'lyFurniture', loot: 'lyLoot', pickups: 'lyPickups', noloot: 'lyNoLoot', inactive: 'lyInactive', landmarks: 'lyLandmarks', doors: 'lyDoors', people: 'lyPeople', services: 'lyServices', art: 'lyArt', plan: 'lyPlan' };
 for (const [k, id] of Object.entries(LAYERS)) {
   const el = document.getElementById(id); S.layers[k] = el.checked;
   el.addEventListener('change', () => { S.layers[k] = el.checked; if (k === 'plan') S.userPlan = el.checked; draw(); });
@@ -670,7 +697,7 @@ window.OBS_MAP = { show(slug, q, focus) {
   if (SC[slug]) S.region = SC[slug].group; renderTabs(); resize();
   if (S.scene === slug && S.data) {
     fit(); refresh();
-    if (S.pendingShop) { const f = S.data.services.find(x => x.kind === 'vendor' && x.title === S.pendingShop); S.pendingShop = null; if (f) { S.selF = f; S.view = { cx: f.x, cz: f.z, s: 9 }; S.autoFit = false; renderDetail(); draw(); $('#detail').classList.add('open'); } }
+    if (S.pendingShop) { const f = S.data.services.find(x => x.kind === 'vendor' && x.title === S.pendingShop) || (S.data.people || []).find(x => x.name === S.pendingShop); S.pendingShop = null; if (f) { S.selF = f; S.view = { cx: f.x, cz: f.z, s: 9 }; S.autoFit = false; renderDetail(); draw(); $('#detail').classList.add('open'); } }
   } else openScene(slug);
 } };
 })();

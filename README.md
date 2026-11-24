@@ -12,6 +12,8 @@ scene list and map light up wherever it can be found.
 - The real in-game map art for the Tenement, Bazaar and Mines, with the game's own landmark
   icons and hand-drawn circles (Hotel Korso, Sewerview Inn, Kolhola, Deekula A/B/C…)
 - Doors labeled with their in-game signs: click one to walk inside, and "Back outside" to return
+- **Stairs, ladders and elevator stops** on every floor, **people** placed in each scene (tenants you can rent to get a gold ring, with their rent and a link to their tenant page), and the interior doors with their lock state
+- **Item pages** list the best places to look; **recipe pages** have a *Find the ingredients on the map* button (search several items at once with `a | b | c`)
 - Beds, toilets, shop counters, phones and mailboxes
 - Workstations and usable furniture (Drill, Lathe, 3D Printer, stoves, ovens, Sewing Machine, Chemical lab…) with every recipe they can make, plus planters, water sources, showers, saunas, generators and recycling drops
 - Ownership: every container, pickup spot and workstation is marked **free to take** or **stealing**, using the game's own rule (an owner with ID > 1 and no permission to take), with a filter to show only one or the other

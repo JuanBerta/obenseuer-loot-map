@@ -371,6 +371,9 @@ function itemCard(id) {
   if (placed.length) {
     const best = X.tableScenes[placed[0][0]][0][0];
     const kinds = {}; placed.forEach(([n, k]) => (kinds[n] = kinds[n] || new Set()).add(k));
+    const per = {}; for (const [n] of placed) for (const [slug, k] of X.tableScenes[n]) per[slug] = (per[slug] || 0) + k;
+    const top = Object.entries(per).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    h += `<p class="muted">Best places to look:</p><div class="tags">${top.map(([slug, k]) => mapBtn(slug, t, sceneName(slug) + ' · ' + k)).join('')}</div>`;
     h += ul(Object.entries(kinds).map(([n, k]) => `<span>${esc(n.trim())} <em class="${k.has('c') ? '' : 'rare'}">${k.size > 1 ? 'common &amp; rare' : k.has('r') ? 'rare' : 'common'}</em></span><small>${X.tableCount[n]} placed</small>`))
        + mapBtn(best, t, 'Show where on the map');
   } else h += '<p class="muted">Not in any placed container.</p>';
@@ -392,6 +395,12 @@ function craftBlock(rid, forItem) {
     <div class="cm">${econText(rid)}</div>${shopBtn(rid)}</div>`;
 }
 const chipOf = (x, k) => `<span class="chip2 ${k || ''}"><b>${num(x[1])}×</b> ${il(x[0])}</span>`;
+// The scene with the most containers that can drop any of these items.
+function bestSceneFor(ids) {
+  const per = {};
+  for (const id of ids) for (const k of (X.inTables[id] || [])) { const n = k.split('\u0000')[0]; for (const [slug, c] of (X.tableScenes[n] || [])) per[slug] = (per[slug] || 0) + c; }
+  const best = Object.entries(per).sort((a, b) => b[1] - a[1])[0]; return best ? best[0] : null;
+}
 function recipeCard(id) {
   const r = X.R[id]; if (!r) return missing();
   const [, n, type, skill, minS, fail, time, inp, out, fout, cond, tags, req] = r;
@@ -405,6 +414,8 @@ function recipeCard(id) {
     <h3>Details</h3><div class="facts"><span>Skill</span><span>${esc(skill)}${minS ? ' · min ' + minS : ''}</span><span>Fail chance</span><span>${Math.round(fail * 100)}%</span>
     <span>Time</span><span>${hrs(time)}</span><span>Recipe needed</span><span>${req ? 'yes, learn it first' : 'no'}</span><span>Value</span><span>${econText(id)}</span>
     ${cond.length ? `<span>Station must be</span><span>${cond.map(esc).join(', ')}</span>` : ''}${tags.length ? `<span>Learned from</span><span>${tags.map(esc).join(', ')}</span>` : ''}</div>`;
+  if (inp.length) { const sl = bestSceneFor(inp.map(x => x[0]));
+    h += `<h3>Where to find the ingredients</h3>${sl ? mapBtn(sl, inp.map(x => iname(x[0])).join(' | '), 'Find the ingredients on the map') : '<p class="muted">None of them is in a placed container.</p>'}<p class="muted">Lights up every container, shop and workstation that has any of ${inp.length > 1 ? 'these ' + inp.length + ' ingredients' : 'this ingredient'}, starting in the place with the most.</p>`; }
   h += `<h3>Where to make it</h3>`;
   h += st.length ? `<p>Workstations on the map: ${st.map(esc).join(', ')}</p>` : '';
   h += furn.length ? `<p>Furniture you can buy: ${furn.sort((a, b) => DB.furniture[a][0].localeCompare(DB.furniture[b][0])).map(fl).join(', ')}</p>` : '';
@@ -447,7 +458,7 @@ function tenantCard(name) {
   if (flat.length) h += `<h3>Demands in the apartment</h3>${ul(flat.map(n => `<span>${esc(needName(n))}</span>`))}`;
   if (building.length) h += `<h3>Demands of the building</h3>${ul(building.map(n => `<span>${esc(needName(n))}</span>`))}`;
   if (!r.needs.length) h += `<p class="muted">Makes no demands.</p>`;
-  h += `<p class="muted">Rented through their own conversation once you hold the “Tenement blueprint” task item. Data checked against the <a href="https://obenseuer-viewer.pages.dev/#/renters" target="_blank" rel="noopener">Obenseuer viewer</a>.</p>${mapBtn('interior-player-tenement', '', 'Open your tenement on the map')}`;
+  h += `<p class="muted">Rented through their own conversation once you hold the “Tenement blueprint” task item. Data checked against the <a href="https://obenseuer-viewer.pages.dev/#/renters" target="_blank" rel="noopener">Obenseuer viewer</a>.</p>${(window.OBS_PEOPLE || {})[name] ? mapBtn(window.OBS_PEOPLE[name][0], '', 'Find ' + name + ' on the map', name) : ''}${mapBtn('interior-player-tenement', '', 'Open your tenement on the map')}`;
   return h + '</div>';
 }
 function furnCard(id) {
