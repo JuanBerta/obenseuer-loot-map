@@ -20,6 +20,7 @@ const TOTALS = {};
 for (const s of IDX.scenes) for (const [c, k] of Object.entries(s.cats)) TOTALS[c] = (TOTALS[c] || 0) + k;
 const IMG = {};
 const DOOR = { open: ['#2b2a27', 'open'], pick: ['#6b3fa0', 'locked · lockpick it'], key: ['#2c6fa6', 'locked · needs a key'], locked: ['#b0651a', 'locked · opens another way'], blocked: ['#8c8577', 'not accessible'], closed: ['#8c8577', 'not open in this version of the game'] };
+const VERT = { stairs: 'Stairs', ladder: 'Ladder', elevator: 'Elevator' };
 const doorState = f => f.kind === 'idoor' ? (f.lock || 'open') : !f.toSlug ? 'closed' : (f.lock || 'open');
 function img(src) {
   if (!IMG[src]) { const i = new Image(); i.onload = () => draw(); i.src = src; IMG[src] = i; }
@@ -140,7 +141,7 @@ function loadScene(slug) {
   if (loading[slug]) return loading[slug].p;
   const w = loading[slug] = {};
   w.p = new Promise((res, rej) => { w.res = res; w.rej = rej; });
-  const s = document.createElement('script'); s.src = `data/scenes/${slug}.js?v=2`;
+  const s = document.createElement('script'); s.src = `data/scenes/${slug}.js?v=3`;
   s.onerror = () => { delete loading[slug]; s.remove(); w.rej(new Error('scene ' + slug)); };
   document.head.appendChild(s);
   return w.p;
@@ -155,7 +156,7 @@ function prep(d) {
   const doors = [];
   for (const f of d.features.filter(f => f.kind === 'door'))
     if (!doors.find(g => g.to === f.to && Math.hypot(g.x - f.x, g.z - f.z) < 4)) doors.push(f);
-  d.doors = doors; d.idoors = d.features.filter(f => f.kind === 'idoor'); d.services = d.features.filter(f => f.kind !== 'door' && f.kind !== 'idoor');
+  d.doors = doors; d.idoors = d.features.filter(f => f.kind === 'idoor'); d.verts = d.features.filter(f => f.kind === 'vert'); d.services = d.features.filter(f => f.kind !== 'door' && f.kind !== 'idoor' && f.kind !== 'vert');
   return d;
 }
 function computeFloors(d) {
@@ -368,6 +369,21 @@ function drawNow() {
     if (hov || (!open && s > (meta.outdoor ? 14 : 18))) label('Door' + (st === 'pick' ? ' (lockpick)' : st === 'key' ? ' (key)' : st === 'blocked' ? ' (blocked)' : st === 'locked' ? ' (locked)' : ''), x + 9, y, { font: '600 11px "IBM Plex Sans", sans-serif' });
     S._hits.push({ x, y, r: 9, f });
   }
+  if (L.doors) for (const f of d.verts || []) {   // stairs, ladders and elevators, shown on the floor where they start
+    if (!onFloor(f)) continue;
+    const [x, y] = toScreen(f.x, f.z); if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
+    const hov = S.hover && S.hover.f === f, ds = s < 5 ? 3.2 : s < 13 ? 4.4 : 5.8, k = ds / 5.8;
+    ctx.fillStyle = '#2e7a68'; ctx.strokeStyle = '#f4eddd'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(x, y, ds + 0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (ds > 3.5) { ctx.strokeStyle = ctx.fillStyle = '#f4eddd'; ctx.lineWidth = 1.2;
+      if (f.sub === 'stairs') { ctx.beginPath(); ctx.moveTo(x - 3.6 * k, y + 3 * k); ctx.lineTo(x - 3.6 * k, y + 1 * k); ctx.lineTo(x - 1.2 * k, y + 1 * k); ctx.lineTo(x - 1.2 * k, y - 1.2 * k); ctx.lineTo(x + 1.2 * k, y - 1.2 * k); ctx.lineTo(x + 1.2 * k, y - 3.2 * k); ctx.lineTo(x + 3.6 * k, y - 3.2 * k); ctx.stroke(); }
+      else if (f.sub === 'ladder') { ctx.beginPath(); ctx.moveTo(x - 2 * k, y - 3.4 * k); ctx.lineTo(x - 2 * k, y + 3.4 * k); ctx.moveTo(x + 2 * k, y - 3.4 * k); ctx.lineTo(x + 2 * k, y + 3.4 * k);
+        for (const r of [-2, 0, 2]) { ctx.moveTo(x - 2 * k, y + r * k); ctx.lineTo(x + 2 * k, y + r * k); } ctx.stroke(); }
+      else { ctx.beginPath(); ctx.moveTo(x, y - 3.6 * k); ctx.lineTo(x + 2.6 * k, y - 0.8 * k); ctx.lineTo(x - 2.6 * k, y - 0.8 * k); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(x, y + 3.6 * k); ctx.lineTo(x + 2.6 * k, y + 0.8 * k); ctx.lineTo(x - 2.6 * k, y + 0.8 * k); ctx.closePath(); ctx.fill(); } }
+    if (hov) label(VERT[f.sub], x + 9, y, { font: '600 11px "IBM Plex Sans", sans-serif' });
+    S._hits.push({ x, y, r: 9, f });
+  }
   for (const l of lms) {
     if (l.w > 0) continue;
     const [x, y] = toScreen(l.x, l.z); if (x < -40 || y < -40 || x > W + 40 || y > H + 40) continue;
@@ -468,6 +484,7 @@ function hoverAt(x, y) {
     html = f.toSlug ? `<b>Door → ${esc(f.toName)}</b><br><small>${DOOR[st][1]}${note} · ${SC[f.toSlug].lootContainers} loot containers inside · click to enter</small>` : `<b>${esc(f.toName)}</b><br><small>${DOOR[st][1]}</small>`; }
   else if (h.f && h.f.kind === 'idoor') { const f = h.f, st = doorState(f), note = st === 'pick' && f.diff != null ? ` · difficulty ${f.diff < 0.25 ? 'easy' : f.diff < 0.5 ? 'moderate' : f.diff < 1 ? 'challenging' : 'difficult'}` : '';
     html = `<b>Door</b><br><small>${DOOR[st][1]}${note}${f.active ? '' : ' · appears after an event'}</small>`; }
+  else if (h.f && h.f.kind === 'vert') html = `<b>${VERT[h.f.sub]}</b><br><small>${h.f.sub === 'elevator' ? 'Elevator stop on this floor' : h.f.sub === 'ladder' ? 'Ladder — goes up or down from here' : 'Stairs — go up or down from here'}</small>`;
   else if (h.f) {
     const f = h.f, own = f.owned ? `<br><small style="color:#f39a88">Owned${f.owner ? ' by ' + esc(f.owner) : ''} — taking its items counts as stealing</small>` : '';
     const extra = f.kind === 'station' ? esc((f.types || []).join(', ')) + ' · click for recipes' : f.kind === 'bed' ? (f.safe ? 'Safe place to sleep' : 'You can sleep here') + (f.arrest ? ' · you can be arrested here' : '') : svcOf(f.kind)[1];
@@ -479,7 +496,7 @@ function hoverAt(x, y) {
 function clickAt(x, y) {
   const h = pick(x, y);
   if (h && h.f && h.f.kind === 'door') { if (h.f.toSlug) openScene(h.f.toSlug); return; }
-  if (h && h.f && h.f.kind === 'idoor') return;
+  if (h && h.f && (h.f.kind === 'idoor' || h.f.kind === 'vert')) return;
   if (h && h.f) { S.sel = null; S.selF = h.f; renderDetail(); draw(); $('#detail').classList.add('open'); return; }
   if (h && h.l) { S.view.cx = h.l.x; S.view.cz = h.l.z; S.view.s = Math.max(S.view.s * 1.6, 9); S.autoFit = false; draw(); saveHash(); return; }
   S.selF = null; S.sel = h && h.p ? h.p.i : null; renderDetail(); draw(); saveHash();
@@ -551,12 +568,15 @@ function renderDetail() {
   const fac = [['bed', 'beds'], ['toilet', 'toilets'], ['vending', 'shop counters'], ['vendor', 'shops'], ['phone', 'phones'], ['mailbox', 'mailboxes']].filter(([k]) => n(k)).map(([k, w]) => n(k) + ' ' + w).join(' · ');
   const dc = {}; for (const f of d.idoors || []) if (f.active) { const k = doorState(f); dc[k] = (dc[k] || 0) + 1; }
   const dn = Object.values(dc).reduce((a, b) => a + b, 0), dsum = [['open', 'open'], ['pick', 'lockpick'], ['key', 'need a key'], ['locked', 'locked another way'], ['blocked', 'blocked']].filter(([k]) => dc[k]).map(([k, w]) => dc[k] + ' ' + w).join(' · ');
+  const vc = {}; for (const f of d.verts || []) vc[f.sub] = (vc[f.sub] || 0) + 1;
+  const vn = Object.values(vc).reduce((a, b) => a + b, 0), vsum = [['stairs', 'stairs'], ['ladder', 'ladders'], ['elevator', 'elevator stops']].filter(([k]) => vc[k]).map(([k, w]) => vc[k] + ' ' + w).join(' · ');
   el.innerHTML = `<div class="card"><h2>${esc(meta.name)}</h2><div class="sub">${esc(meta.scene)}</div>
     <p class="muted">Click a container type to light it up on the map, or click any box on the map for its loot.</p>
     <div class="split"><span class="a"><b>${meta.safe}</b>free to take</span><span class="b"><b>${meta.steal}</b>stealing</span></div>
     <h3>Containers</h3>${Object.keys(cats).length ? list(cats) : '<p class="muted">No loot containers here.</p>'}
     <h3>Pickup spots</h3>${Object.keys(pk).length ? list(pk) : '<p class="muted">None.</p>'}
     ${fac ? `<h3>Facilities</h3><p>${fac}</p>` : ''}
+    ${vn ? `<h3>Ways up and down · ${vn}</h3><p>${vsum}</p>` : ''}
     ${dn ? `<h3>Doors inside · ${dn}</h3><p>${dsum}</p>` : ''}
     ${Object.keys(meta.stations || {}).length ? `<h3>Workstations</h3><ul class="list">${Object.entries(meta.stations).sort((a, b) => a[0].localeCompare(b[0])).map(([t, n]) => `<li data-station="${esc(t)}"><span>${esc(t)}</span><b>${n}</b></li>`).join('')}</ul>` : ''}
     ${inside.length ? `<h3>Go inside</h3><ul class="list">${inside.map(f => `<li data-slug="${f.toSlug}"><span>${esc(f.toName)}</span><b>${SC[f.toSlug].lootContainers}</b></li>`).join('')}</ul>` : ''}
