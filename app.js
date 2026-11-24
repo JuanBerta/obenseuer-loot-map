@@ -39,7 +39,7 @@ const S = { scene: null, data: null, q: '', cat: null, sel: null, floor: -1, flo
 const RECIPES = IDX.recipes || {}, STYPES = IDX.stationTypes || {};
 function stationText(title) { const t = STYPES[title] || []; return (title + '\n' + t.join('\n') + '\n' + t.flatMap(x => RECIPES[x] || []).join('\n')).toLowerCase(); }
 const STEXT = {}; for (const t of Object.keys(STYPES)) STEXT[t] = stationText(t);
-const stationMatches = f => !S.cat && qTerm() && (f.kind === 'vendor' ? (f.items || []).some(id => itemName(id).toLowerCase().includes(qTerm()))
+const stationMatches = f => !S.cat && qTerm() && (f.kind === 'vendor' ? ((f.title || '').toLowerCase().includes(qTerm()) || (f.items || []).some(id => itemName(id).toLowerCase().includes(qTerm())))
   : f.kind === 'station' && f.title && (STEXT[f.title] || f.title.toLowerCase()).includes(qTerm()));
 const cache = {};
 
@@ -192,6 +192,7 @@ async function openScene(slug, keepView) {
   S.floors = computeFloors(S.data); if (S.floor >= S.floors.length) S.floor = -1;
   S.layers.plan = S.userPlan ?? !(meta.outdoor && meta.map); $('#lyPlan').checked = S.layers.plan;
   buildPaths(); renderFloors();
+  if (S.pendingShop) { const t = S.pendingShop; S.pendingShop = null; const f = S.data.services.find(x => x.kind === 'vendor' && x.title === t); if (f) { S.selF = f; S.pendingFocus = f; } }
   if (S.pendingFocus) { const f = S.pendingFocus; S.pendingFocus = null; S.view = { cx: f.x, cz: f.z, s: 9 }; S.autoFit = false; }
   else if (!keepView) fit();
   renderDetail(); draw(); saveHash();
@@ -622,9 +623,13 @@ S.region = SC[first].group; renderTabs(); applyPref();
 openScene(first, !!start && !S.autoFit);
 window.addEventListener('hashchange', () => { const s = readHash(); if (s && s !== S.scene) openScene(s, true); });
 // Used by the database pages (dbview.js) to jump to a scene, optionally with a search.
-window.OBS_MAP = { show(slug, q) {
+window.OBS_MAP = { show(slug, q, focus) {
+  S.pendingShop = focus || null;
   S.cat = null; $('#catChip').classList.add('hidden'); S.q = q || ''; $('#q').value = S.q; S.sel = null; S.selF = null;
   if (SC[slug]) S.region = SC[slug].group; renderTabs(); resize();
-  if (S.scene === slug) { fit(); refresh(); } else openScene(slug);
+  if (S.scene === slug && S.data) {
+    fit(); refresh();
+    if (S.pendingShop) { const f = S.data.services.find(x => x.kind === 'vendor' && x.title === S.pendingShop); S.pendingShop = null; if (f) { S.selF = f; S.view = { cx: f.x, cz: f.z, s: 9 }; S.autoFit = false; renderDetail(); draw(); $('#detail').classList.add('open'); } }
+  } else openScene(slug);
 } };
 })();

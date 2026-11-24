@@ -151,7 +151,7 @@ const fl = id => DB.furniture[id] ? `<span class="lk">${fIco(id)}${link('furnitu
 const price = f => [f[2] > 0 ? f[2] + ' OC' : '', f[3] > 0 ? f[3] + ' RM' : ''].filter(Boolean).join(' / ') || '—';
 const hrs = s => s >= 3600 ? +(s / 3600).toFixed(1) + ' h' : s >= 60 ? Math.round(s / 60) + ' min' : s + ' s';
 const num = x => (+x).toLocaleString(undefined, { maximumFractionDigits: 2 });
-const mapBtn = (slug, q, text) => `<button class="go" data-map="${esc(slug)}" data-q="${esc(q || '')}">${esc(text || 'Show on the map')}</button>`;
+const mapBtn = (slug, q, text, focus) => `<button class="go" data-map="${esc(slug)}" data-q="${esc(q || '')}"${focus ? ` data-focus="${esc(focus)}"` : ''}>${esc(text || 'Show on the map')}</button>`;
 const ul = a => a.length ? '<ul class="items">' + a.map(x => `<li>${x}</li>`).join('') + '</ul>' : '<p class="muted">None.</p>';
 const recipesOf = set => set && set.size ? [...set].sort((a, b) => X.R[a][1].localeCompare(X.R[b][1])).map(rl) : [];
 const skillsFor = types => [...new Set(types.flatMap(t => DB.typeSkills[t] || []))];
@@ -186,6 +186,9 @@ const shopGet = () => { if (!shopMem) { try { shopMem = JSON.parse(localStorage.
 const shopSave = () => { try { localStorage.setItem(SHOP, JSON.stringify(shopMem)); } catch (e) {} };
 const shopCount = () => Object.keys(shopGet()).length;
 const shopBadge = () => { const b = $('#shopN'); if (b) b.textContent = shopCount(); };
+function shopSet(rid, n) { const L = shopGet(); n = Math.max(0, Math.min(9999, Math.floor(+n) || 0)); if (n) L[rid] = n; else delete L[rid]; shopSave(); shopBadge(); }
+const qtyBtn = (rid, d) => `<button type="button" data-shop="${rid}" data-d="${d}" aria-label="${d > 0 ? 'Add ' + d : 'Remove ' + -d}">${d > 0 ? '+' + d : '−' + -d}</button>`;
+const qtyCtl = (rid, n) => `<span class="qty">${[-100, -10, -1].map(d => qtyBtn(rid, d)).join('')}<input type="number" class="qin" min="0" max="9999" step="1" inputmode="numeric" value="${n}" data-shopset="${rid}" aria-label="Quantity">${[1, 5, 10, 100].map(d => qtyBtn(rid, d)).join('')}<button type="button" class="x" data-shop="${rid}" data-d="-99999" aria-label="Remove from the list">✕</button></span>`;
 function shopChange(rid, d) { const L = shopGet(), n = Math.max(0, (L[rid] || 0) + d); if (n) L[rid] = n; else delete L[rid]; shopSave(); shopBadge(); }
 let optMem = null;
 const shopOpt = () => {
@@ -223,7 +226,7 @@ function expandNeeds(base, opt) {
   return { raw, steps, outs, order };
 }
 const shopCtl = rid => { const n = shopGet()[rid] || 0; return n
-  ? `<span class="shopctl"><button type="button" data-shop="${rid}" data-d="-1" aria-label="One less">−</button><span>On the list × ${n}</span><button type="button" data-shop="${rid}" data-d="1" aria-label="One more">+</button><button type="button" class="x" data-shop="${rid}" data-d="-999">Remove</button></span>`
+  ? `<span class="shopctl"><span>On the list</span>${qtyCtl(rid, n)}</span>`
   : `<button type="button" class="shopbtn" data-shop="${rid}" data-d="1">+ Shopping list</button>`; };
 const shopBtn = rid => `<span class="shopwrap" data-rid="${rid}">${shopCtl(rid)}</span>`;
 const econText = rid => { const e = X.RC[rid]; return `Ingredients ≈ ${fmt(e.cost)} OC · worth ≈ ${fmt(e.worth)} OC · <b class="${e.profit >= 0 ? 'good' : 'bad'}">${e.profit >= 0 ? '+' : '−'}${fmt(Math.abs(e.profit))} OC</b>`; };
@@ -267,7 +270,13 @@ function rows() {
       .filter(v => !V.f || (V.f === 'items' ? (v.t || v.i) : V.f === 'buys' ? v.b : V.f === 'furniture' ? (v.fs || v.fb) : V.f === 'vending' ? /vending|soda fountain/i.test(v.n) : true))
       .sort((a, b) => a.n.localeCompare(b.n) || sceneName(a.sc).localeCompare(sceneName(b.sc)))
       .map(v => [v.key, v.n, sceneName(v.sc), vIco(v)]);
-    case 'tenants': return DB.tenants.filter(t => m(t[0]) || m((DB.people[t[0]] || [])[4] || '')).map(t => [t[0], t[0], (DB.people[t[0]] || [])[4] || '', pIco(t[0])]);
+    case 'tenants': {
+      const ren = new Set(DB.tenants.map(t => t[0])), fam = {}; DB.tenants.forEach(t => t[15].forEach(f => { fam[f] = t[0]; }));
+      const sub = n => { const p = DB.people[n] || [], j = p[4] && p[4] !== 'Unemployed' ? p[4] : ''; return ren.has(n) ? (j ? j + ' · ' : '') + 'rents a flat' : fam[n] ? 'lives with ' + fam[n] : (j || (p[2] >= 0 && p[2] < 200 ? p[2] + ' years' : 'resident')); };
+      const tier = n => ren.has(n) ? 0 : fam[n] ? 1 : 2;
+      return Object.keys(DB.people).filter(n => n !== 'Tenant' && (m(n) || m((DB.people[n] || [])[4] || '') || m(fam[n] || '')))
+        .sort((a, b) => tier(a) - tier(b) || a.localeCompare(b)).map(n => [n, n, sub(n), pIco(n)]);
+    }
     case 'furniture': return Object.entries(DB.furniture).filter(([id, f]) => m(f[0]) && (!V.f || f[1] === V.f))
       .sort(V.sort === 'value' ? (a, b) => (b[1][2] + b[1][3] * 10) - (a[1][2] + a[1][3] * 10) : (a, b) => a[1][0].localeCompare(b[1][0]))
       .map(([id, f]) => [id, f[0], (f[4] && f[4].length ? '⚒ ' : '') + price(f), fIco(id)]);
@@ -299,7 +308,7 @@ const INTRO = {
   recipes: 'Every recipe with its ingredients, station, skill and time.',
   vendors: 'Shops, traders, stalls and vending machines placed in the world: what they sell and what they buy from you.',
   tenement: 'Building materials and wall coverings for fixing up your tenement, and the recipes that make them.',
-  tenants: 'People who can rent a flat from you, what they pay and what the flat needs.',
+  tenants: 'Everyone who lives in Obenseuer. The first group can rent a flat from you (what they pay, what the flat needs), then the family who move in with them, then the other residents.',
   furniture: 'Every piece of furniture, its price, the shops that sell and buy it, and what it lets you craft.',
   list: 'Recipes you plan to make, with everything you need and where to find it.',
   notes: 'Things in the game data that look wrong or inconsistent. Some may be intentional.',
@@ -421,7 +430,14 @@ function vendorCard(key) {
   return h + '</div>';
 }
 function tenantCard(name) {
-  const t = DB.tenants.find(t => t[0] === name); if (!t) return missing();
+  const t = DB.tenants.find(t => t[0] === name);
+  if (!t) {
+    const p = DB.people[name]; if (!p) return missing();
+    const host = DB.tenants.find(x => x[15].includes(name)), who2 = [p[1], p[2] != null && p[2] >= 0 && p[2] < 200 ? p[2] + ' years' : null, p[3], p[4]].filter(Boolean).map(esc).join(' · ');
+    return `<div class="card"><div class="dbhead">${pIco(name, 1)}<div><h2>${esc(name)}</h2><div class="sub">${who2 || 'Character'}</div></div></div>
+      ${host ? `<p>Moves in with <a href="#/db/tenants/${encodeURIComponent(host[0])}">${esc(host[0])}</a> when they rent a flat from you.</p>` : '<p class="muted">This character has no rent table, so they never ask you for a flat. They live in the world as a neighbour, shopkeeper or story character.</p>'}
+      <p class="muted">Character ID ${p[0]}</p></div>`;
+  }
   const [n, rid, inc, meth, cmin, cmax, small, big, fmin, fmax, bath, el, heat, kit, wat, fam] = t, p = DB.people[n] || [];
   const yn = b => b ? '<b>needed</b>' : '<span class="muted">not needed</span>';
   const who = x => [x[1], x[2] != null && x[2] >= 0 && x[2] < 200 ? x[2] + ' years' : null, x[3], x[4]].filter(Boolean).map(esc).join(' · ');
@@ -482,7 +498,7 @@ function whereIs(id) {
   if (tabs.length) { parts.push('in ' + tabs.reduce((a, n) => a + X.tableCount[n], 0) + ' containers'); btn = mapBtn(X.tableScenes[tabs[0]][0][0], iname(id), 'Find on the map'); }
   const sv = DB.vendors.filter(v => sells(v, +id));
   if (sv.length) { parts.push('sold by ' + sv.slice(0, 3).map(v => `<span class="lk">${link('vendors', v.key, v.n)}</span> <small>(${esc(sceneName(v.sc))})</small>`).join(', ') + (sv.length > 3 ? ' and ' + (sv.length - 3) + ' more' : ''));
-    btn += mapBtn(sv[0].sc, sv[0].n, 'Find the shop'); }
+    btn += mapBtn(sv[0].sc, iname(id), 'Find the shop', sv[0].n); }
   if (X.makes[id]) parts.push('craftable');
   if (!parts.length) parts.push('not found in the world data');
   return { parts, btn };
@@ -501,7 +517,7 @@ function listCard() {
   modCode = 'OBSLIST:' + JSON.stringify({ v: 1, recipes: rids.map(r => [X.R[r][1], L[r]]), steps: E.order.map(r => [X.R[r][1], up(E.steps[r]), E.outs[r]]), raw: Object.entries(E.raw).map(([id, n]) => [+id, up(n)]) });
   return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ${o.mode !== 'off' ? 'raw materials' : 'ingredients'} ≈ ${fmt(o.mode !== 'off' ? rawCost : cost)} OC · worth ≈ ${fmt(worth)} OC</div>
     <label class="shopopt">Ingredients <select data-shopmode aria-label="How far to break ingredients down"><option value="all" ${o.mode === 'all' ? 'selected' : ''}>Break down everything craftable</option><option value="missing" ${o.mode === 'missing' ? 'selected' : ''}>Only what can't be found or bought</option><option value="off" ${o.mode === 'off' ? 'selected' : ''}>Don't break down</option></select></label>
-    <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span>${rl(rid)}</span><span class="qty"><button type="button" data-shop="${rid}" data-d="-1" aria-label="One less">−</button><b>× ${L[rid]}</b><button type="button" data-shop="${rid}" data-d="1" aria-label="One more">+</button><button type="button" class="x" data-shop="${rid}" data-d="-999" aria-label="Remove from the list">✕</button></span></div>`).join('')}
+    <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span class="rn">${rl(rid)}</span>${qtyCtl(rid, L[rid])}</div>`).join('')}
     ${crafted ? `<h3>Craft these first · ${crafted}</h3>${ul(E.order.map(rid => { const out = E.outs[rid], per = X.R[rid][8].find(x => x[0] === out)[1], b = up(E.steps[rid]);
       return `<span>${rl(rid)} <small class="muted">× ${b} → ${num(per * b)} ${esc(iname(out))}</small></span><button type="button" class="shopbtn mini" data-pref="${out}:buy" title="Find or buy it instead of crafting it">Find or buy instead</button>`; }))}` : ''}
     <h3>${o.mode !== 'off' ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = o.mode !== 'off' && bestRecipe(+id) && !(DB.items[id] && DB.items[id][6].length);
@@ -551,10 +567,10 @@ async function route() {
   document.title = 'Obenseuer Loot Map · ' + SECTIONS.find(x => x[0] === s)[1];
   syncUrl();
 }
-function leave(slug, q) {
+function leave(slug, q, focus) {
   document.body.classList.remove('dbmode'); $('#dbBtn').classList.remove('on'); document.title = 'Obenseuer Loot Map';
   history.pushState(null, '', '#/' + slug);
-  window.OBS_MAP && window.OBS_MAP.show(slug, q);
+  window.OBS_MAP && window.OBS_MAP.show(slug, q, focus);
 }
 document.addEventListener('click', e => {
   const cm = e.target.closest('[data-copymod]');
@@ -573,14 +589,15 @@ document.addEventListener('click', e => {
   if (sc) { const k = sc.dataset.col; if (V.col === k) V.dir = -V.dir; else { V.col = k; V.dir = k === 'name' ? 1 : -1; } renderDetail(); syncUrl(); return; }
   const tr = e.target.closest('tr[data-go]');
   if (tr && !e.target.closest('a')) { location.hash = '#/db/items/' + tr.dataset.go; return; }
-  const m = e.target.closest('[data-map]'); if (m) { e.preventDefault(); leave(m.dataset.map, m.dataset.q); return; }
+  const m = e.target.closest('[data-map]'); if (m) { e.preventDefault(); leave(m.dataset.map, m.dataset.q, m.dataset.focus); return; }
   const c = e.target.closest('#dbDetail [data-cat]');
   if (c) { e.preventDefault(); V.sec = 'items'; V.q = ''; V.f = c.dataset.cat; V.e = ''; V.e2 = ''; V.min = ''; if (['eh', 'el', 'ep'].includes(V.sort)) V.sort = 'name'; V.key = null; history.pushState(null, '', '#/db/items'); renderSide(); renderDetail(); }
 });
 // Region tabs leave the database and go back to the map.
 $('#regionTabs').addEventListener('click', e => { if (isDb() && e.target.closest('[data-region]')) { document.body.classList.remove('dbmode'); $('#dbBtn').classList.remove('on'); history.replaceState(null, '', '#/'); } }, true);
 function fallbackCopy(t, ok) { const a = document.createElement('textarea'); a.value = t; a.style.position = 'fixed'; a.style.opacity = '0'; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); ok(); } catch (_) { } a.remove(); }
-document.addEventListener('change', e => { const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
+document.addEventListener('change', e => { const q = e.target.closest('[data-shopset]'); if (q) { shopSet(q.dataset.shopset, q.value); if (V.sec === 'list') renderDetail(); else document.querySelectorAll('.shopwrap').forEach(w => { if (w.dataset.rid === q.dataset.shopset) w.innerHTML = shopCtl(q.dataset.shopset); }); return; }
+  const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
 window.addEventListener('hashchange', () => { route(); setReport(); });
 // footer: game version, theme switch
 fetch('data/meta.json?v=1').then(r => r.json()).then(m => {
