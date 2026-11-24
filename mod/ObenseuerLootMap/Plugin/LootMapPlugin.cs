@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -19,7 +19,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap;
 
-[BepInPlugin("com.juanberta.obenseuer.lootmap", "Loot Map", "0.7.0")]
+[BepInPlugin("com.juanberta.obenseuer.lootmap", "Loot Map", "0.7.1")]
 public partial class LootMapPlugin : BaseUnityPlugin
 {
 	private class GuideTarget
