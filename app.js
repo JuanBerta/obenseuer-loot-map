@@ -95,7 +95,7 @@ let FDB = null, fdbBusy = false;
 function furnDb() {
   if (FDB || fdbBusy) return FDB;
   fdbBusy = true; const sc = document.createElement('script'); sc.src = 'data/db.js?v=5';
-  sc.onload = () => { FDB = window.OBS_DB; aliasQ = null; if (searching()) { renderSide(); draw(); } }; sc.onerror = () => { fdbBusy = false; }; document.head.appendChild(sc);
+  sc.onload = () => { FDB = window.OBS_DB; aliasQ = null; if (searching()) { renderSide(); draw(); if (S.data && S.sel == null && !S.selF) focusFirstMatch(); } }; sc.onerror = () => { fdbBusy = false; }; document.head.appendChild(sc);
   return null;
 }
 function furnSection(q) {
@@ -232,6 +232,7 @@ async function openScene(slug, keepView) {
   if (S.pendingFocus) { const f = S.pendingFocus; S.pendingFocus = null; S.view = { cx: f.x, cz: f.z, s: 9 }; S.autoFit = false; }
   else if (!keepView) fit();
   renderDetail(); draw(); saveHash();
+  if (searching() && S.sel == null && !S.selF) focusFirstMatch();
 }
 function renderCrumb(meta) {
   const parent = meta.parent && SC[meta.parent], reg = REGIONS.find(r => r.id === meta.group);
@@ -675,10 +676,23 @@ $('#floors').addEventListener('click', e => { const b = e.target.closest('button
 function setCat(c) {
   S.cat = c || null;
   const chip = $('#catChip'); if (S.cat) { chip.textContent = S.cat; chip.classList.remove('hidden'); } else chip.classList.add('hidden');
-  refresh();
+  refresh(); if (S.cat) focusFirstMatch();
+}
+// Searching inside a place: jump to the nearest match, on its floor, and select it.
+function focusFirstMatch() {
+  const d = S.data; if (!d || !searching() || S.pendingFocus) return false;
+  const c = d.points.filter(p => p.active && pointMatches(p)).concat((d.services || []).filter(f => f.active !== false && stationMatches(f)));
+  if (!c.length) return false;
+  const dist = t => Math.hypot(t.x - S.view.cx, t.z - S.view.cz);
+  const t = c.reduce((a, b) => dist(b) < dist(a) ? b : a);
+  const fi = S.floors.findIndex(fl => t.y >= fl.lo && t.y <= fl.hi);
+  if (S.floors.length > 1 && fi >= 0 && S.floor !== fi) { S.floor = fi; buildPaths(); renderFloors(); }
+  S.view = { cx: t.x, cz: t.z, s: Math.max(S.view.s, 12) }; S.autoFit = false;
+  if (t.i != null && d.points[t.i] === t) { S.sel = t.i; S.selF = null; } else { S.sel = null; S.selF = t; }
+  renderDetail(); draw(); saveHash(); return true;
 }
 function refresh() { renderSide(); renderDetail(); draw(); saveHash(); }
-let qt; $('#q').addEventListener('input', e => { S.q = e.target.value; clearTimeout(qt); qt = setTimeout(() => { if (S.cat) setCat(null); else refresh(); }, 120); });
+let qt; $('#q').addEventListener('input', e => { S.q = e.target.value; clearTimeout(qt); qt = setTimeout(() => { if (S.cat) setCat(null); else { refresh(); if (qTerm().length > 1) focusFirstMatch(); } }, 120); });
 $('#catChip').onclick = () => setCat(null);
 document.querySelectorAll('input[name=own]').forEach(r => r.addEventListener('change', () => { S.own = r.value; refresh(); }));
 const LAYERS = { furniture: 'lyFurniture', loot: 'lyLoot', pickups: 'lyPickups', noloot: 'lyNoLoot', inactive: 'lyInactive', landmarks: 'lyLandmarks', doors: 'lyDoors', wood: 'lyWood', people: 'lyPeople', services: 'lyServices', art: 'lyArt', plan: 'lyPlan' };
@@ -742,7 +756,7 @@ window.OBS_MAP = { show(slug, q, focus) {
   S.cat = null; $('#catChip').classList.add('hidden'); S.q = q || ''; $('#q').value = S.q; S.sel = null; S.selF = null;
   if (SC[slug]) S.region = SC[slug].group; renderTabs(); resize();
   if (S.scene === slug && S.data) {
-    fit(); refresh();
+    fit(); refresh(); if (!S.pendingShop && searching()) focusFirstMatch();
     if (S.pendingShop) { const f = S.data.services.find(x => x.kind === 'vendor' && x.title === S.pendingShop) || (S.data.people || []).find(x => x.name === S.pendingShop); S.pendingShop = null; if (f) { S.selF = f; S.view = { cx: f.x, cz: f.z, s: 9 }; S.autoFit = false; renderDetail(); draw(); $('#detail').classList.add('open'); } }
   } else openScene(slug);
 } };
