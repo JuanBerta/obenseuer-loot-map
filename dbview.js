@@ -133,8 +133,7 @@ function secIcon(k) {
     case 'recipes': return rIco(0);
     case 'vendors': return imgIco(placeIcon('One Stop Shop'));
     case 'tenement': return imgIco(placeIcon('Tenement'));
-    case 'tenants': return RT.r.filter(r => (m(r.n) || r.w.some(m) || r.at.some(m)) && (!V.f || (V.f === 'OC' ? r.oc : V.f === 'RM' ? r.rm : r.sz.includes(V.f))))
-      .sort((a, b) => a.n.localeCompare(b.n)).map(r => [r.n, r.n, rentLine(r), pIco(r.n)]);
+    case 'tenants': { const t = DB.tenants.find(t => DB.icons && DB.icons.people && DB.icons.people[t[0]] != null); return t ? pIco(t[0]) : imgIco(placeIcon('Open Homes Company')); }
     case 'furniture': return imgIco(placeIcon('Möbelmann Furnitures', 'Commercial Furniture Shop'));
     case 'notes': { const r = Object.keys(DB.items).find(id => DB.items[id][2].includes('Readable')); return r ? iIco(r) : ''; }
   }
@@ -271,13 +270,8 @@ function rows() {
       .filter(v => !V.f || (V.f === 'items' ? (v.t || v.i) : V.f === 'buys' ? v.b : V.f === 'furniture' ? (v.fs || v.fb) : V.f === 'vending' ? /vending|soda fountain/i.test(v.n) : true))
       .sort((a, b) => a.n.localeCompare(b.n) || sceneName(a.sc).localeCompare(sceneName(b.sc)))
       .map(v => [v.key, v.n, sceneName(v.sc), vIco(v)]);
-    case 'tenants': {
-      const ren = new Set(DB.tenants.map(t => t[0])), fam = {}; DB.tenants.forEach(t => t[15].forEach(f => { fam[f] = t[0]; }));
-      const sub = n => { const p = DB.people[n] || [], j = p[4] && p[4] !== 'Unemployed' ? p[4] : ''; return ren.has(n) ? (j ? j + ' · ' : '') + 'rents a flat' : fam[n] ? 'lives with ' + fam[n] : (j || (p[2] >= 0 && p[2] < 200 ? p[2] + ' years' : 'resident')); };
-      const tier = n => ren.has(n) ? 0 : fam[n] ? 1 : 2;
-      return Object.keys(DB.people).filter(n => n !== 'Tenant' && (V.f === 'all' || ren.has(n)) && (m(n) || m((DB.people[n] || [])[4] || '') || m(fam[n] || '')))
-        .sort((a, b) => tier(a) - tier(b) || a.localeCompare(b)).map(n => [n, n, sub(n), pIco(n)]);
-    }
+    case 'tenants': return RT.r.filter(r => (m(r.n) || r.w.some(m) || r.at.some(m)) && (!V.f || (V.f === 'OC' ? r.oc : V.f === 'RM' ? r.rm : r.sz.includes(V.f))))
+      .sort((a, b) => a.n.localeCompare(b.n)).map(r => [r.n, r.n, rentLine(r), pIco(r.n)]);
     case 'furniture': return Object.entries(DB.furniture).filter(([id, f]) => m(f[0]) && (!V.f || f[1] === V.f))
       .sort(V.sort === 'value' ? (a, b) => (b[1][2] + b[1][3] * 10) - (a[1][2] + a[1][3] * 10) : (a, b) => a[1][0].localeCompare(b[1][0]))
       .map(([id, f]) => [id, f[0], (f[4] && f[4].length ? '⚒ ' : '') + price(f), fIco(id)]);
