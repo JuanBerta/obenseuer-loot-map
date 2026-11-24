@@ -486,3 +486,13 @@ html.hc[data-theme=light]{--tx2:#2c323d}
 .arrow{color:var(--cmut);font-size:1.125rem}
 .failtag{color:var(--bad);font-weight:600;font-size:.8125rem;white-space:nowrap}
 .craft .fl{margin-top:6px}
+
+/* upgrades + summaries */
+dl.kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 22px;margin:8px 0 16px}
+dl.kv dt{color:var(--mut,#9aa0aa)}dl.kv dd{margin:0;font-variant-numeric:tabular-nums}
+.coin{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--bd,#2a2f38);background:var(--s2,#1a1d23);border-radius:6px;padding:2px 8px;font-variant-numeric:tabular-nums;font-weight:600}
+.coin i{font-style:normal;font-size:.7rem;opacity:.65;font-weight:500}
+.tier{border:1px solid var(--bd,#2a2f38);border-radius:10px;padding:12px 14px;margin:10px 0;background:var(--s1,transparent)}
+.tierhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:1rem}.tierhead .grow{flex:1}
+.tiermeta{margin:6px 0;font-size:.85rem;color:var(--mut,#9aa0aa)}
+table.tbl.up td,table.tbl.up th{text-align:left}table.tbl.up tr.grp th{background:var(--s2,#1a1d23);color:var(--acc,#d9b45a);font-size:.8rem;letter-spacing:.04em}

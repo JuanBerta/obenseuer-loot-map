@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const IDX = window.OBS_INDEX;
 const SCN = Object.fromEntries(IDX.scenes.map(s => [s.slug, s]));
 const SECTIONS = [
-  ['items', 'Items'], ['recipes', 'Recipes'], ['vendors', 'Vendors'], ['tenement', 'Tenement'],
+  ['items', 'Items'], ['recipes', 'Recipes'], ['vendors', 'Vendors'], ['tenement', 'Tenement'], ['upgrades', 'Upgrades'],
   ['tenants', 'Tenants'], ['furniture', 'Furniture'], ['list', 'Shopping list'], ['notes', 'Data notes'],
 ];
 let DB = null, X = null;                       // raw data, derived indexes
@@ -132,7 +132,7 @@ function secIcon(k) {
     case 'items': { const I = DB.icons && DB.icons.items; return iIco(I && I[35100] == null ? Object.keys(I)[0] : 35100); }
     case 'recipes': return rIco(0);
     case 'vendors': return imgIco(placeIcon('One Stop Shop'));
-    case 'tenement': return imgIco(placeIcon('Tenement'));
+    case 'tenement': case 'upgrades': return imgIco(placeIcon('Tenement'));
     case 'tenants': { const t = DB.tenants.find(t => DB.icons && DB.icons.people && DB.icons.people[t[0]] != null); return t ? pIco(t[0]) : imgIco(placeIcon('Open Homes Company')); }
     case 'furniture': return imgIco(placeIcon('Möbelmann Furnitures', 'Commercial Furniture Shop'));
     case 'notes': { const r = Object.keys(DB.items).find(id => DB.items[id][2].includes('Readable')); return r ? iIco(r) : ''; }
@@ -262,6 +262,7 @@ function rows() {
   switch (V.sec) {
     case 'items': return itemRows(Object.keys(I).map(Number));
     case 'tenement': return itemRows(X.tenIds);
+    case 'upgrades': return TU.cats.map((c, i) => [i, c[1], c[0] + ' · ' + (c[3].length - 1) + ' tiers', '']).filter(r => m(r[1]) || m(r[2]));
     case 'recipes': return DB.recipes.filter(r => (m(r[1]) || r[8].some(x => m(iname(x[0])))) && (!V.f || r[2] === V.f))
       .sort(V.sort === 'profit' ? (a, b) => X.RC[b[0]].profit - X.RC[a[0]].profit || a[1].localeCompare(b[1])
         : V.sort === 'cost' ? (a, b) => X.RC[a[0]].cost - X.RC[b[0]].cost || a[1].localeCompare(b[1]) : (a, b) => a[1].localeCompare(b[1]))
@@ -292,6 +293,7 @@ function filters() {
       + (V.e ? `<select id="dbE2" aria-label="Second effect" title="Also require this effect"><option value="">…and also</option>${effOpts(V.e2)}</select><input id="dbMin" type="number" min="0" step="any" inputmode="decimal" placeholder="Min strength" aria-label="Minimum strength" value="${esc(V.min)}">` : '')
       + `<div class="chips">${chips}</div>`;
   }
+  if (V.sec === 'upgrades') return '';
   if (V.sec === 'tenement') return opt(X.itemCats, 'All categories') + sort;
   if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('profit', 'Best craft profit')}${so('cost', 'Cheapest ingredients')}</select>`;
   if (V.sec === 'tenants') return `<select id="dbF" aria-label="Filter tenants"><option value="">All tenants</option>${[['Small', 'Accept a small apartment'], ['Medium', 'Accept a medium apartment'], ['Large', 'Accept a large apartment'], ['OC', 'Pay OC'], ['RM', 'Pay RM']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
@@ -304,6 +306,7 @@ const INTRO = {
   recipes: 'Every recipe with its ingredients, station, skill and time.',
   vendors: 'Shops, traders, stalls and vending machines placed in the world: what they sell and what they buy from you.',
   tenement: 'Building materials and wall coverings for fixing up your tenement, and the recipes that make them.',
+  upgrades: 'Everything you can build in the tenement: one ladder of tiers per category, with money, materials, build time, requirements and the contractors who can build it.',
   tenants: 'The tenants the game can offer for your apartments: who moves in with them, which apartment sizes they accept, their base rent per rent period and what they demand before moving in.',
   furniture: 'Every piece of furniture, its price, the shops that sell and buy it, and what it lets you craft.',
   list: 'Recipes you plan to make, with everything you need and where to find it.',
@@ -459,6 +462,50 @@ function furnCard(id) {
   h += `<h3>Sold by · ${sv.length}</h3>${ul(sv.map(vl))}<h3>Bought by · ${bv.length}</h3>${ul(bv.map(vl))}`;
   return h + '</div>';
 }
+
+// ---------- tenement upgrades (data/tenup.js, from the viewer's tenement.json) ----------
+const TU = window.OBS_TUP || window.OBS_TENUP || { cats: [], up: [], con: [], max: [] };
+const bhrs = h => !h ? '–' : h % 24 === 0 && h >= 48 ? (h / 24) + ' days' : h + ' h';
+const reqName = r => r.replace(/-(\d)-/, ' · ').replace(/-/g, ' ');
+const upBy = ci => TU.up.filter(u => u[0] === ci).sort((a, b) => a[1] - b[1]);
+const coinBox = (v, c) => `<span class="coin"><i>${c}</i>${num(v)}</span>`;
+function upgradesHome() {
+  const mats = new Set(); let oc = 0, rm = 0, free = 0;
+  TU.up.forEach(u => { oc += u[4]; rm += u[5]; u[6].forEach(x => mats.add(x[0])); if (!u[8].length && u[1] > 0) free++; });
+  const sum = [['Categories', TU.cats.length], ['Upgrades', TU.up.filter(u => u[1] > 0).length + (free ? ` <small class="muted">(${free} that no contractor builds)</small>` : '')], ['Contractors', TU.con.length], ['Distinct materials', mats.size], ['Everything buildable', coinBox(oc, 'OC') + ' ' + coinBox(rm, 'RM')]];
+  let groups = [...new Set(TU.cats.map(c => c[0]))], body = '';
+  groups.forEach(g => {
+    body += `<tr class="grp"><th colspan="${TU.con.length + 1}">${esc(g)}</th></tr>`;
+    TU.cats.forEach((c, i) => { if (c[0] !== g) return;
+      body += `<tr data-go="${i}"><td>${link('upgrades', i, c[1])}</td>${TU.con.map((_, k) => { const m = TU.max[k][i]; return m ? `<td>${esc(c[3][m])} <small class="muted">${m}</small></td>` : '<td class="muted">–</td>'; }).join('')}</tr>`; });
+  });
+  return `<div class="card wide"><h2>Tenement upgrades</h2><p class="muted">${esc(INTRO.upgrades)} Pick a category from the list.</p>
+    <h3>Summary</h3><dl class="kv">${sum.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+    <h3>Contractors</h3><p class="muted">Highest tier each contractor builds, per category. A dash means that contractor cannot build any tier of it.</p>
+    <div class="tblwrap"><table class="tbl up"><thead><tr><th>Category</th>${TU.con.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+function upgradeCard(key) {
+  const ci = +key, c = TU.cats[ci]; if (!c) return missing();
+  const tiers = upBy(ci).filter(u => u[1] > 0);
+  const tot = tiers.reduce((a, u) => [a[0] + u[4], a[1] + u[5]], [0, 0]);
+  const mat = {}; tiers.forEach(u => u[6].forEach(x => { mat[x[0]] = (mat[x[0]] || 0) + x[1]; }));
+  return `<div class="card"><div class="dbhead"><div><h2>${esc(c[1])}</h2><div class="sub">${esc(c[0])} · ${tiers.length} tiers${c[2] ? ' · raises rent' : ''}</div></div></div>
+    <p>All tiers together: ${coinBox(tot[0], 'OC')} ${coinBox(tot[1], 'RM')}</p>
+    ${tiers.map(u => `<div class="tier"><div class="tierhead"><b>${esc(u[2])}</b> <small class="muted">tier ${u[1]}</small><span class="grow"></span>${u[4] ? coinBox(u[4], 'OC') : ''} ${u[5] ? coinBox(u[5], 'RM') : ''}</div>
+      <div class="tiermeta">Build time ${bhrs(u[3])}${u[7].length ? ' · needs ' + u[7].map(r => esc(reqName(r))).join(', ') : ''}</div>
+      ${u[6].length ? `<div class="flow">${u[6].map(x => chipOf(x)).join('')}</div>` : ''}
+      <div class="tiermeta">${u[8].length ? 'Built by ' + u[8].map(k => esc(TU.con[k])).join(', ') : '<span class="failtag">No contractor builds this</span>'}</div></div>`).join('')}
+    <h3>Materials for every tier</h3><div class="flow">${Object.entries(mat).sort((a, b) => iname(a[0]).localeCompare(iname(b[0]))).map(x => chipOf(x)).join('')}</div></div>`;
+}
+// ---------- vendors summary ----------
+function vendorsHome() {
+  const V0 = DB.vendors, sc = new Set(V0.map(v => v.sc)), sold = new Set();
+  V0.forEach(v => { (v.i || []).forEach(i => sold.add(i)); if (v.t && DB.loot[v.t]) { DB.loot[v.t][1].concat(DB.loot[v.t][2]).forEach(i => sold.add(i)); } });
+  const n = f => V0.filter(f).length, tables = Object.keys(DB.loot).length;
+  const sum = [['Vendors', V0.length], ['Sell from a stock list', n(v => v.t)], ['Sell a fixed list', n(v => v.i)], ['Buy from you', n(v => v.b)], ['Buy stolen goods', n(v => v.bs)], ['Sell furniture', n(v => v.fs)], ['Places with a vendor', sc.size], ['Stock lists and loot tables', tables], ['Distinct items on sale', sold.size]];
+  return `<div class="card"><h2>Vendors</h2><p class="muted">${esc(INTRO.vendors)} A vendor either rolls its wares from a stock list on every restock or sells a fixed list. Pick one on the left.</p>
+    <h3>Summary</h3><dl class="kv">${sum.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div>`;
+}
 function tenementHome() {
   const recs = X.tenRecipes.slice().sort((a, b) => X.R[a][1].localeCompare(X.R[b][1]));
   return `<div class="card"><div class="dbhead">${imgIco(placeIcon('Tenement'), 1)}<div><h2>Your tenement</h2><div class="sub">${X.tenIds.length} materials · ${recs.length} recipes</div></div></div>
@@ -530,12 +577,12 @@ const missing = () => `<div class="card"><h2>Not found</h2><p class="muted">This
 function renderDetail() {
   const el = $('#dbDetail'), k = V.key, bare = V.sec === 'notes' || V.sec === 'list', tbl = tableOn();
   const back = `<a class="dbback${tbl && V.sec === 'items' ? ' show' : ''}" href="#/db/${bare ? 'items' : V.sec}">${tbl && V.sec === 'items' ? '← Back to the table' : '← Back to the list'}</a>`;
-  const home = { items: 'items', recipes: 'recipes', vendors: 'vendors', tenants: 'tenants', furniture: 'pieces of furniture' };
+  const home = { upgrades: 'categories', items: 'items', recipes: 'recipes', vendors: 'vendors', tenants: 'tenants', furniture: 'pieces of furniture' };
   if (V.sec === 'notes') el.innerHTML = notesCard();
   else if (V.sec === 'list') el.innerHTML = listCard();
   else if (k == null && tbl) el.innerHTML = tableCard();
-  else if (k == null) el.innerHTML = V.sec === 'tenement' ? tenementHome() : `<div class="card"><h2>${esc(SECTIONS.find(s => s[0] === V.sec)[1])}</h2><p class="muted">${rows().length} ${home[V.sec]}. Pick one on the left.</p></div>`;
-  else el.innerHTML = { items: itemCard, tenement: itemCard, recipes: recipeCard, vendors: vendorCard, tenants: tenantCard, furniture: furnCard }[V.sec](k);
+  else if (k == null) el.innerHTML = V.sec === 'tenement' ? tenementHome() : V.sec === 'upgrades' ? upgradesHome() : V.sec === 'vendors' ? vendorsHome() : `<div class="card"><h2>${esc(SECTIONS.find(s => s[0] === V.sec)[1])}</h2><p class="muted">${rows().length} ${home[V.sec]}. Pick one on the left.</p></div>`;
+  else el.innerHTML = { upgrades: upgradeCard, items: itemCard, tenement: itemCard, recipes: recipeCard, vendors: vendorCard, tenants: tenantCard, furniture: furnCard }[V.sec](k);
   if (k != null || bare) el.insertAdjacentHTML('afterbegin', back);
   const more = $('#tblMore'); if (more) more.onclick = () => { V.lim += 600; renderDetail(); };
   el.scrollTop = 0;
