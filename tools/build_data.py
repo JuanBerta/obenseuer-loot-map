@@ -110,7 +110,7 @@ for f in levels:
     feats=[]
     for x in fe['features']:
         if x['x']==0 and x['z']==0: continue
-        if x['kind'] not in ('door','station') and any(f['kind']==x['kind'] and abs(f['x']-x['x'])<1.5 and abs(f['z']-x['z'])<1.5 and abs(f['y']-x['y'])<1.5 for f in feats): continue
+        if x['kind'] not in ('door','station','idoor') and any(f['kind']==x['kind'] and abs(f['x']-x['x'])<1.5 and abs(f['z']-x['z'])<1.5 and abs(f['y']-x['y'])<1.5 for f in feats): continue
         if x['kind']=='door':
             if x['to']==name: continue
             x=dict(x,toName=friendly(x['to']) if x['to'] in present else (x.get('title') or suffix(x['to'])),

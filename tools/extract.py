@@ -177,7 +177,7 @@ FEATURE_SCRIPTS={'DoorChangelevel':'door','Changelevel':'door','Sleep':'bed','To
                  'VendingMachine':'vending','Phone':'phone','Mailbox':'mailbox',
                  'manufacturing':'station','Generator':'generator','GrowingSpot':'grow','Autofarm':'grow',
                  'AnimalBreeder':'breeder','LiquidStorage':'water','InteractableShower':'shower','SaunaCooling':'sauna',
-                 'BottleRecyclingDrop':'recycling','Radio':'radio'}
+                 'BottleRecyclingDrop':'recycling','Radio':'radio','Door':'idoor'}
 RECIPE_TYPES={}
 PLACEHOLDER_OWNERS={'','name','default male','default female','default owner','none'}
 def _recipe_types():
@@ -228,10 +228,10 @@ def features(sf):
             fdisp.append(pid); continue
         if cls not in FEATURE_SCRIPTS: continue
         kind=FEATURE_SCRIPTS[cls]
-        upto={'door':'OtherEntrypoint','station':'Recipes','bed':'owner','water':'PermissionToTake'}.get(kind,'m_useMessage')
+        upto={'idoor':'_Lock','door':'OtherEntrypoint','station':'Recipes','bed':'owner','water':'PermissionToTake'}.get(kind,'m_useMessage')
         try: _,d,_=ser.read_mb(sf,pid,'Assembly-CSharp',cls,upto=upto)
         except Exception:
-            if kind=='door': continue
+            if kind in ('door','idoor'): continue
             d={}
         tp=go2tr.get(go[1])
         if tp is None: continue
@@ -254,6 +254,15 @@ def features(sf):
             if (o.get('ID') or 0) > 1 and not d.get('PermissionToTake'):
                 e['owned']=True
                 if ow.lower() not in PLACEHOLDER_OWNERS: e['owner']=ow
+        if e['kind']=='idoor':
+            if d.get('interactDisabled'): continue
+            lk=d.get('_Lock') or {}
+            if lk.get('Locked'):
+                msg=(lk.get('overrideLockMessage') or '').strip().lower()
+                if msg.startswith('blocked') or msg.startswith('not yet'): e['lock']='blocked'
+                elif lk.get('Lockpickable'): e['lock']='pick'; e['diff']=round(lk.get('Difficulty') or 0,2)
+                else: e['lock']='key' if (lk.get('keyItem') or (0,0,0))[-1] else 'locked'
+            e['title']=None
         if e['kind']=='door':
             e['to']=d.get('OtherLevel') or None
             if not e['to']: continue
