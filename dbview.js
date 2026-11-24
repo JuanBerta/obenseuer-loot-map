@@ -210,7 +210,7 @@ function bestRecipe(id) {
   return bestMemo[id] = best;
 }
 // Break the ingredients down: 'all' crafts everything craftable, 'missing' only what nothing in the world drops or sells, 'off' none. The buttons override this per item.
-const wantCraft = (id, opt) => { const p = opt.pref[id]; return opt.mode !== 'off' && (p === 'craft' || (p !== 'buy' && (opt.mode === 'all' || (!X.placed.has(id) && !X.sold.has(id))))); };
+const wantCraft = (id, opt) => { const p = opt.pref[id]; return p === 'craft' || (opt.mode !== 'off' && p !== 'buy' && (opt.mode === 'all' || (!X.placed.has(id) && !X.sold.has(id)))); };
 function expandNeeds(base, opt) {
   const raw = {}, steps = {}, outs = {}, order = [];
   const visit = (id, n, stack) => {
@@ -558,12 +558,12 @@ function listCard() {
   const rawCost = Object.entries(E.raw).reduce((a, [id, n]) => a + X.unit(id) * up(n), 0);
   const crafted = E.order.length;
   modCode = 'OBSLIST:' + JSON.stringify({ v: 1, recipes: rids.map(r => [X.R[r][1], L[r]]), steps: E.order.map(r => [X.R[r][1], up(E.steps[r]), E.outs[r]]), raw: Object.entries(E.raw).map(([id, n]) => [+id, up(n)]) });
-  return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ${o.mode !== 'off' ? 'raw materials' : 'ingredients'} ≈ ${fmt(o.mode !== 'off' ? rawCost : cost)} OC · worth ≈ ${fmt(worth)} OC</div>
+  return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ${o.mode !== 'off' || crafted ? 'raw materials' : 'ingredients'} ≈ ${fmt(o.mode !== 'off' || crafted ? rawCost : cost)} OC · worth ≈ ${fmt(worth)} OC</div>
     <label class="shopopt">Ingredients <select data-shopmode aria-label="How far to break ingredients down"><option value="all" ${o.mode === 'all' ? 'selected' : ''}>Break down everything craftable</option><option value="missing" ${o.mode === 'missing' ? 'selected' : ''}>Only what can't be found or bought</option><option value="off" ${o.mode === 'off' ? 'selected' : ''}>Don't break down</option></select></label>
     <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span class="rn">${rl(rid)}</span>${qtyCtl(rid, L[rid])}</div>`).join('')}
     ${crafted ? `<h3>Craft these first · ${crafted}</h3>${ul(E.order.map(rid => { const out = E.outs[rid], per = X.R[rid][8].find(x => x[0] === out)[1], b = up(E.steps[rid]);
       return `<span>${rl(rid)} <small class="muted">× ${b} → ${num(per * b)} ${esc(iname(out))}</small></span><button type="button" class="shopbtn mini" data-pref="${out}:buy" title="Find or buy it instead of crafting it">Find or buy instead</button>`; }))}` : ''}
-    <h3>${o.mode !== 'off' ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = o.mode !== 'off' && bestRecipe(+id) && !(DB.items[id] && DB.items[id][6].length);
+    <h3>${o.mode !== 'off' || crafted ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = bestRecipe(+id) && !(DB.items[id] && DB.items[id][6].length);
       return `<span>${il(id)} <small class="muted">× ${num(up(n))}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}`; }))}
     <h3>You will make</h3>${ul(byName(Object.entries(make)).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}</small>`))}
     <button type="button" class="dbmore" data-copymod>Copy list for the mod</button> <button type="button" class="dbmore" data-shop="clear">Clear the list</button>
