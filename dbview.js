@@ -274,7 +274,7 @@ function rows() {
       const ren = new Set(DB.tenants.map(t => t[0])), fam = {}; DB.tenants.forEach(t => t[15].forEach(f => { fam[f] = t[0]; }));
       const sub = n => { const p = DB.people[n] || [], j = p[4] && p[4] !== 'Unemployed' ? p[4] : ''; return ren.has(n) ? (j ? j + ' · ' : '') + 'rents a flat' : fam[n] ? 'lives with ' + fam[n] : (j || (p[2] >= 0 && p[2] < 200 ? p[2] + ' years' : 'resident')); };
       const tier = n => ren.has(n) ? 0 : fam[n] ? 1 : 2;
-      return Object.keys(DB.people).filter(n => n !== 'Tenant' && (m(n) || m((DB.people[n] || [])[4] || '') || m(fam[n] || '')))
+      return Object.keys(DB.people).filter(n => n !== 'Tenant' && (V.f === 'all' || ren.has(n)) && (m(n) || m((DB.people[n] || [])[4] || '') || m(fam[n] || '')))
         .sort((a, b) => tier(a) - tier(b) || a.localeCompare(b)).map(n => [n, n, sub(n), pIco(n)]);
     }
     case 'furniture': return Object.entries(DB.furniture).filter(([id, f]) => m(f[0]) && (!V.f || f[1] === V.f))
@@ -299,6 +299,7 @@ function filters() {
   }
   if (V.sec === 'tenement') return opt(X.itemCats, 'All categories') + sort;
   if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('profit', 'Best craft profit')}${so('cost', 'Cheapest ingredients')}</select>`;
+  if (V.sec === 'tenants') return `<select id="dbF" aria-label="Who to list"><option value="">Only people who rent a flat</option><option value="all" ${V.f === 'all' ? 'selected' : ''}>Everyone (family and other residents too)</option></select>`;
   if (V.sec === 'furniture') return opt(X.fCats, 'All categories') + sort;
   if (V.sec === 'vendors') return `<select id="dbF"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   return '';
@@ -308,7 +309,7 @@ const INTRO = {
   recipes: 'Every recipe with its ingredients, station, skill and time.',
   vendors: 'Shops, traders, stalls and vending machines placed in the world: what they sell and what they buy from you.',
   tenement: 'Building materials and wall coverings for fixing up your tenement, and the recipes that make them.',
-  tenants: 'Everyone who lives in Obenseuer. The first group can rent a flat from you (what they pay, what the flat needs), then the family who move in with them, then the other residents.',
+  tenants: 'The people who rent a flat from you: what they pay and what the flat needs. Switch the filter to Everyone to also list the family who move in and the other residents, who never pay rent.',
   furniture: 'Every piece of furniture, its price, the shops that sell and buy it, and what it lets you craft.',
   list: 'Recipes you plan to make, with everything you need and where to find it.',
   notes: 'Things in the game data that look wrong or inconsistent. Some may be intentional.',
@@ -442,8 +443,8 @@ function tenantCard(name) {
   const yn = b => b ? '<b>needed</b>' : '<span class="muted">not needed</span>';
   const who = x => [x[1], x[2] != null && x[2] >= 0 && x[2] < 200 ? x[2] + ' years' : null, x[3], x[4]].filter(Boolean).map(esc).join(' · ');
   let h = `<div class="card"><div class="dbhead">${pIco(n, 1)}<div><h2>${esc(n)}</h2><div class="sub">${who(p) || 'Not in Characters.json'}</div></div></div>
-    <h3>Rent they will pay</h3><table class="dbt"><tr>${inc.map((_, i) => `<th>Level ${i + 1}</th>`).join('')}</tr><tr>${inc.map(x => `<td>${x}</td>`).join('')}</tr></table>
-    <p class="muted">Income1–6 from the rent table · method ${esc(meth)}${meth === 'OC' ? ' (paid in OC)' : meth === 'RM' ? ' (paid in Real Money)' : ''}.</p>
+    <h3>Rent they will pay · ${meth === 'RM' ? 'Real Money (RM)' : meth === 'OC' ? 'Obenseuer Coins (OC)' : esc(meth)}</h3><table class="dbt"><tr>${inc.map((_, i) => `<th>Level ${i + 1}</th>`).join('')}</tr><tr>${inc.map(x => `<td><b>${x} ${esc(meth)}</b></td>`).join('')}</tr></table>
+    <p class="muted">Six amounts, one per rent level (Income1–6 in the game's rent table), all paid in ${meth === 'RM' ? 'RM, the game\'s real-money currency, not OC' : esc(meth)}. Between ${Math.min(...inc)} and ${Math.max(...inc)} ${esc(meth)}${new Set(inc).size === 1 ? ' (the same at every level)' : ''}.</p>
     <h3>The flat they want</h3><div class="facts"><span>Condition</span><span>${esc(cmin)} to ${esc(cmax)}</span><span>Size</span><span>${esc(small)} to ${esc(big)}</span>
     <span>Floor</span><span>${fmin || fmax ? fmin + '–' + fmax : 'any'}</span><span>Bathroom</span><span>${esc(bath)}</span><span>Heating</span><span>${esc(heat)}</span>
     <span>Electricity</span><span>${yn(el)}</span><span>Kitchen</span><span>${yn(kit)}</span><span>Water</span><span>${yn(wat)}</span></div>`;
