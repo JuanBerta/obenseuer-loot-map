@@ -8,7 +8,7 @@ const IDX = window.OBS_INDEX;
 const SCN = Object.fromEntries(IDX.scenes.map(s => [s.slug, s]));
 const SECTIONS = [
   ['items', 'Items'], ['recipes', 'Recipes'], ['vendors', 'Vendors'], ['tenement', 'Tenement'], ['upgrades', 'Upgrades'],
-  ['tenants', 'Tenants'], ['furniture', 'Furniture'], ['list', 'Shopping list'], ['notes', 'Data notes'],
+  ['tenants', 'Tenants'], ['furniture', 'Furniture'], ['skills', 'Your skills'], ['list', 'Shopping list'], ['notes', 'Data notes'],
 ];
 let DB = null, X = null;                       // raw data, derived indexes
 const V = { sec: 'items', key: null, q: '', f: '', e: '', e2: '', min: '', w: '', view: 'list', col: '', dir: 1, sort: 'name', lim: 300, init: false };
@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=5';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=6';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -102,13 +102,30 @@ function buyCost(id) {
   for (const m of (it[6].length ? it[6] : [+id])) { const s0 = sellersOf(m)[0]; if (s0 && (!best || s0.p < best.p)) best = { p: s0.p, shop: true, v: s0.v, id: m }; }
   return best || { p: X.unit(id), shop: false, id: +id };
 }
+// Quality of what you craft (the game's formula, averaged): skill × 0.2 × the recipe's skill factor × (1 − fail chance) × the recipe's quality factor, from 0.05 to 2; the sale price scales with it.
+let skillLv = {}; try { skillLv = JSON.parse(localStorage.getItem('obs-skills') || '{}') || {}; } catch (e) { skillLv = {}; }
+const lvlOf = sk => { const v = skillLv[sk]; return typeof v === 'number' && v >= 0 && v <= 15 ? v : 5; };
+const qualityOf = r => { const x = r[13] || [1, 1, 0]; if (x[2] > 0) return x[2]; if (!r[3] || r[3] === 'None') return 1; return Math.max(0.05, Math.min(2, lvlOf(r[3]) * 0.2 * x[0] * (1 - (r[5] || 0)) * x[1])); };
+const qualityValue = q => q > 1 ? q * q : 0.5 * q * q + 0.25 * q + 0.25;
+const hasQuality = id => !!(DB.items[id] && DB.items[id][8].includes('ItemQualityData'));
+const skillSelect = sk => `<select data-skill="${esc(sk)}" aria-label="Your ${esc(sk)} level" title="Your ${esc(sk)} level: sets the quality of what you craft, which sets what shops pay">${Array.from({ length: 16 }, (_, i) => `<option value="${i}" ${i === lvlOf(sk) ? 'selected' : ''}>${esc(sk)} ${i}</option>`).join('')}</select>`;
+function setSkill(sk, v) { skillLv[sk] = v; try { localStorage.setItem('obs-skills', JSON.stringify(skillLv)); } catch (e) {} for (const k in RPmemo) delete RPmemo[k]; if (V.sec === 'recipes') renderList(); renderDetail(); }
+function skillsCard() {
+  const names = [...new Set(DB.recipes.map(r => r[3]).filter(x => x && x !== 'None'))].sort();
+  const cnt = sk => DB.recipes.filter(r => r[3] === sk).length;
+  return `<div class="card"><h2>Your skills</h2><div class="sub">${names.length} crafting skills</div>
+    <p>Enter your level in each skill. The quality of what you craft depends on it, and shops pay more for higher quality, so the profit shown on recipes uses these levels (a skill left alone counts as level 5). Quality ≈ level × 0.2 × the recipe's skill factor × (1 − fail chance), between 0.05 and 2.</p>
+    <div class="facts">${names.map(sk => `<span>${esc(sk)} <small class="muted">${cnt(sk)} recipes</small></span><span><input type="number" min="0" max="15" step="1" inputmode="numeric" data-skillin="${esc(sk)}" value="${lvlOf(sk)}" aria-label="${esc(sk)} level" style="width:5em"></span>`).join('')}</div>
+    <button type="button" class="dbmore" data-skillreset>Reset all to 5</button>
+    <p class="muted">The game caps skills at 15. Your levels are kept in this browser only.</p></div>`;
+}
 const RPmemo = {};
 function realProfit(rid) {
   if (RPmemo[rid]) return RPmemo[rid];
   const r = X.R[rid], ing = r[7].map(x => Object.assign({ id: x[0], n: x[1] }, buyCost(x[0], x[1])));
-  const outs = r[8].map(x => { const b = buyersOf(x[0])[0]; return { id: x[0], n: x[1], p: b ? b.p : 0, v: b ? b.v : null }; });
+  const q = qualityOf(r), outs = r[8].map(x => { const b = buyersOf(x[0])[0], qv = hasQuality(x[0]) ? qualityValue(q) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv)) : 0, v: b ? b.v : null, q: qv !== 1 || hasQuality(x[0]) ? q : null }; });
   const cost = ing.reduce((a, x) => a + x.p * x.n, 0), rev = outs.reduce((a, x) => a + x.p * x.n, 0) * (1 - (r[5] || 0)), profit = rev - cost;
-  return RPmemo[rid] = { ing, outs, cost, rev, profit, hour: r[6] > 0 ? profit * 3600 / r[6] : null, sellable: outs.some(o => o.v), estimated: ing.some(x => !x.shop) };
+  return RPmemo[rid] = { q, ing, outs, cost, rev, profit, hour: r[6] > 0 ? profit * 3600 / r[6] : null, sellable: outs.some(o => o.v), estimated: ing.some(x => !x.shop) };
 }
 const profitTxt = n => (n >= 0 ? '+' : '−') + fmt(Math.abs(n)) + ' OC';
 const realText = rid => { const p = realProfit(rid); if (!p.sellable) return '<span class="muted">No shop buys what this makes.</span>';
@@ -118,7 +135,7 @@ function tradeBlock(rid) {
   const buy = p.ing.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.shop ? `${fmt(x.p)} OC each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : `not sold · ≈ ${fmt(x.p)} OC`}</small>`);
   const sell = p.outs.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.v ? `${fmt(x.p)} OC each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : 'no shop buys it'}</small>`);
   return `<h3>Trade at shops</h3><p>${realText(rid)}</p><h3>Buy the ingredients</h3>${ul(buy)}<h3>Sell what it makes</h3>${ul(sell)}
-    <p class="muted">Real shop prices: base value × the shop's multiplier. ${p.estimated ? '* Ingredients no shop sells are counted at base value. ' : ''}Counts the ${Math.round((r[5] || 0) * 100)}% fail chance, ignores item quality and what the shop stocks that day.</p>`;
+    <p class="muted">Real shop prices: base value × the shop's multiplier. ${p.estimated ? '* Ingredients no shop sells are counted at base value. ' : ''}Counts the ${Math.round((r[5] || 0) * 100)}% fail chance and the quality of what you make (${p.outs.some(o => o.q != null) ? 'quality ≈ ' + (+p.q.toFixed(2)) : 'these items have no quality'}, at ${skillSelect(r[3])}). Ignores the quality of bought ingredients and what the shop stocks that day.</p>`;
 }
 // A trade run: what to buy where, then what to sell where, with the stops of each part in a sensible walking order (same area together, nearest next).
 function tripOrder(vs) {
@@ -361,6 +378,7 @@ function filters() {
   return '';
 }
 const INTRO = {
+  skills: 'Your level in each crafting skill, so recipes can show the quality (and the price) of what you would make.',
   items: 'Every item in the game. ◆ can be found in containers or shops · ⚒ can be crafted. Use “Any effect” to find food, drink and medicine by what they do to depression, nutrition, thirst and more.',
   recipes: 'Every recipe with its ingredients, station, skill and time.',
   vendors: 'Shops, traders, stalls and vending machines placed in the world: what they sell and what they buy from you.',
@@ -374,7 +392,7 @@ const INTRO = {
 function renderSide() {
   const el = $('#dbSide');
   const head = `<div class="dbnav">${SECTIONS.map(([k, t]) => `<a href="#/db/${k}" class="${V.sec === k ? 'on' : ''}">${secIcon(k)}${t}${k === 'notes' ? ` <b>${DB.notes.length}</b>` : k === 'list' ? ` <b id="shopN">${shopCount()}</b>` : ''}</a>`).join('')}</div>`;
-  if (V.sec === 'notes' || V.sec === 'list') { el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p>`; return; }
+  if (V.sec === 'notes' || V.sec === 'list' || V.sec === 'skills') { el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p>`; return; }
   el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p><div class="dbbar${V.sec === 'items' ? ' multi' : ''}"><input id="dbQ" type="search" placeholder="Search ${esc(SECTIONS.find(s => s[0] === V.sec)[1].toLowerCase())}…" value="${esc(V.q)}" autocomplete="off">${filters()}</div><div id="dbList"></div>`;
   const q = $('#dbQ'); q.oninput = () => { V.q = q.value; V.lim = 300; renderList(); };
   const f = $('#dbF'); if (f) f.onchange = () => { V.f = f.value; V.lim = 300; renderList(); };
@@ -648,11 +666,12 @@ function notesCard() {
 }
 const missing = () => `<div class="card"><h2>Not found</h2><p class="muted">This entry isn't in the current data.</p></div>`;
 function renderDetail() {
-  const el = $('#dbDetail'), k = V.key, bare = V.sec === 'notes' || V.sec === 'list', tbl = tableOn();
+  const el = $('#dbDetail'), k = V.key, bare = V.sec === 'notes' || V.sec === 'list' || V.sec === 'skills', tbl = tableOn();
   const back = `<a class="dbback${tbl && V.sec === 'items' ? ' show' : ''}" href="#/db/${bare ? 'items' : V.sec}">${tbl && V.sec === 'items' ? '← Back to the table' : '← Back to the list'}</a>`;
   const home = { upgrades: 'categories', items: 'items', recipes: 'recipes', vendors: 'vendors', tenants: 'tenants', furniture: 'pieces of furniture' };
   if (V.sec === 'notes') el.innerHTML = notesCard();
   else if (V.sec === 'list') el.innerHTML = listCard();
+  else if (V.sec === 'skills') el.innerHTML = skillsCard();
   else if (k == null && tbl) el.innerHTML = tableCard();
   else if (k == null) el.innerHTML = V.sec === 'tenement' ? tenementHome() : V.sec === 'upgrades' ? upgradesHome() : V.sec === 'vendors' ? vendorsHome() : `<div class="card"><h2>${esc(SECTIONS.find(s => s[0] === V.sec)[1])}</h2><p class="muted">${rows().length} ${home[V.sec]}. Pick one on the left.</p></div>`;
   else el.innerHTML = { upgrades: upgradeCard, items: itemCard, tenement: itemCard, recipes: recipeCard, vendors: vendorCard, tenants: tenantCard, furniture: furnCard }[V.sec](k);
@@ -671,7 +690,7 @@ async function route() {
   const [, sec, key] = (qi < 0 ? raw : raw.slice(0, qi)).split('/').map(decodeURIComponent);
   const s = SECTIONS.some(x => x[0] === sec) ? sec : 'items';
   if (!DB) { $('#dbDetail').innerHTML = '<div class="card"><p>Opening the files…</p></div>'; try { await load(); } catch (e) { $('#dbDetail').innerHTML = '<div class="card"><h2>Could not load data/db.js</h2><p class="muted">Run tools/build_db.py.</p></div>'; return; } }
-  const changed = s !== V.sec || !V.init, bare = s === 'notes' || s === 'list';
+  const changed = s !== V.sec || !V.init, bare = s === 'notes' || s === 'list' || s === 'skills';
   V.sec = s; V.key = key ?? null;
   document.body.classList.toggle('dbpick', V.key != null || bare);   // phones: show the list or the entry, not both
   if (changed) { Object.assign(V, FRESH, SAVED[s] || {}); V.lim = 300; }
@@ -689,6 +708,7 @@ function leave(slug, q, focus) {
   window.OBS_MAP && window.OBS_MAP.show(slug, q, focus);
 }
 document.addEventListener('click', e => {
+  if (e.target.closest('[data-skillreset]')) { skillLv = {}; try { localStorage.removeItem('obs-skills'); } catch (_) {} for (const k in RPmemo) delete RPmemo[k]; renderDetail(); return; }
   const cm = e.target.closest('[data-copymod]');
   if (cm) { const done = () => { cm.textContent = 'Copied ✓'; setTimeout(() => { cm.textContent = 'Copy list for the mod'; }, 1800); };
     try { navigator.clipboard.writeText(modCode).then(done, () => fallbackCopy(modCode, done)); } catch (_) { fallbackCopy(modCode, done); } return; }
@@ -713,6 +733,8 @@ document.addEventListener('click', e => {
 $('#regionTabs').addEventListener('click', e => { if (isDb() && e.target.closest('[data-region]')) { document.body.classList.remove('dbmode'); $('#dbBtn').classList.remove('on'); history.replaceState(null, '', '#/'); } }, true);
 function fallbackCopy(t, ok) { const a = document.createElement('textarea'); a.value = t; a.style.position = 'fixed'; a.style.opacity = '0'; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); ok(); } catch (_) { } a.remove(); }
 document.addEventListener('change', e => { const q = e.target.closest('[data-shopset]'); if (q) { shopSet(q.dataset.shopset, q.value); if (V.sec === 'list') renderDetail(); else document.querySelectorAll('.shopwrap').forEach(w => { if (w.dataset.rid === q.dataset.shopset) w.innerHTML = shopCtl(q.dataset.shopset); }); return; }
+  const sk = e.target.closest('[data-skill]'); if (sk) { setSkill(sk.dataset.skill, +sk.value); return; }
+  const si = e.target.closest('[data-skillin]'); if (si) { setSkill(si.dataset.skillin, Math.max(0, Math.min(15, Math.round(+si.value || 0)))); return; }
   const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
 window.addEventListener('hashchange', () => { route(); setReport(); });
 // footer: game version, theme switch

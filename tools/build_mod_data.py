@@ -26,7 +26,7 @@ for r in json.loads(txt)['Recipes']:
     recipe_inputs[str(r['ID'])]=[r.get('Name') or '', r.get('Type') or '', sorted(set(ids))]
     if r.get('Type')!='Debug' and r.get('output'):   # amounts, outputs, time and fail chance for the Trade panel (profit at real shop prices)
         kv=lambda l:[[x['Key']['ID'],x['Value']] for x in l or []]
-        trade[str(r['ID'])]=[r.get('Name') or '', r.get('Type') or '', r.get('ProcessTime',0), r.get('FailChance',0), kv(r.get('input')), kv(r.get('output'))]
+        trade[str(r['ID'])]=[r.get('Name') or '', r.get('Type') or '', r.get('ProcessTime',0), r.get('FailChance',0), kv(r.get('input')), kv(r.get('output')), r.get('RelevantSkill') or 'None', r.get('SkillFactor',1), (r.get('metaSettings') or {}).get('qualityFactor',1), (r.get('metaSettings') or {}).get('fixedQuality',0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0]
     if r.get('RelevantSkill') and r['RelevantSkill']!='None': skill_count[r['Type']][r['RelevantSkill']]+=1
 # recipe type -> skills it trains (main skill, plus others used by several recipes)
 type_skills={t:[k for k,n in c.most_common() if n>=2 or k==c.most_common(1)[0][0]] for t,c in skill_count.items()}

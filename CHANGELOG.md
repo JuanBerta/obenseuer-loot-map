@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## 0.7.6
+- Profit counts quality: what you craft is priced by the quality your skill gives it (the Profit finder uses your live skill levels; the website has a "Your skills" page to enter them).
 - Profit finder (More tools): ranks every recipe by what it earns at real shop prices (cheapest shop for the ingredients, best buyer for the products, after the fail chance), by profit or by profit per hour, and shows where to buy and sell. "Find" highlights the ingredients and products on the map.
 - The website's database gained the same real-price profit: sort recipes by "Best profit at shops" or "Best profit per hour", a "Trade at shops" block on every recipe, ranked "Where to buy" and "Where to sell" lists on items, and a "Trade run" on the shopping list (what to buy where, what to sell where, in walking order).
 

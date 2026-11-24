@@ -59,7 +59,8 @@ for r in read_json('Recipes.json')['Recipes']:
     if r.get('Type') == 'Debug': continue
     rec = [r['ID'], (r.get('Name') or '').strip(), r.get('Type'), r.get('RelevantSkill'), r.get('MinimumSkill', 0), r.get('FailChance', 0),
            r.get('ProcessTime', 0), kv(r.get('input')), kv(r.get('output')), kv(r.get('outputFail')), r.get('RequiredConditions') or [],
-           [t for t in r.get('RecipeTags') or [] if t != 'NONE'], 1 if r.get('RecipeRequired') else 0]
+           [t for t in r.get('RecipeTags') or [] if t != 'NONE'], 1 if r.get('RecipeRequired') else 0,
+           [r.get('SkillFactor', 1), (r.get('metaSettings') or {}).get('qualityFactor', 1), (r.get('metaSettings') or {}).get('fixedQuality', 0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0]]   # [13]: skill factor, quality factor, fixed output quality (0 = none)
     for x in rec[7] + rec[8] + rec[9]:
         if x[0] not in items: notes.append(f'Recipe #{rec[0]} “{rec[1]}” uses unknown item ID {x[0]}')
     recipes.append(rec)

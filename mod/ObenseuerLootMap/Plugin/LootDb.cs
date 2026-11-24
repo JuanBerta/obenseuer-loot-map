@@ -146,7 +146,7 @@ public class LootDb
 		return value[1].ToString();
 	}
 
-	private IEnumerable<string> ItemField(int id, int idx)
+	public IEnumerable<string> ItemField(int id, int idx)
 	{
 		if (!items.TryGetValue(id.ToString(), out var value) || value.Count <= idx)
 		{

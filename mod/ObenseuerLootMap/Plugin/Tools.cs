@@ -402,6 +402,16 @@ namespace ObenseuerLootMap
         static string Money(float x) => (x >= 0 ? "+" : "−") + Mathf.Abs(x).ToString("0.#");
         float PayAt(VendorData v, int id) => Mathf.Max(1f, Mathf.Round(Db.ValueOf(id) * (v.bm > 0 ? v.bm : 1.1f)));
         float GetAt(VendorData v, int id) => Mathf.Max(1f, Mathf.Round(Db.ValueOf(id) * (v.sm > 0 ? v.sm : 0.9f)));
+        // Quality of what you craft (the game's formula, averaged, with your live skill) and what it does to the sale price.
+        static float QualityValue(float q) => q > 1f ? q * q : 0.5f * q * q + 0.25f * q + 0.25f;
+        float CraftQuality(JArray r, float fail)
+        {
+            float fixedQ = r.Count > 9 ? (float)r[9] : 0f; if (fixedQ > 0f) return fixedQ;
+            string sk = r.Count > 6 ? (string)r[6] : "None"; if (sk == "None" || !Enum.TryParse(sk, out PlayerStats.PlayerSkillType type)) return 1f;
+            float lvl = 5f; try { lvl = PlayerStats.instance.GetSkillWithEffects(type); } catch { }
+            float sf = (float)r[7], qf = (float)r[8];
+            return Mathf.Clamp(lvl * 0.2f * sf * (1f - fail) * qf, 0.05f, 2f);
+        }
         List<TradeRow> BuildTrade()
         {
             var vendors = Db.scenes.Values.SelectMany(sc => sc.vendors).ToList();
@@ -436,7 +446,7 @@ namespace ObenseuerLootMap
                 foreach (JArray x in (JArray)r[5])
                 {
                     int id = (int)x[0]; float n = (float)x[1]; var b = Best(id); row.ids.Add(id);
-                    if (b.v != null) { row.rev += b.p * n; sellAt ??= b.v.n; }
+                    if (b.v != null) { float qv = Db.ItemField(id, 3).Contains("ItemQualityData") ? QualityValue(CraftQuality(r, fail)) : 1f; row.rev += Mathf.Max(1f, Mathf.Round(b.p * qv)) * n; sellAt ??= b.v.n; }
                 }
                 if (sellAt == null) continue;
                 row.rev *= 1f - fail; row.profit = row.rev - row.cost; row.perHour = time > 0 ? row.profit * 3600f / time : float.MinValue;
@@ -448,9 +458,10 @@ namespace ObenseuerLootMap
         void DrawTradePanel()
         {
             GUILayout.Space(4);
+            bool was = tradeOpen;
             tradeOpen = GUILayout.Toggle(tradeOpen, " " + Loc.T("Profit finder"));
             if (!tradeOpen) return;
-            if (tradeAll == null) tradeAll = BuildTrade();
+            if (!was || tradeAll == null) tradeAll = BuildTrade();   // rebuilt each time it opens, so it follows your current skills
             GUILayout.BeginHorizontal();
             GUILayout.Label(Loc.T("Sort by"), labelStyle, GUILayout.Width(70));
             if (GUILayout.Button(Loc.T(tradeSort == 0 ? "Profit" : "Profit per hour"), btnStyle)) tradeSort = 1 - tradeSort;
@@ -465,7 +476,7 @@ namespace ObenseuerLootMap
                 GUILayout.EndHorizontal();
                 GUILayout.Label(r.route, smallStyle);
             }
-            GUILayout.Label(Loc.T("Real shop prices, after the fail chance. ~ means some ingredient is not sold in any shop (counted at its base value)."), smallStyle);
+            GUILayout.Label(Loc.T("Real shop prices, after the fail chance and with the quality your current skills would give. ~ means some ingredient is not sold in any shop (counted at its base value)."), smallStyle);
         }
 
         // ---------------- panel ----------------
