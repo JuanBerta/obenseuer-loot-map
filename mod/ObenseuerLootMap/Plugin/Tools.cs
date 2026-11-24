@@ -395,6 +395,79 @@ namespace ObenseuerLootMap
             return ids.OrderByDescending(i => Db.ValueOf(i)).First();
         }
 
+
+        // ---------------- profit finder: recipes ranked by what they earn at real shop prices ----------------
+        class TradeRow { public string name; public float cost, rev, profit, perHour; public bool estimated; public string route; public HashSet<int> ids = new HashSet<int>(); }
+        List<TradeRow> tradeAll; bool tradeOpen; int tradeSort;
+        static string Money(float x) => (x >= 0 ? "+" : "−") + Mathf.Abs(x).ToString("0.#");
+        float PayAt(VendorData v, int id) => Mathf.Max(1f, Mathf.Round(Db.ValueOf(id) * (v.bm > 0 ? v.bm : 1.1f)));
+        float GetAt(VendorData v, int id) => Mathf.Max(1f, Mathf.Round(Db.ValueOf(id) * (v.sm > 0 ? v.sm : 0.9f)));
+        List<TradeRow> BuildTrade()
+        {
+            var vendors = Db.scenes.Values.SelectMany(sc => sc.vendors).ToList();
+            var cheapest = new Dictionary<int, (float p, VendorData v)>(); var best = new Dictionary<int, (float p, VendorData v)>();
+            (float p, VendorData v) Cheap(int id)
+            {
+                if (cheapest.TryGetValue(id, out var c)) return c;
+                c = (-1f, null);
+                foreach (var v in vendors) if (Db.Sells(v, id)) { var p = PayAt(v, id); if (c.v == null || p < c.p) c = (p, v); }
+                return cheapest[id] = c;
+            }
+            (float p, VendorData v) Best(int id)
+            {
+                if (best.TryGetValue(id, out var c)) return c;
+                c = (-1f, null);
+                foreach (var v in vendors) if (v.b == 1 && Db.Buys(v, id)) { var p = GetAt(v, id); if (c.v == null || p > c.p) c = (p, v); }
+                return best[id] = c;
+            }
+            var rows = new List<TradeRow>();
+            foreach (var kv in Db.trade)
+            {
+                var r = kv.Value; if (r.Count < 6) continue;
+                var row = new TradeRow { name = (string)r[0] };
+                float fail = (float)r[3], time = (float)r[2]; bool bad = false; var buyAt = new List<string>(); string sellAt = null;
+                foreach (JArray x in (JArray)r[4])
+                {
+                    int id = (int)x[0]; float n = (float)x[1]; var c = Cheap(id); row.ids.Add(id);
+                    if (c.v != null) { row.cost += c.p * n; if (!buyAt.Contains(c.v.n)) buyAt.Add(c.v.n); }
+                    else { int val = Db.ValueOf(id); if (val <= 0) { bad = true; break; } row.cost += val * n; row.estimated = true; }
+                }
+                if (bad) continue;
+                foreach (JArray x in (JArray)r[5])
+                {
+                    int id = (int)x[0]; float n = (float)x[1]; var b = Best(id); row.ids.Add(id);
+                    if (b.v != null) { row.rev += b.p * n; sellAt ??= b.v.n; }
+                }
+                if (sellAt == null) continue;
+                row.rev *= 1f - fail; row.profit = row.rev - row.cost; row.perHour = time > 0 ? row.profit * 3600f / time : float.MinValue;
+                row.route = (buyAt.Count > 0 ? Loc.T("Buy at") + " " + string.Join(", ", buyAt.Take(3)) + " · " : "") + Loc.T("sell at") + " " + sellAt;
+                rows.Add(row);
+            }
+            return rows;
+        }
+        void DrawTradePanel()
+        {
+            GUILayout.Space(4);
+            tradeOpen = GUILayout.Toggle(tradeOpen, " " + Loc.T("Profit finder"));
+            if (!tradeOpen) return;
+            if (tradeAll == null) tradeAll = BuildTrade();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(Loc.T("Sort by"), labelStyle, GUILayout.Width(70));
+            if (GUILayout.Button(Loc.T(tradeSort == 0 ? "Profit" : "Profit per hour"), btnStyle)) tradeSort = 1 - tradeSort;
+            GUILayout.EndHorizontal();
+            var top = (tradeSort == 0 ? tradeAll.OrderByDescending(r => r.profit) : tradeAll.OrderByDescending(r => r.perHour)).Take(8).ToList();
+            if (top.Count == 0) { GUILayout.Label(Loc.T("No profitable recipes found"), smallStyle); return; }
+            foreach (var r in top)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"{r.name}{(r.estimated ? " ~" : "")} · {Money(r.profit)} OC" + (r.perHour > float.MinValue ? $" · {Money(r.perHour)}/h" : ""), labelStyle);
+                if (GUILayout.Button(Loc.T("Find"), btnStyle, GUILayout.Width(50))) SetIdSearch(new HashSet<int>(r.ids), r.name);
+                GUILayout.EndHorizontal();
+                GUILayout.Label(r.route, smallStyle);
+            }
+            GUILayout.Label(Loc.T("Real shop prices, after the fail chance. ~ means some ingredient is not sold in any shop (counted at its base value)."), smallStyle);
+        }
+
         // ---------------- panel ----------------
         void DrawToolsPanel()
         {
@@ -421,6 +494,7 @@ namespace ObenseuerLootMap
             GUILayout.EndHorizontal();
             GUILayout.Space(4);
             DrawShopListPanel();
+            DrawTradePanel();
             int rc = RouteCandidates();
             if (routeTotal > 0 && guide != null)
             {

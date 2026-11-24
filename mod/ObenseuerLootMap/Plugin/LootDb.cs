@@ -21,6 +21,8 @@ public class LootDb
 
 	public Dictionary<string, JArray> recipeInputs = new Dictionary<string, JArray>();
 
+	public Dictionary<string, JArray> trade = new Dictionary<string, JArray>();
+
 	public Dictionary<string, List<object>> furniture = new Dictionary<string, List<object>>();
 
 	public Dictionary<string, List<string>> typeSkills = new Dictionary<string, List<string>>();
@@ -109,11 +111,19 @@ public class LootDb
 		return lootDb;
 	}
 
+	// Furniture shops sell under a longer name than the placed workstation has (“Metalworking Lathe” → “Lathe”): searching the furniture name finds the station.
+	string FurnNamesLike(string station)
+	{
+		if (station == null || station.Length < 4) return "";
+		var names = furniture.Values.Where(f => f.Count > 0).Select(f => f[0].ToString().Trim()).Where(n => n.IndexOf(station, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+		return names.Count == 0 ? "" : string.Join("\n", names) + "\n";
+	}
+
 	public string StationTextFor(string name, List<string> types)
 	{
 		if (!StationText.TryGetValue(name, out var value))
 		{
-			value = (StationText[name] = (name + "\n" + string.Join("\n", types) + "\n" + string.Join("\n", SkillsFor(types)) + "\n" + string.Join("\n", types.SelectMany((string x) => (!recipes.TryGetValue(x, out var value2)) ? new List<string>() : value2))).ToLowerInvariant());
+			value = (StationText[name] = (name + "\n" + FurnNamesLike(name) + string.Join("\n", types) + "\n" + string.Join("\n", SkillsFor(types)) + "\n" + string.Join("\n", types.SelectMany((string x) => (!recipes.TryGetValue(x, out var value2)) ? new List<string>() : value2))).ToLowerInvariant());
 		}
 		return value;
 	}

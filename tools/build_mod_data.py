@@ -19,11 +19,14 @@ items={it['ID']:[it['Title'],it.get('BaseValue',0),it.get('Categories') or [],so
 loot={c['Name']:[c.get('ItemCommon') or [],c.get('ItemRare') or []] for c in json.load(open(os.path.join(SA,'StorageSpawnCategory.json'),encoding='utf-8-sig'))['$content']}
 raw=open(os.path.join(SA,'Recipes.json'),'rb').read()
 txt=raw.decode('utf-16') if raw[:2] in (b'\xff\xfe',b'\xfe\xff') else raw.decode('utf-8-sig')
-recipes=collections.defaultdict(list); recipe_inputs={}; skill_count=collections.defaultdict(collections.Counter)
+recipes=collections.defaultdict(list); recipe_inputs={}; trade={}; skill_count=collections.defaultdict(collections.Counter)
 for r in json.loads(txt)['Recipes']:
     if r.get('Name') and r['Name'] not in recipes[r['Type']]: recipes[r['Type']].append(r['Name'])
     ids=[int(x) for x in re.findall(r"'ID': (\d+)", str(r.get('input') or ''))]
     recipe_inputs[str(r['ID'])]=[r.get('Name') or '', r.get('Type') or '', sorted(set(ids))]
+    if r.get('Type')!='Debug' and r.get('output'):   # amounts, outputs, time and fail chance for the Trade panel (profit at real shop prices)
+        kv=lambda l:[[x['Key']['ID'],x['Value']] for x in l or []]
+        trade[str(r['ID'])]=[r.get('Name') or '', r.get('Type') or '', r.get('ProcessTime',0), r.get('FailChance',0), kv(r.get('input')), kv(r.get('output'))]
     if r.get('RelevantSkill') and r['RelevantSkill']!='None': skill_count[r['Type']][r['RelevantSkill']]+=1
 # recipe type -> skills it trains (main skill, plus others used by several recipes)
 type_skills={t:[k for k,n in c.most_common() if n>=2 or k==c.most_common(1)[0][0]] for t,c in skill_count.items()}
@@ -140,7 +143,8 @@ for i,name in enumerate(scenes):
 used=set(t for s in S.values() for t in [p.get('t') for p in s['points']] if t)|used_stock
 for t in used_stock: need.update(loot[t][0]); need.update(loot[t][1])
 for r in recipe_inputs.values(): need.update(r[2])
-data=dict(version=7,furniture=furniture,typeSkills=type_skills,recipeInputs=recipe_inputs,scenes=S,loot={k:v for k,v in loot.items() if k in used},
+for r in trade.values(): need.update(x[0] for x in r[4]+r[5])
+data=dict(version=7,furniture=furniture,typeSkills=type_skills,recipeInputs=recipe_inputs,trade=trade,scenes=S,loot={k:v for k,v in loot.items() if k in used},
           items={str(k):v for k,v in items.items()},recipes=recipes)
 os.makedirs(os.path.dirname(os.path.abspath(out)),exist_ok=True)
 json.dump(data,open(out,'w',encoding='utf-8'),separators=(',',':'),ensure_ascii=False)

@@ -42,8 +42,17 @@ const RECIPES = IDX.recipes || {}, STYPES = IDX.stationTypes || {};
 function stationText(title) { const t = STYPES[title] || []; return (title + '\n' + t.join('\n') + '\n' + t.flatMap(x => RECIPES[x] || []).join('\n')).toLowerCase(); }
 const STEXT = {}; for (const t of Object.keys(STYPES)) STEXT[t] = stationText(t);
 const stationMatches = f => !S.cat && qTerm() && (f.kind === 'vendor' ? ((f.title || '').toLowerCase().has(qTerm()) || (f.items || []).some(id => itemName(id).toLowerCase().has(qTerm())))
-  : f.kind === 'station' && f.title && (STEXT[f.title] || f.title.toLowerCase()).has(qTerm()));
+  : f.kind === 'station' && f.title && ((STEXT[f.title] || f.title.toLowerCase()).has(qTerm()) || furnAlias().has(f.title)));
 const cache = {};
+// The furniture shops sell (“Metalworking Lathe”) is placed on the map under a shorter workstation name (“Lathe”): a search for the furniture lights up those stations too.
+let aliasQ = null, aliasSet = new Set();
+function furnAlias() {
+  const q = S.cat ? '' : qTerm(); if (q === aliasQ && (FDB || !q)) return aliasSet;
+  aliasQ = q; aliasSet = new Set(); const D = q.length > 1 ? furnDb() : null; if (!D) { if (q.length > 1) aliasQ = null; return aliasSet; }
+  const names = Object.values(D.furniture).map(f => f[0].toLowerCase()).filter(n => n.has(q));
+  for (const t of Object.keys(STYPES)) { const tl = t.toLowerCase(); if (tl.length >= 4 && names.some(n => n.includes(tl))) aliasSet.add(t); }
+  return aliasSet;
+}
 
 // ---------- search ----------
 const qTerm = () => S.q.trim().toLowerCase();
@@ -81,6 +90,27 @@ function row(sc, count, extraCls) {
   return `<div class="row ${extraCls || ''} ${S.scene === sc.slug ? 'on' : ''} ${sc.outdoor ? 'out' : ''}" data-slug="${sc.slug}" title="${esc(sc.scene)}">
     ${placeIcon(sc)}<span class="nm">${esc(sc.name)}${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="ct">${count}</span></div>`;
 }
+// Furniture you can buy (a Drill, a Lathe…): found through the database file, which loads the first time a search needs it.
+let FDB = null, fdbBusy = false;
+function furnDb() {
+  if (FDB || fdbBusy) return FDB;
+  fdbBusy = true; const sc = document.createElement('script'); sc.src = 'data/db.js?v=5';
+  sc.onload = () => { FDB = window.OBS_DB; aliasQ = null; if (searching()) { renderSide(); draw(); } }; sc.onerror = () => { fdbBusy = false; }; document.head.appendChild(sc);
+  return null;
+}
+function furnSection(q) {
+  const D = furnDb(); if (!D || q.length < 2) return '';
+  const hits = Object.entries(D.furniture).filter(([, f]) => f[0].toLowerCase().has(q) || (f[4] || []).some(t => t.toLowerCase().has(q)) || (f[4] || []).length && f[1].toLowerCase().has(q) && q.length > 3)
+    .sort((a, b) => a[1][0].localeCompare(b[1][0])).slice(0, 8);
+  if (!hits.length) return '';
+  const price = f => [f[2] ? f[2] + ' OC' : '', f[3] ? f[3] + ' RM' : ''].filter(Boolean).join(' + ') || 'free';
+  const rows = hits.map(([id, f]) => {
+    const vs = D.vendors.filter(v => (v.fs || []).includes(+id) && SC[v.sc]);
+    return vs.length ? vs.map(v => `<div class="row" data-vsc="${esc(v.sc)}" data-vn="${esc(v.n)}" data-vq="${esc(f[0])}"><span class="ico blank"></span><span class="nm">${esc(f[0])}<small>Sold by ${esc(v.n)} · ${esc(SC[v.sc].name)} · ${price(f)}</small></span><span class="ct">buy</span></div>`).join('')
+      : `<div class="row" data-fdb="${id}"><span class="ico blank"></span><span class="nm">${esc(f[0])}<small>Not sold in any shop on the map · ${price(f)}</small></span><span class="ct">info</span></div>`;
+  }).join('');
+  return '<div class="sec">Furniture for sale</div>' + rows;
+}
 function renderSide() {
   const q = qTerm();
   if (searching()) {
@@ -100,7 +130,7 @@ function renderSide() {
     }
     let wsec = '';
     if (!S.cat && q) {
-      const titles = Object.keys(STYPES).filter(t => STEXT[t].has(q));
+      const al = furnAlias(), titles = Object.keys(STYPES).filter(t => STEXT[t].has(q) || al.has(t));
       const rows = IDX.scenes.map(s => [s, titles.reduce((a, t) => a + ((s.stations || {})[t] || 0), 0), titles.filter(t => (s.stations || {})[t])]).filter(x => x[1]).sort((a, b) => b[1] - a[1]);
       if (rows.length) wsec = '<div class="sec">Workstations that match</div>' + rows.slice(0, 25).map(([s, k, ts]) =>
         `<div class="row" data-slug="${s.slug}"><span class="ico blank"></span><span class="nm">${esc(ts.slice(0, 3).join(', '))}<small>in ${esc(s.name)}</small></span><span class="ct">${k}</span></div>`).join('');
@@ -110,9 +140,9 @@ function renderSide() {
     $('#sideBody').innerHTML =
       (placeHits.length ? '<div class="sec">Places</div>' + placeHits.map(s => row(s, s.lootContainers)).join('') : '') +
       (lmHits.length ? '<div class="sec">On the in-game map</div>' + lmHits.map(l => `<div class="row" data-lm="${LM_GROUPS.indexOf(l)}">${l.icon ? `<img class="ico" src="${l.icon}" alt="">` : '<span class="ico blank"></span>'}<span class="nm">${esc(l.titles.join(', '))}<small>${l.map === 'mines' ? 'Mines map' : 'Tenement & Bazaar map'}</small></span></div>`).join('') : '') +
-      tables + wsec +
+      tables + wsec + (!S.cat && q ? furnSection(q) : '') +
       (ranked.length ? '<div class="sec">Best places to look</div>' + ranked.slice(0, 60).map(([s, k]) => row(s, k, 'hit')).join('') :
-        (!placeHits.length && !lmHits.length && !wsec ? `<p class="empty">Nothing matches ${esc(label)}. Try a shorter word, like “tape” or “battery”.</p>` : ''));
+        (!placeHits.length && !lmHits.length && !wsec && !furnSection(q) ? `<p class="empty">Nothing matches ${esc(label)}. Try a shorter word, like “tape” or “battery”.</p>` : ''));
     return;
   }
   const reg = REGIONS.find(r => r.id === S.region);
@@ -125,6 +155,8 @@ function renderSide() {
 $('#sideBody').addEventListener('click', e => {
   const r = e.target.closest('.row'); if (!r) return;
   if (r.dataset.slug) openScene(r.dataset.slug);
+  else if (r.dataset.vsc) window.OBS_MAP.show(r.dataset.vsc, r.dataset.vq, r.dataset.vn);
+  else if (r.dataset.fdb) location.hash = '#/db/furniture/' + r.dataset.fdb;
   else if (r.dataset.cat) setCat(r.dataset.cat);
   else if (r.dataset.lm) {
     const l = LM_GROUPS[+r.dataset.lm];

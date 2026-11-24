@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=4';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=5';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -88,6 +88,63 @@ function buys(v, id) {
 }
 const furnSells = (v, id) => !!(v.fs && v.fs.includes(id));
 const furnBuys = (v, id) => v.fb === 'any' || (v.fb === 'same' && furnSells(v, id)) || (Array.isArray(v.fb) && v.fb.includes(id));
+
+// ---------- real shop prices (the game's formula: base value × the shop's multiplier, at least 1 OC) ----------
+const payAt = (v, id) => Math.max(1, Math.round(DB.items[id][1] * (v.bm != null ? v.bm : 1.1)));   // what you pay the shop
+const getAt = (v, id) => Math.max(1, Math.round(DB.items[id][1] * (v.sm != null ? v.sm : 0.9)));   // what the shop pays you
+const sellersMemo = {}, buyersMemo = {};
+const sellersOf = id => sellersMemo[id] || (sellersMemo[id] = DB.items[id] ? DB.vendors.filter(v => sells(v, +id)).map(v => ({ v, p: payAt(v, id) })).sort((a, b) => a.p - b.p || a.v.n.localeCompare(b.v.n)) : []);
+const buyersOf = id => buyersMemo[id] || (buyersMemo[id] = DB.items[id] ? DB.vendors.filter(v => buys(v, +id)).map(v => ({ v, p: getAt(v, id) })).sort((a, b) => b.p - a.p || a.v.n.localeCompare(b.v.n)) : []);
+// The cheapest way to pay for one of an ingredient: a group counts as its cheapest member; nothing sells it → its base value, marked as an estimate.
+function buyCost(id) {
+  const it = DB.items[id]; if (!it) return { p: 0, shop: false };
+  let best = null;
+  for (const m of (it[6].length ? it[6] : [+id])) { const s0 = sellersOf(m)[0]; if (s0 && (!best || s0.p < best.p)) best = { p: s0.p, shop: true, v: s0.v, id: m }; }
+  return best || { p: X.unit(id), shop: false, id: +id };
+}
+const RPmemo = {};
+function realProfit(rid) {
+  if (RPmemo[rid]) return RPmemo[rid];
+  const r = X.R[rid], ing = r[7].map(x => Object.assign({ id: x[0], n: x[1] }, buyCost(x[0], x[1])));
+  const outs = r[8].map(x => { const b = buyersOf(x[0])[0]; return { id: x[0], n: x[1], p: b ? b.p : 0, v: b ? b.v : null }; });
+  const cost = ing.reduce((a, x) => a + x.p * x.n, 0), rev = outs.reduce((a, x) => a + x.p * x.n, 0) * (1 - (r[5] || 0)), profit = rev - cost;
+  return RPmemo[rid] = { ing, outs, cost, rev, profit, hour: r[6] > 0 ? profit * 3600 / r[6] : null, sellable: outs.some(o => o.v), estimated: ing.some(x => !x.shop) };
+}
+const profitTxt = n => (n >= 0 ? '+' : '−') + fmt(Math.abs(n)) + ' OC';
+const realText = rid => { const p = realProfit(rid); if (!p.sellable) return '<span class="muted">No shop buys what this makes.</span>';
+  return `At shops: pay ≈ ${fmt(p.cost)} OC${p.estimated ? '*' : ''} · get ≈ ${fmt(p.rev)} OC · <b class="${p.profit >= 0 ? 'good' : 'bad'}">${profitTxt(p.profit)}</b>${p.hour != null ? ` · ${profitTxt(p.hour)}/h` : ''}`; };
+function tradeBlock(rid) {
+  const p = realProfit(rid), r = X.R[rid];
+  const buy = p.ing.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.shop ? `${fmt(x.p)} OC each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : `not sold · ≈ ${fmt(x.p)} OC`}</small>`);
+  const sell = p.outs.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.v ? `${fmt(x.p)} OC each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : 'no shop buys it'}</small>`);
+  return `<h3>Trade at shops</h3><p>${realText(rid)}</p><h3>Buy the ingredients</h3>${ul(buy)}<h3>Sell what it makes</h3>${ul(sell)}
+    <p class="muted">Real shop prices: base value × the shop's multiplier. ${p.estimated ? '* Ingredients no shop sells are counted at base value. ' : ''}Counts the ${Math.round((r[5] || 0) * 100)}% fail chance, ignores item quality and what the shop stocks that day.</p>`;
+}
+// A trade run: what to buy where, then what to sell where, with the stops of each part in a sensible walking order (same area together, nearest next).
+function tripOrder(vs) {
+  const by = new Map(); vs.forEach(v => { if (!by.has(v.sc)) by.set(v.sc, []); by.get(v.sc).push(v); });
+  const out = []; let at = null;
+  for (const [, g] of [...by].sort((a, b) => b[1].length - a[1].length || sceneName(a[0]).localeCompare(sceneName(b[0])))) {
+    let cur = at && at.sc === g[0].sc ? at : g[0]; const left = g.slice();
+    while (left.length) { left.sort((a, b) => Math.hypot(a.x - cur.x, a.z - cur.z) - Math.hypot(b.x - cur.x, b.z - cur.z)); cur = left.shift(); out.push(cur); }
+    at = cur;
+  }
+  return out;
+}
+function tradeRun(raw, make) {
+  const buy = new Map(), sell = new Map(), find = [], nosell = []; let bt = 0, st = 0;
+  const add = (m, v, l) => { if (!m.has(v)) m.set(v, []); m.get(v).push(l); };
+  for (const [id, n0] of Object.entries(raw)) { const n = Math.ceil(n0 - 1e-9), c = buyCost(id); if (!c.shop) { find.push([+id, n]); continue; } add(buy, c.v, { id: c.id, n, p: c.p }); bt += c.p * n; }
+  for (const [id, n] of Object.entries(make)) { const b = buyersOf(+id)[0]; if (!b) { nosell.push(+id); continue; } add(sell, b.v, { id: +id, n, p: b.p }); st += b.p * n; }
+  if (!buy.size && !sell.size) return '';
+  const stop = (v, ls, k) => `<span>${vl(v)}<br>${ls.map(l => `<small class="muted">${il(l.id)} × ${num(l.n)} · ${fmt(l.p)} OC each = ${fmt(l.p * l.n)} OC</small>`).join('<br>')}</span>${mapBtn(v.sc, iname(ls[0].id), k, v.n)}`;
+  let h = `<h3>Trade run</h3><p>Buy ≈ ${fmt(bt)} OC · sell ≈ ${fmt(st)} OC · <b class="${st - bt >= 0 ? 'good' : 'bad'}">${profitTxt(st - bt)}</b></p>`;
+  if (buy.size) h += `<p class="muted">1. Buy, in this order:</p>${ul(tripOrder([...buy.keys()]).map(v => stop(v, buy.get(v), 'Show the shop')))}`;
+  if (sell.size) h += `<p class="muted">2. Sell, in this order:</p>${ul(tripOrder([...sell.keys()]).map(v => stop(v, sell.get(v), 'Show the shop')))}`;
+  if (find.length) h += `<p class="muted">No shop sells these, so find them yourself (not in the cost): ${find.map(([id, n]) => `${il(id)} × ${num(n)}`).join(', ')}</p>`;
+  if (nosell.length) h += `<p class="muted">No shop buys: ${nosell.map(il).join(', ')}</p>`;
+  return h + `<p class="muted">Cheapest shop for each ingredient, best price for each product. Item quality, stolen goods and daily stock are ignored.</p>`;
+}
 
 // ---------- icons (in-game sprites from tools/icons.py, place icons from the map's landmarks) ----------
 function ico(sheet, key, big) {
@@ -263,10 +320,12 @@ function rows() {
     case 'items': return itemRows(Object.keys(I).map(Number));
     case 'tenement': return itemRows(X.tenIds);
     case 'upgrades': return TU.cats.map((c, i) => [i, c[1], c[0] + ' · ' + (c[3].length - 1) + ' tiers', '']).filter(r => m(r[1]) || m(r[2]));
-    case 'recipes': return DB.recipes.filter(r => (m(r[1]) || r[8].some(x => m(iname(x[0])))) && (!V.f || r[2] === V.f))
-      .sort(V.sort === 'profit' ? (a, b) => X.RC[b[0]].profit - X.RC[a[0]].profit || a[1].localeCompare(b[1])
+    case 'recipes': return DB.recipes.filter(r => (m(r[1]) || r[8].some(x => m(iname(x[0])))) && (!V.f || r[2] === V.f) && (V.sort !== 'rprofit' && V.sort !== 'rhour' || realProfit(r[0]).sellable))
+      .sort(V.sort === 'rprofit' ? (a, b) => realProfit(b[0]).profit - realProfit(a[0]).profit || a[1].localeCompare(b[1])
+        : V.sort === 'rhour' ? (a, b) => (realProfit(b[0]).hour ?? -1e12) - (realProfit(a[0]).hour ?? -1e12) || a[1].localeCompare(b[1])
+        : V.sort === 'profit' ? (a, b) => X.RC[b[0]].profit - X.RC[a[0]].profit || a[1].localeCompare(b[1])
         : V.sort === 'cost' ? (a, b) => X.RC[a[0]].cost - X.RC[b[0]].cost || a[1].localeCompare(b[1]) : (a, b) => a[1].localeCompare(b[1]))
-      .map(r => [r[0], r[1], V.sort === 'profit' ? (X.RC[r[0]].profit >= 0 ? '+' : '−') + fmt(Math.abs(X.RC[r[0]].profit)) + ' OC' : V.sort === 'cost' ? fmt(X.RC[r[0]].cost) + ' OC' : r[2], rIco(r[0])]);
+      .map(r => [r[0], r[1], V.sort === 'rprofit' ? profitTxt(realProfit(r[0]).profit) : V.sort === 'rhour' ? (realProfit(r[0]).hour == null ? '–' : profitTxt(realProfit(r[0]).hour) + '/h') : V.sort === 'profit' ? (X.RC[r[0]].profit >= 0 ? '+' : '−') + fmt(Math.abs(X.RC[r[0]].profit)) + ' OC' : V.sort === 'cost' ? fmt(X.RC[r[0]].cost) + ' OC' : r[2], rIco(r[0])]);
     case 'vendors': return DB.vendors.filter(v => m(v.n) || m(v.o || '') || m(sceneName(v.sc)) || (q.length > 2 && (v.t && m(v.t))))
       .filter(v => !V.f || (V.f === 'items' ? (v.t || v.i) : V.f === 'buys' ? v.b : V.f === 'furniture' ? (v.fs || v.fb) : V.f === 'vending' ? /vending|soda fountain/i.test(v.n) : true))
       .sort((a, b) => a.n.localeCompare(b.n) || sceneName(a.sc).localeCompare(sceneName(b.sc)))
@@ -295,7 +354,7 @@ function filters() {
   }
   if (V.sec === 'upgrades') return '';
   if (V.sec === 'tenement') return opt(X.itemCats, 'All categories') + sort;
-  if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('profit', 'Best craft profit')}${so('cost', 'Cheapest ingredients')}</select>`;
+  if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('rprofit', 'Best profit at shops')}${so('rhour', 'Best profit per hour')}${so('profit', 'Best craft profit (base values)')}${so('cost', 'Cheapest ingredients')}</select>`;
   if (V.sec === 'tenants') return `<select id="dbF" aria-label="Filter tenants"><option value="">All tenants</option>${[['Small', 'Accept a small apartment'], ['Medium', 'Accept a medium apartment'], ['Large', 'Accept a large apartment'], ['OC', 'Pay OC'], ['RM', 'Pay RM']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   if (V.sec === 'furniture') return opt(X.fCats, 'All categories') + sort;
   if (V.sec === 'vendors') return `<select id="dbF"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
@@ -347,7 +406,7 @@ function renderList() {
 function itemCard(id) {
   const it = DB.items[id]; if (!it) return missing();
   const [t, val, cats, desc, stack, eff, grp, wall] = it;
-  let h = `<div class="card"><div class="dbhead">${iIco(id, 1)}<div><h2>${esc(t)}</h2><div class="sub">ID ${id} · ${val} OC · stacks to ${stack}${X.craftCost[id] != null ? ' · costs ≈ ' + fmt(X.craftCost[id]) + ' OC to make' : ''}</div></div></div>`;
+  let h = `<div class="card"><div class="dbhead">${iIco(id, 1)}<div><h2>${esc(t)}</h2><div class="sub">ID ${id} · ${val} OC · stacks to ${stack}${X.craftCost[id] != null ? ' · costs ≈ ' + fmt(X.craftCost[id]) + ' OC to make' : ''}${sellersOf(+id)[0] ? ' · buy from ' + fmt(sellersOf(+id)[0].p) + ' OC' : ''}${buyersOf(+id)[0] ? ' · sell up to ' + fmt(buyersOf(+id)[0].p) + ' OC' : ''}</div></div></div>`;
   if (desc) h += `<p>${esc(desc)}</p>`;
   h += `<div class="tags">${cats.map(c => `<a class="tag" href="#/db/items" data-cat="${esc(c)}">${esc(c)}</a>`).join('')}${eff.map(e => `<span class="tag teal">${e[0]} ${e[1]}</span>`).join('')}${wall ? `<span class="tag">${esc(wall)}</span>` : ''}</div>`;
   const st = it[9];
@@ -378,8 +437,9 @@ function itemCard(id) {
        + mapBtn(best, t, 'Show where on the map');
   } else h += '<p class="muted">Not in any placed container.</p>';
   if (unplaced.length) h += `<p class="muted">Also listed in ${[...new Set(unplaced.map(([n]) => n.trim()))].map(esc).join(', ')}, which ${unplaced.length > 1 ? 'are' : 'is'} not placed in any scene on the map (spawned at runtime, or unused).</p>`;
-  const sv = DB.vendors.filter(v => sells(v, +id)), bv = DB.vendors.filter(v => buys(v, +id));
-  h += `<h3>Sold by · ${sv.length}</h3>${ul(sv.map(vl))}<h3>Bought by · ${bv.length}</h3>${ul(bv.map(v => vl(v) + (v.bs ? ' <small class="muted">· buys stolen</small>' : '')))}`;
+  const sv = sellersOf(+id), bv = buyersOf(+id);
+  h += `<h3>Where to buy · ${sv.length}</h3>${sv.length ? `<p class="muted">Cheapest first. The shop's price is the base value × its multiplier.</p>` : ''}${ul(sv.map((x, i) => vl(x.v) + ` <small class="${i ? 'muted' : 'good'}">· ${fmt(x.p)} OC</small>`))}${sv.length ? mapBtn(sv[0].v.sc, t, 'Show the cheapest shop', sv[0].v.n) : ''}`;
+  h += `<h3>Where to sell · ${bv.length}</h3>${bv.length ? `<p class="muted">Best price first.</p>` : ''}${ul(bv.map((x, i) => vl(x.v) + ` <small class="${i ? 'muted' : 'good'}">· ${fmt(x.p)} OC</small>` + (x.v.bs ? ' <small class="muted">· buys stolen</small>' : '')))}${bv.length ? mapBtn(bv[0].v.sc, t, 'Show the best buyer', bv[0].v.n) : ''}`;
   const via = new Set(); (X.groupsOf[id] || []).forEach(g => (X.uses[g] || []).forEach(r => via.add(r)));
   if (X.fails[id]) h += `<h3>Comes out of a failed</h3>${ul(recipesOf(X.fails[id]))}`;
   h += `<h3>Used in · ${(X.uses[id] || []).size || 0}</h3>${ul(recipesOf(X.uses[id]))}`;
@@ -392,7 +452,7 @@ function craftBlock(rid, forItem) {
   const mk = out.find(x => x[0] === +forItem), more = mk && mk[1] > 1 ? ` <small class="muted">makes ${num(mk[1])}</small>` : '';
   return `<div class="craft"><div class="ch">${rl(rid)}${more}</div><div class="fl">${inp.map(chipOf).join('')}</div>
     <div class="cm muted">${esc(skill)}${minS ? ' ' + minS + '+' : ''} · ${hrs(time)} · ${Math.round(fail * 100)}% fail</div>
-    <div class="cm">${econText(rid)}</div>${shopBtn(rid)}</div>`;
+    <div class="cm">${econText(rid)}</div><div class="cm">${realText(rid)}</div>${shopBtn(rid)}</div>`;
 }
 const chipOf = (x, k) => `<span class="chip2 ${k || ''}"><b>${num(x[1])}×</b> ${il(x[0])}</span>`;
 // The scene with the most containers that can drop any of these items.
@@ -414,6 +474,7 @@ function recipeCard(id) {
     <h3>Details</h3><div class="facts"><span>Skill</span><span>${esc(skill)}${minS ? ' · min ' + minS : ''}</span><span>Fail chance</span><span>${Math.round(fail * 100)}%</span>
     <span>Time</span><span>${hrs(time)}</span><span>Recipe needed</span><span>${req ? 'yes, learn it first' : 'no'}</span><span>Value</span><span>${econText(id)}</span>
     ${cond.length ? `<span>Station must be</span><span>${cond.map(esc).join(', ')}</span>` : ''}${tags.length ? `<span>Learned from</span><span>${tags.map(esc).join(', ')}</span>` : ''}</div>`;
+  h += tradeBlock(id);
   if (inp.length) { const sl = bestSceneFor(inp.map(x => x[0]));
     h += `<h3>Where to find the ingredients</h3>${sl ? mapBtn(sl, inp.map(x => iname(x[0])).join(' | '), 'Find the ingredients on the map') : '<p class="muted">None of them is in a placed container.</p>'}<p class="muted">Lights up every container, shop and workstation that has any of ${inp.length > 1 ? 'these ' + inp.length + ' ingredients' : 'this ingredient'}, starting in the place with the most.</p>`; }
   h += `<h3>Where to make it</h3>`;
@@ -577,6 +638,7 @@ function listCard() {
     <h3>${o.mode !== 'off' || crafted ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = bestRecipe(+id) && !(DB.items[id] && DB.items[id][6].length);
       return `<span>${il(id)} <small class="muted">× ${num(up(n))}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}`; }))}
     <h3>You will make</h3>${ul(byName(Object.entries(make)).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}</small>`))}
+    ${tradeRun(E.raw, make)}
     <button type="button" class="dbmore" data-copymod>Copy list for the mod</button> <button type="button" class="dbmore" data-shop="clear">Clear the list</button>
     <p class="muted">In the game, open the Loot Map panel and press “Paste list from the website”: the mod shows what you still need and where to find it.</p></div>`;
 }

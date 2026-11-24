@@ -19,7 +19,7 @@ using UnityEngine.UI;
 
 namespace ObenseuerLootMap;
 
-[BepInPlugin("com.juanberta.obenseuer.lootmap", "Loot Map", "0.7.5")]
+[BepInPlugin("com.juanberta.obenseuer.lootmap", "Loot Map", "0.7.6")]
 public partial class LootMapPlugin : BaseUnityPlugin
 {
 	private class GuideTarget

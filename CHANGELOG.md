@@ -1,5 +1,9 @@
 # Changelog - Loot Map (in-game mod)
 
+## 0.7.6
+- Profit finder (More tools): ranks every recipe by what it earns at real shop prices (cheapest shop for the ingredients, best buyer for the products, after the fail chance), by profit or by profit per hour, and shows where to buy and sell. "Find" highlights the ingredients and products on the map.
+- The website's database gained the same real-price profit: sort recipes by "Best profit at shops" or "Best profit per hour", a "Trade at shops" block on every recipe, ranked "Where to buy" and "Where to sell" lists on items, and a "Trade run" on the shopping list (what to buy where, what to sell where, in walking order).
+
 ## 0.6.0
 - Doors show whether you can get through: open, locked (lockpick it, with a difficulty hint), locked (needs a key), locked (opens another way) or blocked. The state is read live from the game when you are in that place, so a door you already unlocked shows as open. "Guide me there" prefers open doors and tells you when the route goes through a locked one.
 - Containers you have emptied are remembered between places (until they restock), shown hollow, and can be hidden with "Hide emptied containers". The panel says how many are left and when nothing is left to search.

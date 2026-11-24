@@ -11,6 +11,14 @@ internal static class Loc
 
 	private static readonly Dictionary<string, string> Es = new Dictionary<string, string>
 	{
+		["Profit finder"] = "Buscador de beneficios",
+		["Profit"] = "Beneficio",
+		["Profit per hour"] = "Beneficio por hora",
+		["Sort by"] = "Ordenar por",
+		["Buy at"] = "Comprar en",
+		["sell at"] = "vender en",
+		["Real shop prices, after the fail chance. ~ means some ingredient is not sold in any shop (counted at its base value)."] = "Precios reales de tienda, con la probabilidad de fallo. ~ significa que algún ingrediente no se vende en ninguna tienda (se cuenta a su valor base).",
+		["No profitable recipes found"] = "No hay recetas rentables",
 		["Show loot markers"] = "Mostrar marcadores",
 		["locked: lockpick it"] = "con llave: se fuerza con ganzúa",
 		["locked: needs a key"] = "con llave: necesita llave",
@@ -198,6 +206,14 @@ internal static class Loc
 
 	private static readonly Dictionary<string, string> Fi = new Dictionary<string, string>
 	{
+		["Profit finder"] = "Voitonetsijä",
+		["Profit"] = "Voitto",
+		["Profit per hour"] = "Voitto tunnissa",
+		["Sort by"] = "Järjestä",
+		["Buy at"] = "Osta täältä",
+		["sell at"] = "myy täällä",
+		["Real shop prices, after the fail chance. ~ means some ingredient is not sold in any shop (counted at its base value)."] = "Oikeat kauppahinnat epäonnistumisen jälkeen. ~ tarkoittaa, ettei jotain raaka-ainetta myydä missään kaupassa (lasketaan perusarvolla).",
+		["No profitable recipes found"] = "Kannattavia reseptejä ei löytynyt",
 		["Show loot markers"] = "Näytä merkit",
 		["locked"] = "lukittu",
 		["more"] = "lisää",
