@@ -384,10 +384,11 @@ function itemCard(id) {
 function craftBlock(rid, forItem) {
   const r = X.R[rid], [, n, type, skill, minS, fail, time, inp, out] = r;
   const mk = out.find(x => x[0] === +forItem), more = mk && mk[1] > 1 ? ` <small class="muted">makes ${num(mk[1])}</small>` : '';
-  return `<div class="craft"><div class="ch">${rl(rid)}${more}</div><div class="ci">${inp.map(x => `<span>${il(x[0])} <small class="muted">× ${num(x[1])}</small></span>`).join('')}</div>
+  return `<div class="craft"><div class="ch">${rl(rid)}${more}</div><div class="fl">${inp.map(chipOf).join('')}</div>
     <div class="cm muted">${esc(skill)}${minS ? ' ' + minS + '+' : ''} · ${hrs(time)} · ${Math.round(fail * 100)}% fail</div>
     <div class="cm">${econText(rid)}</div>${shopBtn(rid)}</div>`;
 }
+const chipOf = (x, k) => `<span class="chip2 ${k || ''}"><b>${num(x[1])}×</b> ${il(x[0])}</span>`;
 function recipeCard(id) {
   const r = X.R[id]; if (!r) return missing();
   const [, n, type, skill, minS, fail, time, inp, out, fout, cond, tags, req] = r;
@@ -395,7 +396,9 @@ function recipeCard(id) {
   const ioOut = a => ul(a.map(x => `<span>${il(x[0])}${fxLine(x[0])}</span><small>× ${num(x[1])}</small>`));
   const st = DB.stations[type] || [], furn = (X.furnTypes[type] || []).map(Number);
   let h = `<div class="card"><div class="dbhead">${rIco(id, 1)}<div><h2>${esc(n)}</h2><div class="sub">Recipe #${id} · ${esc(type)}</div></div></div>${shopBtn(id)}
-    <h3>Ingredients</h3>${io(inp)}<h3>Makes</h3>${ioOut(out)}${fout.length ? `<h3>If it fails</h3>${io(fout)}` : ''}
+    <div class="flow"><div class="fl">${inp.map(chipOf).join('')}</div><span class="arrow" aria-hidden="true">→</span><div class="fl res">${out.map(x => chipOf(x, 'ok')).join('')}</div></div>
+    ${fout.length ? `<div class="flow"><span class="failtag">On fail ${Math.round(fail * 100)}%</span><div class="fl">${fout.map(x => chipOf(x, 'bad')).join('')}</div></div>` : ''}
+    ${out.some(x => fxLine(x[0])) ? `<ul class="items">${out.filter(x => fxLine(x[0])).map(x => `<li><span>${iname(x[0])}${fxLine(x[0])}</span></li>`).join('')}</ul>` : ''}
     <h3>Details</h3><div class="facts"><span>Skill</span><span>${esc(skill)}${minS ? ' · min ' + minS : ''}</span><span>Fail chance</span><span>${Math.round(fail * 100)}%</span>
     <span>Time</span><span>${hrs(time)}</span><span>Recipe needed</span><span>${req ? 'yes, learn it first' : 'no'}</span><span>Value</span><span>${econText(id)}</span>
     ${cond.length ? `<span>Station must be</span><span>${cond.map(esc).join(', ')}</span>` : ''}${tags.length ? `<span>Learned from</span><span>${tags.map(esc).join(', ')}</span>` : ''}</div>`;

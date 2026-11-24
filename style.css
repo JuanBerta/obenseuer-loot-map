@@ -474,3 +474,15 @@ html.hc[data-theme=light]{--tx2:#2c323d}
 #hint{bottom:78px}
 #dbList .row .ct{max-width:55%}
 @media (max-width:820px){.tabs{flex:1 1 0;min-width:0}.dbtab{order:6;flex:none}.search{order:5}}
+
+/* recipe flow: ingredients → result, with the failure outcome underneath */
+.flow{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin:12px 0}
+.fl{display:flex;flex-wrap:wrap;gap:6px}
+.chip2{display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--cline);border-radius:var(--r1);padding:4px 9px;font-size:.875rem}
+.chip2 b{font-weight:600;color:var(--cmut);font-size:.8125rem}
+.chip2 .ic{margin-right:0}
+.chip2.ok{border-color:color-mix(in srgb,var(--acc) 60%,transparent);background:var(--acc-soft)}
+.chip2.bad{border-color:color-mix(in srgb,var(--bad) 55%,transparent);background:color-mix(in srgb,var(--bad) 10%,transparent)}
+.arrow{color:var(--cmut);font-size:1.125rem}
+.failtag{color:var(--bad);font-weight:600;font-size:.8125rem;white-space:nowrap}
+.craft .fl{margin-top:6px}
