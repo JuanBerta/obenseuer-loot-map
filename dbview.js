@@ -131,17 +131,17 @@ function tripOrder(vs) {
   }
   return out;
 }
-function tradeRun(raw, make) {
+function tradeRun(raw, make, o) {
   const buy = new Map(), sell = new Map(), find = [], nosell = []; let bt = 0, st = 0;
   const add = (m, v, l) => { if (!m.has(v)) m.set(v, []); m.get(v).push(l); };
-  for (const [id, n0] of Object.entries(raw)) { const n = Math.ceil(n0 - 1e-9), c = buyCost(id); if (!c.shop) { find.push([+id, n]); continue; } add(buy, c.v, { id: c.id, n, p: c.p }); bt += c.p * n; }
+  for (const [id, n0] of Object.entries(raw)) { const n = Math.ceil(n0 - 1e-9), c = buyCost(id); if (!c.shop || (o && o.pref[id] === 'find')) { find.push([+id, n]); continue; } add(buy, c.v, { id: c.id, n, p: c.p }); bt += c.p * n; }
   for (const [id, n] of Object.entries(make)) { const b = buyersOf(+id)[0]; if (!b) { nosell.push(+id); continue; } add(sell, b.v, { id: +id, n, p: b.p }); st += b.p * n; }
   if (!buy.size && !sell.size) return '';
   const stop = (v, ls, k) => `<span>${vl(v)}<br>${ls.map(l => `<small class="muted">${il(l.id)} × ${num(l.n)} · ${fmt(l.p)} OC each = ${fmt(l.p * l.n)} OC</small>`).join('<br>')}</span>${mapBtn(v.sc, iname(ls[0].id), k, v.n)}`;
   let h = `<h3>Trade run</h3><p>Buy ≈ ${fmt(bt)} OC · sell ≈ ${fmt(st)} OC · <b class="${st - bt >= 0 ? 'good' : 'bad'}">${profitTxt(st - bt)}</b></p>`;
   if (buy.size) h += `<p class="muted">1. Buy, in this order:</p>${ul(tripOrder([...buy.keys()]).map(v => stop(v, buy.get(v), 'Show the shop')))}`;
   if (sell.size) h += `<p class="muted">2. Sell, in this order:</p>${ul(tripOrder([...sell.keys()]).map(v => stop(v, sell.get(v), 'Show the shop')))}`;
-  if (find.length) h += `<p class="muted">No shop sells these, so find them yourself (not in the cost): ${find.map(([id, n]) => `${il(id)} × ${num(n)}`).join(', ')}</p>`;
+  if (find.length) h += `<p class="muted">To find, not buy (left out of the cost and the route): ${find.map(([id, n]) => `${il(id)} × ${num(n)}`).join(', ')}</p>`;
   if (nosell.length) h += `<p class="muted">No shop buys: ${nosell.map(il).join(', ')}</p>`;
   return h + `<p class="muted">Cheapest shop for each ingredient, best price for each product. Item quality, stolen goods and daily stock are ignored.</p>`;
 }
@@ -250,7 +250,7 @@ function shopChange(rid, d) { const L = shopGet(), n = Math.max(0, (L[rid] || 0)
 let optMem = null;
 const shopOpt = () => {
   if (!optMem) { try { optMem = JSON.parse(localStorage.getItem('obs-shop-opt') || 'null'); } catch (e) {} if (!optMem || typeof optMem !== 'object') optMem = {}; }
-  if (!['all', 'missing', 'off'].includes(optMem.mode)) optMem.mode = 'all'; if (!optMem.pref || typeof optMem.pref !== 'object') optMem.pref = {};   // pref: item id -> 'craft' or 'buy', overriding the default
+  if (!['all', 'missing', 'off'].includes(optMem.mode)) optMem.mode = 'all'; if (!optMem.pref || typeof optMem.pref !== 'object') optMem.pref = {};   // pref: item id -> 'craft', 'buy' or 'find' (you will find it, not buy it), overriding the default
   return optMem;
 };
 const optSave = () => { try { localStorage.setItem('obs-shop-opt', JSON.stringify(optMem)); } catch (e) {} };
@@ -267,7 +267,7 @@ function bestRecipe(id) {
   return bestMemo[id] = best;
 }
 // Break the ingredients down: 'all' crafts everything craftable, 'missing' only what nothing in the world drops or sells, 'off' none. The buttons override this per item.
-const wantCraft = (id, opt) => { const p = opt.pref[id]; return p === 'craft' || (opt.mode !== 'off' && p !== 'buy' && (opt.mode === 'all' || (!X.placed.has(id) && !X.sold.has(id)))); };
+const wantCraft = (id, opt) => { const p = opt.pref[id]; return p === 'craft' || (opt.mode !== 'off' && p !== 'buy' && p !== 'find' && (opt.mode === 'all' || (!X.placed.has(id) && !X.sold.has(id)))); };
 function expandNeeds(base, opt) {
   const raw = {}, steps = {}, outs = {}, order = [];
   const visit = (id, n, stack) => {
@@ -627,7 +627,7 @@ function listCard() {
   for (const rid of rids) { const n = L[rid], r = X.R[rid]; r[7].forEach(x => { need[x[0]] = (need[x[0]] || 0) + x[1] * n; }); r[8].forEach(x => { make[x[0]] = (make[x[0]] || 0) + x[1] * n; }); cost += X.RC[rid].cost * n; worth += X.RC[rid].worth * n; }
   for (const id of Object.keys(need)) { if (make[id]) need[id] = Math.max(0, need[id] - make[id]); if (!need[id]) delete need[id]; }   // a recipe on the list may already make what another needs
   const E = expandNeeds(need, o), byName = a => a.sort((x, y) => iname(x[0]).localeCompare(iname(y[0])));
-  const rawCost = Object.entries(E.raw).reduce((a, [id, n]) => a + X.unit(id) * up(n), 0);
+  const rawCost = Object.entries(E.raw).reduce((a, [id, n]) => a + (o.pref[id] === 'find' ? 0 : X.unit(id) * up(n)), 0);
   const crafted = E.order.length;
   modCode = 'OBSLIST:' + JSON.stringify({ v: 1, recipes: rids.map(r => [X.R[r][1], L[r]]), steps: E.order.map(r => [X.R[r][1], up(E.steps[r]), E.outs[r]]), raw: Object.entries(E.raw).map(([id, n]) => [+id, up(n)]) });
   return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ${o.mode !== 'off' || crafted ? 'raw materials' : 'ingredients'} ≈ ${fmt(o.mode !== 'off' || crafted ? rawCost : cost)} OC · worth ≈ ${fmt(worth)} OC</div>
@@ -636,9 +636,9 @@ function listCard() {
     ${crafted ? `<h3>Craft these first · ${crafted}</h3>${ul(E.order.map(rid => { const out = E.outs[rid], per = X.R[rid][8].find(x => x[0] === out)[1], b = up(E.steps[rid]);
       return `<span>${rl(rid)} <small class="muted">× ${b} → ${num(per * b)} ${esc(iname(out))}</small></span><button type="button" class="shopbtn mini" data-pref="${out}:buy" title="Find or buy it instead of crafting it">Find or buy instead</button>`; }))}` : ''}
     <h3>${o.mode !== 'off' || crafted ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = bestRecipe(+id) && !(DB.items[id] && DB.items[id][6].length);
-      return `<span>${il(id)} <small class="muted">× ${num(up(n))}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}`; }))}
+      return `<span>${il(id)} <small class="muted">× ${num(up(n))}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}${o.pref[id] === 'find' ? `<button type="button" class="shopbtn mini" data-pref="${id}:buy" title="Count it as bought again">Buy it instead</button>` : `<button type="button" class="shopbtn mini" data-pref="${id}:find" title="You will find it, not buy it: it stays out of the cost and the shopping route">Find it instead</button>`}`; }))}
     <h3>You will make</h3>${ul(byName(Object.entries(make)).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}</small>`))}
-    ${tradeRun(E.raw, make)}
+    ${tradeRun(E.raw, make, o)}
     <button type="button" class="dbmore" data-copymod>Copy list for the mod</button> <button type="button" class="dbmore" data-shop="clear">Clear the list</button>
     <p class="muted">In the game, open the Loot Map panel and press “Paste list from the website”: the mod shows what you still need and where to find it.</p></div>`;
 }
