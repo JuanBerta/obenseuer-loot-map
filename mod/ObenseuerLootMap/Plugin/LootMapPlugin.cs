@@ -757,6 +757,17 @@ public partial class LootMapPlugin : BaseUnityPlugin
 		}
 		try
 		{
+			LoadingScreen ls = LoadingScreen.instance;
+			if ((Object)(object)ls != (Object)null && (ls.Active || ls.Fading))
+			{
+				return true;
+			}
+		}
+		catch
+		{
+		}
+		try
+		{
 			GameUIController instance = GameUIController.instance;
 			if ((Object)(object)instance != (Object)null && (instance.IsAnyMenuOpen() || instance.IsMenuVisible || !instance.GameUIVisible()))
 			{
