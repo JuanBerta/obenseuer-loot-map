@@ -214,7 +214,8 @@ async function openScene(slug, keepView) {
   const my = ++openSeq;
   const meta = SC[slug] || SC['open-sewer-bazaar'];
   if (S.scene !== meta.slug) S.selF = null;
-  if (S.scene !== meta.slug && !keepView) { S.sel = null; S.floor = -1; }
+  const fresh = S.scene !== meta.slug && !keepView;
+  if (fresh) { S.sel = null; S.floor = -1; }
   S.scene = meta.slug;
   if (!searching()) { S.region = meta.group; renderTabs(); }
   S.data = null; paths = null; S.floors = []; renderFloors();   // nothing of the previous place is drawn under the new name
@@ -226,6 +227,10 @@ async function openScene(slug, keepView) {
   if (my !== openSeq || S.scene !== meta.slug) return;   // a newer tap took over; it will finish the job
   $('#loading').classList.add('hidden'); S.data = data;
   S.floors = computeFloors(S.data); if (S.floor >= S.floors.length) S.floor = -1;
+  if (fresh && S.floors.length > 1 && S.floor < 0) {   // a building opens on its busiest floor, not on all of them stacked together
+    const n = S.floors.map(fl => S.data.points.filter(p => p.active && p.y >= fl.lo && p.y <= fl.hi).length);
+    S.floor = n.indexOf(Math.max(...n));
+  }
   S.layers.plan = S.userPlan ?? !(meta.outdoor && meta.map); $('#lyPlan').checked = S.layers.plan;
   buildPaths(); renderFloors();
   if (S.pendingShop) { const t = S.pendingShop; S.pendingShop = null; const f = S.data.services.find(x => x.kind === 'vendor' && x.title === t) || (S.data.people || []).find(x => x.name === t); if (f) { S.selF = f; S.pendingFocus = f; } }
