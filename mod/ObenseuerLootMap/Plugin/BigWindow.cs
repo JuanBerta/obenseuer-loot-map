@@ -166,6 +166,14 @@ namespace ObenseuerLootMap
             if (GUILayout.Button("Refresh", bigTabOff)) { try { bigRows = BuildTrade(); } catch (Exception) { } }
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
+            if (Db.containers.Count > 0)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Sell liquids in", labelStyle, GUILayout.Width(100));
+                if (GUILayout.Button(SaleContainerLabel() + "   (click to change)", bigTabOff)) { NextSaleContainer(); try { bigRows = BuildTrade(); } catch (Exception) { } }
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+            }
             GUILayout.Label("Real shop prices, after the fail chance and with the quality your current skills would give. ~ = an ingredient is not sold in any shop.", smallStyle);
             var rows = (bigRows ?? new List<TradeRow>());
             var list = (bigSort == 0 ? rows.OrderByDescending(r => r.profit) : rows.OrderByDescending(r => r.perHour)).Take(100).ToList();

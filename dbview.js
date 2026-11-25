@@ -173,6 +173,12 @@ function skillsCard() {
       ${Object.keys(saveInfo.game).length ? `<h3>Other game skills</h3><div class="facts">${Object.entries(saveInfo.game).filter(([k]) => !names.includes(k)).sort().map(([k, v]) => `<span>${esc(k)}</span><span>Level ${v}</span>`).join('')}</div>` : ''}` : ''}
     <p class="muted">The game caps skills at 15. Your levels are kept in this browser only.</p></div>`;
 }
+// the container liquids are sold in: its liquid value factor multiplies what a shop pays for the liquid (a filled container is worth its own value + liters × liquid value × factor)
+let contPick = 'best'; try { contPick = localStorage.getItem('obs-cont') || 'best'; } catch (e) {}
+const contList = () => (DB.containers || []).slice().sort((a, b) => b[2] - a[2] || b[1] - a[1]);
+const saleCont = () => { const l = contList(); return !l.length || contPick === 'none' ? null : l.find(c => String(c[0]) === contPick) || l[0]; };
+const isLiquid = id => !!(DB.items[id] && DB.items[id][2].includes('Liquid'));
+const saleF = id => { const c = isLiquid(id) && saleCont(); return c ? c[2] : 1; };
 const RPmemo = {}, CPmemo = {};
 const clearRP = () => { for (const k in RPmemo) delete RPmemo[k]; for (const k in CPmemo) delete CPmemo[k]; };
 // Profit per unit of an item when you craft it: at real shop prices, your skill and quality when a shop buys it, base values otherwise (so the sign matches the recipe's own numbers).
@@ -181,14 +187,14 @@ const recipeProfit = rid => { const p = realProfit(rid); return p.sellable ? p.p
 function realProfit(rid) {
   if (RPmemo[rid]) return RPmemo[rid];
   const r = X.R[rid], ing = r[7].map(x => Object.assign({ id: x[0], n: x[1], div: X.div(r, x[0]) }, buyCost(x[0], x[1])));
-  const q = qualityOf(r), outs = r[8].map(x => { const b = buyersOf(x[0])[0], qv = hasQuality(x[0]) ? qualityValue(q) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv)) : 0, v: b ? b.v : null, q: qv !== 1 || hasQuality(x[0]) ? q : null }; });
-  const fail = failNow(r), failOuts = (r[9] || []).map(x => { const b = buyersOf(x[0])[0], qv = hasQuality(x[0]) ? qualityValue(q * 0.5) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv)) : 0, v: b ? b.v : null }; });
+  const q = qualityOf(r), outs = r[8].map(x => { const b = buyersOf(x[0])[0], qv = hasQuality(x[0]) ? qualityValue(q) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv * saleF(x[0]))) : 0, v: b ? b.v : null, q: qv !== 1 || hasQuality(x[0]) ? q : null }; });
+  const fail = failNow(r), failOuts = (r[9] || []).map(x => { const b = buyersOf(x[0])[0], qv = hasQuality(x[0]) ? qualityValue(q * 0.5) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv * saleF(x[0]))) : 0, v: b ? b.v : null }; });
   const cost = ing.reduce((a, x) => a + x.p * x.n / x.div, 0), rev = outs.reduce((a, x) => a + x.p * x.n, 0) * (1 - fail) + failOuts.reduce((a, x) => a + x.p * x.n, 0) * fail, profit = rev - cost;
   return RPmemo[rid] = { q, fail, failOuts, ing, outs, cost, rev, profit, hour: r[6] > 0 ? profit * 3600 / r[6] : null, sellable: outs.some(o => o.v), estimated: ing.some(x => !x.shop) };
 }
 const profitTxt = n => (n >= 0 ? '+' : '−') + fmt(Math.abs(n)) + ' OC';
 const realText = rid => { const p = realProfit(rid); if (!p.sellable) return '<span class="muted">No shop buys what this makes.</span>';
-  return `At shops: pay ≈ ${fmt(p.cost)} OC${p.estimated ? '*' : ''} · get ≈ ${fmt(p.rev)} OC · <b class="${p.profit >= 0 ? 'good' : 'bad'}">${profitTxt(p.profit)}</b>${p.hour != null ? ` · ${profitTxt(p.hour)}/h` : ''}`; };
+  const lq = realProfit(rid).outs.some(o => o.v && isLiquid(o.id)) && saleCont(); return `${lq ? `<span class="muted">Liquid sold in a ${esc(iname(lq[0]))} (${lq[1]} L, ×${lq[2]}). </span>` : ''}At shops: pay ≈ ${fmt(p.cost)} OC${p.estimated ? '*' : ''} · get ≈ ${fmt(p.rev)} OC · <b class="${p.profit >= 0 ? 'good' : 'bad'}">${profitTxt(p.profit)}</b>${p.hour != null ? ` · ${profitTxt(p.hour)}/h` : ''}`; };
 function tradeBlock(rid) {
   const p = realProfit(rid), r = X.R[rid];
   const buy = p.ing.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}${x.div > 1 ? ` use${x.n === 1 ? '' : 's'} of ${x.div}` : ''}</small></span><small>${x.shop ? `${fmt(x.p)} OC ${x.div > 1 ? `per item (≈ ${fmt(x.p / x.div)} OC per use)` : 'each'} at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : `not sold · ≈ ${fmt(x.p)} OC`}</small>`);
@@ -418,7 +424,9 @@ function rows() {
 function filters() {
   const opt = (list, all) => `<select id="dbF"><option value="">${all}</option>${list.map(c => `<option ${V.f === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
   const so = (k, t) => `<option value="${k}" ${V.sort === k ? 'selected' : ''}>${t}</option>`;
-  const sort = `<select id="dbSort"><option value="name">A–Z</option>${so('value', 'Price ↓')}${V.sec === 'items' && V.e ? so('eh', 'Strongest effect first') + so('el', 'Weakest effect first') : ''}</select>`;
+  const contSel = () => { const l = contList(); if (!l.length) return ''; const c = saleCont(), nm = c => `${iname(c[0])} (${c[1]} L, ×${c[2]})`;
+  return ` <select id="dbCont" aria-label="Sell liquids in" title="Liquids sell for more or less depending on the container. A shop pays for the whole filled container."><option value="best"${contPick === 'best' ? ' selected' : ''}>Liquids in: best container</option>${l.map(x => `<option value="${x[0]}"${contPick === String(x[0]) ? ' selected' : ''}>Liquids in: ${esc(nm(x))}</option>`).join('')}<option value="none"${contPick === 'none' ? ' selected' : ''}>Liquids in: plain liters</option></select>`; };
+const sort = `<select id="dbSort"><option value="name">A–Z</option>${so('value', 'Price ↓')}${V.sec === 'items' && V.e ? so('eh', 'Strongest effect first') + so('el', 'Weakest effect first') : ''}</select>`;
   if (V.sec === 'items') {
     const effOpts = cur => STATS.flatMap(([k, , up, down]) => [[k + '+', up], [k + '-', down]]).filter(([key, t]) => t && X.statCount[key])
       .map(([key, t]) => `<option value="${key}" ${cur === key ? 'selected' : ''}>${esc(t)} (${X.statCount[key]})</option>`).join('');
@@ -431,7 +439,7 @@ function filters() {
   }
   if (V.sec === 'upgrades') return '';
   if (V.sec === 'tenement') return opt(X.itemCats, 'All categories') + sort;
-  if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('rprofit', 'Best profit at shops')}${so('rhour', 'Best profit per hour')}${so('profit', 'Best craft profit (base values)')}${so('cost', 'Cheapest ingredients')}</select>`;
+  if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('rprofit', 'Best profit at shops')}${so('rhour', 'Best profit per hour')}${so('profit', 'Best craft profit (base values)')}${so('cost', 'Cheapest ingredients')}</select>` + contSel();
   if (V.sec === 'tenants') return `<select id="dbF" aria-label="Filter tenants"><option value="">All tenants</option>${[['Small', 'Accept a small apartment'], ['Medium', 'Accept a medium apartment'], ['Large', 'Accept a large apartment'], ['OC', 'Pay OC'], ['RM', 'Pay RM']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   if (V.sec === 'furniture') return opt(X.fCats, 'All categories') + sort;
   if (V.sec === 'vendors') return `<select id="dbF"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
@@ -457,6 +465,7 @@ function renderSide() {
   const q = $('#dbQ'); q.oninput = () => { V.q = q.value; V.lim = 300; renderList(); };
   const f = $('#dbF'); if (f) f.onchange = () => { V.f = f.value; V.lim = 300; renderList(); };
   const s = $('#dbSort'); if (s) s.onchange = () => { V.sort = s.value; renderList(); };
+  const sc = $('#dbCont'); if (sc) sc.onchange = () => { contPick = sc.value; try { localStorage.setItem('obs-cont', contPick); } catch (e) {} clearRP(); renderList(); renderDetail(); };
   const e = $('#dbE'); if (e) e.onchange = () => {
     V.e = e.value; V.lim = 300; if (!V.e) { V.e2 = ''; V.min = ''; }
     V.sort = V.e ? 'eh' : (['eh', 'el', 'ep'].includes(V.sort) ? 'name' : V.sort); renderSide();

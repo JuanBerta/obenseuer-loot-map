@@ -14,7 +14,7 @@ namespace ObenseuerLootMap
     // 0.6.0: door lock states, emptied-container memory, value / effect search, shopping list, route planner, shop hours and prices.
     public partial class LootMapPlugin
     {
-        ConfigEntry<bool> cfgHideEmpty, cfgShopHud, cfgMoreTools;
+        ConfigEntry<bool> cfgHideEmpty, cfgShopHud, cfgMoreTools; ConfigEntry<int> cfgSaleContainer;
 
         void BindToolsConfig()
         {
@@ -24,6 +24,7 @@ namespace ObenseuerLootMap
             BindMemoryConfig();
             cfgHideEmpty = Config.Bind("Filters", "HideEmptiedContainers", false, "Hide containers you have already emptied (they are shown hollow otherwise).");
             cfgShopHud = Config.Bind("Display", "ShoppingListOnScreen", true, "Show the shopping list (from the website) as a checklist on screen.");
+            cfgSaleContainer = Config.Bind("Profit", "SaleContainer", 0, "Container that liquids are sold in for the profit finder: 0 = the best one, -1 = none (plain liters), or an item ID such as 17780.");
             cfgMoreTools = Config.Bind("Display", "ShowMoreTools", true, "Show the value / effect / shopping list / route tools in the panel.");
         }
 
@@ -400,7 +401,7 @@ namespace ObenseuerLootMap
 
 
         // ---------------- profit finder: recipes ranked by what they earn at real shop prices ----------------
-        class TradeRow { public string key, name; public float cost, rev, profit, perHour; public bool estimated; public string route; public HashSet<int> ids = new HashSet<int>(); }
+        class TradeRow { public string key, name; public float cost, rev, profit, perHour; public bool estimated; public float liters, litersRev; public string route; public HashSet<int> ids = new HashSet<int>(); }
         List<TradeRow> tradeAll; bool tradeOpen; int tradeSort; List<VendorData> tradeVendors;
         readonly Dictionary<int, (float p, VendorData v)> tradeCheap = new Dictionary<int, (float p, VendorData v)>(), tradeBest = new Dictionary<int, (float p, VendorData v)>();
         static string Money(float x) => (x >= 0 ? "+" : "−") + Mathf.Abs(x).ToString("0.#");
@@ -445,8 +446,33 @@ namespace ObenseuerLootMap
             if (mn > 0f && mn > lv) n2 *= Mathf.Pow(1f + n2, mn - lv);
             return Mathf.Clamp01(n2);
         }
+        // the container liquids are sold in: its liquid value factor multiplies what a shop pays for the liquid (a filled container is worth its own value + liters x liquid value x factor)
+        JArray SaleContainer()
+        {
+            int id = cfgSaleContainer.Value;
+            if (id < 0 || Db.containers.Count == 0) return null;
+            if (id > 0) { var c = Db.containers.FirstOrDefault(x => (int)x[0] == id); if (c != null) return c; }
+            return Db.containers.OrderByDescending(x => (float)x[2]).ThenByDescending(x => (float)x[1]).First();
+        }
+        List<JArray> SaleContainers() => Db.containers.OrderByDescending(x => (float)x[2]).ThenByDescending(x => (float)x[1]).ToList();
+        string SaleContainerLabel()
+        {
+            if (Db.containers.Count == 0) return "-";
+            var c = SaleContainer();
+            string pre = cfgSaleContainer.Value == 0 ? "Best: " : "";
+            return c == null ? "None (plain liters)" : pre + Db.ItemName((int)c[0]) + " (" + (float)c[1] + " L, x" + (float)c[2] + ")";
+        }
+        // one click moves to the next choice: best, then each container, then none
+        void NextSaleContainer()
+        {
+            var l = SaleContainers(); int cur = cfgSaleContainer.Value;
+            if (cur == 0) cfgSaleContainer.Value = l.Count > 0 ? (int)l[0][0] : -1;
+            else if (cur < 0) cfgSaleContainer.Value = 0;
+            else { int i = l.FindIndex(x => (int)x[0] == cur); cfgSaleContainer.Value = i >= 0 && i + 1 < l.Count ? (int)l[i + 1][0] : -1; }
+        }
         List<TradeRow> BuildTrade()
         {
+            var cont = SaleContainer(); float cf = cont != null ? (float)cont[2] : 1f;
             var vendors = tradeVendors ??= Db.scenes.Values.SelectMany(sc => sc.vendors).ToList();
             var cheapest = tradeCheap; var best = tradeBest;   // shop prices never change, so they are kept between rebuilds
             (float p, VendorData v) Cheap(int id)
@@ -480,7 +506,7 @@ namespace ObenseuerLootMap
                 foreach (JArray x in (JArray)r[5])
                 {
                     int id = (int)x[0]; float n = (float)x[1]; var b = Best(id); row.ids.Add(id);
-                    if (b.v != null) { float qv = Db.ItemField(id, 3).Contains("ItemQualityData") ? QualityValue(CraftQuality(r, fail)) : 1f; row.rev += Mathf.Max(1f, Mathf.Round(b.p * qv)) * n; sellAt ??= b.v.n; }
+                    if (b.v != null) { float qv = Db.ItemField(id, 3).Contains("ItemQualityData") ? QualityValue(CraftQuality(r, fail)) : 1f; bool liq = Db.IsLiquid(id); float one = Mathf.Max(1f, Mathf.Round(b.p * qv * (liq ? cf : 1f))); row.rev += one * n; if (liq) { row.liters += n; row.litersRev += one * n; } sellAt ??= b.v.n; }
                 }
                 if (sellAt == null) continue;
                 float failNow = FailNow(r, fail), failRev = 0f;
@@ -488,10 +514,11 @@ namespace ObenseuerLootMap
                     foreach (JArray x in fo)
                     {
                         int id = (int)x[0]; var b = Best(id);
-                        if (b.v != null) { float qv = Db.ItemField(id, 3).Contains("ItemQualityData") ? QualityValue(CraftQuality(r, fail) * 0.5f) : 1f; failRev += Mathf.Max(1f, Mathf.Round(b.p * qv)) * (float)x[1]; }
+                        if (b.v != null) { float qv = Db.ItemField(id, 3).Contains("ItemQualityData") ? QualityValue(CraftQuality(r, fail) * 0.5f) : 1f; failRev += Mathf.Max(1f, Mathf.Round(b.p * qv * (Db.IsLiquid(id) ? cf : 1f))) * (float)x[1]; }
                     }
                 row.rev = row.rev * (1f - failNow) + failRev * failNow; row.profit = row.rev - row.cost; row.perHour = time > 0 ? row.profit * 3600f / time : float.MinValue;
                 row.route = (buyAt.Count > 0 ? Loc.T("Buy at") + " " + string.Join(", ", buyAt.Take(3)) + " · " : "") + Loc.T("sell at") + " " + sellAt;
+                if (row.liters > 0.0001f && cont != null) row.route += " · in " + Db.ItemName((int)cont[0]) + ": a full " + (float)cont[1] + " L ≈ " + Mathf.Round((float)cont[3] * 0.9f + row.litersRev / row.liters * (float)cont[1]) + " OC";
                 rows.Add(row);
             }
             return rows;
@@ -507,6 +534,7 @@ namespace ObenseuerLootMap
             GUILayout.Label(Loc.T("Sort by"), labelStyle, GUILayout.Width(70));
             if (GUILayout.Button(Loc.T(tradeSort == 0 ? "Profit" : "Profit per hour"), btnStyle)) tradeSort = 1 - tradeSort;
             GUILayout.EndHorizontal();
+            if (Db.containers.Count > 0 && GUILayout.Button("Sell liquids in: " + SaleContainerLabel(), btnStyle)) { NextSaleContainer(); tradeAll = BuildTrade(); }
             var top = (tradeSort == 0 ? tradeAll.OrderByDescending(r => r.profit) : tradeAll.OrderByDescending(r => r.perHour)).Take(8).ToList();
             if (top.Count == 0) { GUILayout.Label(Loc.T("No profitable recipes found"), smallStyle); return; }
             foreach (var r in top)

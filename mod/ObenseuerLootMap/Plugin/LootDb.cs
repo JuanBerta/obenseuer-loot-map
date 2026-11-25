@@ -21,6 +21,8 @@ public class LootDb
 
 	public Dictionary<string, JArray> recipeInputs = new Dictionary<string, JArray>();
 
+	public List<JArray> containers = new List<JArray>();
+
 	public Dictionary<string, JArray> trade = new Dictionary<string, JArray>();
 
 	public Dictionary<string, List<object>> furniture = new Dictionary<string, List<object>>();

@@ -165,7 +165,13 @@ used=set(t for s in S.values() for t in [p.get('t') for p in s['points']] if t)|
 for t in used_stock: need.update(loot[t][0]); need.update(loot[t][1])
 for r in recipe_inputs.values(): need.update(r[2])
 for r in trade.values(): need.update(x[0] for x in r[4]+r[5])
-data=dict(version=7,furniture=furniture,typeSkills=type_skills,recipeInputs=recipe_inputs,trade=trade,scenes=S,loot={k:v for k,v in loot.items() if k in used},
+# containers a liquid can be sold in: [id, liters it holds, liquid value factor, own value]; a filled one is worth its own value + liters x liquid value x factor
+containers=[]
+for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig')):
+    for m in it.get('Meta') or []:
+        if isinstance(m,dict) and str(m.get('$type','')).endswith('ItemLiquidData') and m.get('liquidMaxAmount',0)>=1:
+            containers.append([it['ID'],m['liquidMaxAmount'],m.get('liquidValueFactor',1),it.get('BaseValue',0)]); need.add(it['ID'])
+data=dict(version=7,containers=containers,furniture=furniture,typeSkills=type_skills,recipeInputs=recipe_inputs,trade=trade,scenes=S,loot={k:v for k,v in loot.items() if k in used},
           items={str(k):v for k,v in items.items()},recipes=recipes)
 os.makedirs(os.path.dirname(os.path.abspath(out)),exist_ok=True)
 json.dump(data,open(out,'w',encoding='utf-8'),separators=(',',':'),ensure_ascii=False)

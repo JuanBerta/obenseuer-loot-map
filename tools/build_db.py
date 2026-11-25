@@ -146,7 +146,7 @@ else: print('no icons: run tools/icons.py first to add the in-game icons')
 landmark_icons = {l['t']: l['icon'] for l in IDX['landmarks'] if l.get('icon') and not l.get('w')}
 
 db = dict(icons=icons, landmarkIcons=landmark_icons, items={str(k): v for k, v in items.items()}, recipes=recipes, loot=loot, vendors=vendors, furniture=furniture,
-          typeSkills=M.get('typeSkills', {}), stations=stations, sceneCats=scene_cats, tenants=tenants, people=people,
+          typeSkills=M.get('typeSkills', {}), containers=M.get('containers', []), stations=stations, sceneCats=scene_cats, tenants=tenants, people=people,
           notes=sorted(set(notes)))
 # ---- game version and Steam build for the footer (optional: needs the Steam appmanifest next to the game folder)
 import glob, datetime
