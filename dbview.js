@@ -64,14 +64,14 @@ function index() {
   const unit = id => { const it = I[id]; if (!it) return 0; const g = it[6].map(m => I[m] ? I[m][1] : Infinity); const lo = Math.min(...g); return g.length && isFinite(lo) ? lo : it[1]; };
   // multi-use items (a bottle of ink is 50 uses): a recipe that spends ammo takes one use per unit, not the whole item
   X.div = (r, id) => { const it = I[id]; return r[13] && r[13][3] && it && it[10] > 1 ? it[10] : 1; };
-  X.unit = unit; X.RC = {}; X.craftCost = {}; X.craftProfit = {};
+  X.unit = unit; X.RC = {}; X.craftCost = {}; X.craftProfit0 = {};
   for (const r of DB.recipes) {
     const cost = r[7].reduce((a, x) => a + unit(x[0]) * x[1] / X.div(r, x[0]), 0), worth = r[8].reduce((a, x) => a + (I[x[0]] ? I[x[0]][1] : 0) * x[1], 0);
     X.RC[r[0]] = { cost, worth, profit: worth - cost };
     for (const o of r[8]) {
       const per = cost / Math.max(o[1], 1), pr = (I[o[0]] ? I[o[0]][1] : 0) - per;
       if (X.craftCost[o[0]] == null || per < X.craftCost[o[0]]) X.craftCost[o[0]] = per;
-      if (X.craftProfit[o[0]] == null || pr > X.craftProfit[o[0]]) X.craftProfit[o[0]] = pr;
+      if (X.craftProfit0[o[0]] == null || pr > X.craftProfit0[o[0]]) X.craftProfit0[o[0]] = pr;
     }
   }
   X.sold = new Set(Object.keys(I).map(Number).filter(id => DB.vendors.some(v => sells(v, id))));
@@ -120,7 +120,7 @@ const failNow = r => {
 const qualityValue = q => q > 1 ? q * q : 0.5 * q * q + 0.25 * q + 0.25;
 const hasQuality = id => !!(DB.items[id] && DB.items[id][8].includes('ItemQualityData'));
 const skillSelect = sk => `<select data-skill="${esc(sk)}" aria-label="Your ${esc(sk)} level" title="Your ${esc(sk)} level: sets the quality of what you craft, which sets what shops pay">${Array.from({ length: 16 }, (_, i) => `<option value="${i}" ${i === lvlOf(sk) ? 'selected' : ''}>${esc(sk)} ${i}</option>`).join('')}</select>`;
-function setSkill(sk, v) { skillLv[sk] = v; try { localStorage.setItem('obs-skills', JSON.stringify(skillLv)); } catch (e) {} for (const k in RPmemo) delete RPmemo[k]; if (V.sec === 'recipes') renderList(); renderDetail(); }
+function setSkill(sk, v) { skillLv[sk] = v; try { localStorage.setItem('obs-skills', JSON.stringify(skillLv)); } catch (e) {} clearRP(); if (V.sec === 'recipes') renderList(); renderDetail(); }
 // ---------- skills from a save (Globals.tnmt: the game's skills; mod skills keep their XP in their own save entries; Woodcutting in woodcutting.json) ----------
 const MODSK = [['Scavenging', 'ScavengeTimer_Stash_001'], ['Haggling', 'JuanBerta_Haggling_Save_001'], ['Stealth', 'JuanBerta_Stealth_Save_001'], ['Fraud', 'JuanBerta_ScamArtist_Save_001']];
 const modLevel = xp => xp > 0 ? Math.floor(Math.min(10, 1 + xp / 1000)) : 0;   // the Skills Pack: learned at the first XP, 1000 XP per level, up to 10
@@ -145,7 +145,7 @@ async function loadSaves(files) {
   const used = new Set(DB.recipes.map(r => r[3]));
   let n = 0; for (const [k, v] of Object.entries(info.game)) if (used.has(k)) { skillLv[k] = Math.max(0, Math.min(15, v)); n++; }
   try { localStorage.setItem('obs-skills', JSON.stringify(skillLv)); localStorage.setItem('obs-saveinfo', JSON.stringify(info)); } catch (e) {}
-  saveInfo = info; for (const k in RPmemo) delete RPmemo[k];
+  saveInfo = info; clearRP();
   saveMsg = (n ? n + ' crafting skill levels loaded from your save. ' : '') + notes.join(' ');
   renderDetail();
 }
@@ -165,7 +165,11 @@ function skillsCard() {
       ${Object.keys(saveInfo.game).length ? `<h3>Other game skills</h3><div class="facts">${Object.entries(saveInfo.game).filter(([k]) => !names.includes(k)).sort().map(([k, v]) => `<span>${esc(k)}</span><span>Level ${v}</span>`).join('')}</div>` : ''}` : ''}
     <p class="muted">The game caps skills at 15. Your levels are kept in this browser only.</p></div>`;
 }
-const RPmemo = {};
+const RPmemo = {}, CPmemo = {};
+const clearRP = () => { for (const k in RPmemo) delete RPmemo[k]; for (const k in CPmemo) delete CPmemo[k]; };
+// Profit per unit of an item when you craft it: at real shop prices, your skill and quality when a shop buys it, base values otherwise (so the sign matches the recipe's own numbers).
+const craftProfitOf = id => { if (id in CPmemo) return CPmemo[id]; let best = null; for (const rid of X.makes[id] || []) { const p = realProfit(rid), o = X.R[rid][8].find(x => x[0] === +id), n = Math.max(o ? o[1] : 1, 1), v = p.sellable ? p.profit / n : X.craftProfit0[id]; if (best == null || v > best) best = v; } return CPmemo[id] = best; };
+const recipeProfit = rid => { const p = realProfit(rid); return p.sellable ? p.profit : X.RC[rid].profit; };
 function realProfit(rid) {
   if (RPmemo[rid]) return RPmemo[rid];
   const r = X.R[rid], ing = r[7].map(x => Object.assign({ id: x[0], n: x[1], div: X.div(r, x[0]) }, buyCost(x[0], x[1])));
@@ -350,7 +354,7 @@ const shopCtl = rid => { const n = shopGet()[rid] || 0; return n
   ? `<span class="shopctl"><span>On the list</span>${qtyCtl(rid, n)}</span>`
   : `<button type="button" class="shopbtn" data-shop="${rid}" data-d="1">+ Shopping list</button>`; };
 const shopBtn = rid => `<span class="shopwrap" data-rid="${rid}">${shopCtl(rid)}</span>`;
-const econText = rid => { const e = X.RC[rid]; return `Ingredients ≈ ${fmt(e.cost)} OC · worth ≈ ${fmt(e.worth)} OC · <b class="${e.profit >= 0 ? 'good' : 'bad'}">${e.profit >= 0 ? '+' : '−'}${fmt(Math.abs(e.profit))} OC</b>`; };
+const econText = rid => { if (realProfit(rid).sellable) return realText(rid); const e = X.RC[rid]; return `Ingredients ≈ ${fmt(e.cost)} OC · worth ≈ ${fmt(e.worth)} OC · <b class="${e.profit >= 0 ? 'good' : 'bad'}">${e.profit >= 0 ? '+' : '−'}${fmt(Math.abs(e.profit))} OC</b>`; };
 const fxLine = id => { const st = DB.items[id] && DB.items[id][9]; if (!st) return ''; const t = STATS.filter(([k]) => st[k]).slice(0, 4).map(([k, l]) => `${l} ${sgn(st[k])}`); return t.length ? `<br><small class="muted">${t.join(' · ')}</small>` : ''; };
 
 // ---------- lists ----------
@@ -368,14 +372,14 @@ function rows() {
     const mag = id => ek ? Math.abs(stat(id, ek)) : 0, per = id => I[id][1] > 0 ? mag(id) / I[id][1] : -1, BIG = 1e12;
     const name = (x, y) => I[x][0].localeCompare(I[y][0]);
     const cmp = { eh: (x, y) => mag(y) - mag(x), el: (x, y) => mag(x) - mag(y), ep: (x, y) => per(y) - per(x), value: (x, y) => I[y][1] - I[x][1],
-      cost: (x, y) => (X.craftCost[x] ?? BIG) - (X.craftCost[y] ?? BIG), profit: (x, y) => (X.craftProfit[y] ?? -BIG) - (X.craftProfit[x] ?? -BIG) }[V.sort];
+      cost: (x, y) => (X.craftCost[x] ?? BIG) - (X.craftCost[y] ?? BIG), profit: (x, y) => (craftProfitOf(y) ?? -BIG) - (craftProfitOf(x) ?? -BIG) }[V.sort];
     a.sort(cmp ? (x, y) => cmp(x, y) || name(x, y) : name);
     return a.map(id => {
       const parts = [];
       if (ek) parts.push(sgn(stat(id, ek)) + ' ' + STAT[ek][1].toLowerCase());
       if (V.sort === 'ep' && ek) parts.push(per(id) < 0 ? '–' : +per(id).toFixed(2) + '/OC');
       if (V.sort === 'cost') parts.push('costs ' + fmt(X.craftCost[id]) + ' OC');
-      if (V.sort === 'profit') parts.push((X.craftProfit[id] >= 0 ? '+' : '−') + fmt(Math.abs(X.craftProfit[id])) + ' OC');
+      if (V.sort === 'profit') { const cp = craftProfitOf(id); parts.push((cp >= 0 ? '+' : '−') + fmt(Math.abs(cp)) + ' OC'); }
       if (!parts.length) parts.push((X.inTables[id] ? '◆ ' : '') + (X.makes[id] ? '⚒ ' : '') + I[id][1] + ' OC');
       return [id, I[id][0], parts.join(' · '), iIco(id)];
     });
@@ -387,9 +391,9 @@ function rows() {
     case 'recipes': return DB.recipes.filter(r => (m(r[1]) || r[8].some(x => m(iname(x[0])))) && (!V.f || r[2] === V.f) && (V.sort !== 'rprofit' && V.sort !== 'rhour' || realProfit(r[0]).sellable))
       .sort(V.sort === 'rprofit' ? (a, b) => realProfit(b[0]).profit - realProfit(a[0]).profit || a[1].localeCompare(b[1])
         : V.sort === 'rhour' ? (a, b) => (realProfit(b[0]).hour ?? -1e12) - (realProfit(a[0]).hour ?? -1e12) || a[1].localeCompare(b[1])
-        : V.sort === 'profit' ? (a, b) => X.RC[b[0]].profit - X.RC[a[0]].profit || a[1].localeCompare(b[1])
+        : V.sort === 'profit' ? (a, b) => recipeProfit(b[0]) - recipeProfit(a[0]) || a[1].localeCompare(b[1])
         : V.sort === 'cost' ? (a, b) => X.RC[a[0]].cost - X.RC[b[0]].cost || a[1].localeCompare(b[1]) : (a, b) => a[1].localeCompare(b[1]))
-      .map(r => [r[0], r[1], V.sort === 'rprofit' ? profitTxt(realProfit(r[0]).profit) : V.sort === 'rhour' ? (realProfit(r[0]).hour == null ? '–' : profitTxt(realProfit(r[0]).hour) + '/h') : V.sort === 'profit' ? (X.RC[r[0]].profit >= 0 ? '+' : '−') + fmt(Math.abs(X.RC[r[0]].profit)) + ' OC' : V.sort === 'cost' ? fmt(X.RC[r[0]].cost) + ' OC' : r[2], rIco(r[0])]);
+      .map(r => [r[0], r[1], V.sort === 'rprofit' ? profitTxt(realProfit(r[0]).profit) : V.sort === 'rhour' ? (realProfit(r[0]).hour == null ? '–' : profitTxt(realProfit(r[0]).hour) + '/h') : V.sort === 'profit' ? (recipeProfit(r[0]) >= 0 ? '+' : '−') + fmt(Math.abs(recipeProfit(r[0]))) + ' OC' : V.sort === 'cost' ? fmt(X.RC[r[0]].cost) + ' OC' : r[2], rIco(r[0])]);
     case 'vendors': return DB.vendors.filter(v => m(v.n) || m(v.o || '') || m(sceneName(v.sc)) || (q.length > 2 && (v.t && m(v.t))))
       .filter(v => !V.f || (V.f === 'items' ? (v.t || v.i) : V.f === 'buys' ? v.b : V.f === 'furniture' ? (v.fs || v.fb) : V.f === 'vending' ? /vending|soda fountain/i.test(v.n) : true))
       .sort((a, b) => a.n.localeCompare(b.n) || sceneName(a.sc).localeCompare(sceneName(b.sc)))
@@ -517,7 +521,7 @@ function craftBlock(rid, forItem) {
   const mk = out.find(x => x[0] === +forItem), more = mk && mk[1] > 1 ? ` <small class="muted">makes ${num(mk[1])}</small>` : '';
   return `<div class="craft"><div class="ch">${rl(rid)}${more}</div><div class="fl">${inp.map(chipOf).join('')}</div>
     <div class="cm muted">${esc(skill)}${minS ? ' ' + minS + '+' : ''} · ${hrs(time)} · ${Math.round(fail * 100)}% fail</div>
-    <div class="cm">${econText(rid)}</div><div class="cm">${realText(rid)}</div>${shopBtn(rid)}</div>`;
+    <div class="cm">${econText(rid)}</div>${shopBtn(rid)}</div>`;
 }
 const chipOf = (x, k) => `<span class="chip2 ${k || ''}"><b>${num(x[1])}×</b> ${il(x[0])}</span>`;
 // The scene with the most containers that can drop any of these items.
@@ -755,7 +759,7 @@ function leave(slug, q, focus) {
   window.OBS_MAP && window.OBS_MAP.show(slug, q, focus);
 }
 document.addEventListener('click', e => {
-  if (e.target.closest('[data-skillreset]')) { skillLv = {}; try { localStorage.removeItem('obs-skills'); } catch (_) {} for (const k in RPmemo) delete RPmemo[k]; renderDetail(); return; }
+  if (e.target.closest('[data-skillreset]')) { skillLv = {}; try { localStorage.removeItem('obs-skills'); } catch (_) {} clearRP(); renderDetail(); return; }
   const cm = e.target.closest('[data-copymod]');
   if (cm) { const done = () => { cm.textContent = 'Copied ✓'; setTimeout(() => { cm.textContent = 'Copy list for the mod'; }, 1800); };
     try { navigator.clipboard.writeText(modCode).then(done, () => fallbackCopy(modCode, done)); } catch (_) { fallbackCopy(modCode, done); } return; }
