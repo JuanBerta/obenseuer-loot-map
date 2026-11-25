@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=8';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=9';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -708,7 +708,7 @@ function whereIs(id) {
   if (sv.length) { parts.push('sold by ' + sv.slice(0, 3).map(v => `<span class="lk">${link('vendors', v.key, v.n)}</span> <small>(${esc(sceneName(v.sc))})</small>`).join(', ') + (sv.length > 3 ? ' and ' + (sv.length - 3) + ' more' : ''));
     btn += mapBtn(sv[0].sc, iname(id), 'Find the shop', sv[0].n); }
   if (X.makes[id]) parts.push('craftable');
-  if (!parts.length) parts.push('not found in the world data');
+  if (!parts.length) parts.push('no recipe makes it, and nothing drops or sells it in this version of the game');
   return { parts, btn };
 }
 let modCode = '';

@@ -54,11 +54,14 @@ for it in read_json('Items.json'):
                        sorted({str(m.get('$type', '')).split('.')[-1] for m in it.get('Meta') or [] if isinstance(m, dict)}), stats(it),
                        next((int(m.get('maxAmmo', 0)) for m in it.get('Meta') or [] if isinstance(m, dict) and str(m.get('$type', '')).endswith('ItemAmmodata') and m.get('maxAmmo', 0) > 1 and not (isinstance(m.get('ammoItems'), dict) and m['ammoItems'].get('$content') or isinstance(m.get('ammoItems'), list) and m['ammoItems'] or m.get('ammoItemcategories'))), 0)]   # [10]: uses per item (ink = 50), 0 = single use
 # ---- recipes
-recipes = []
+recipes = []; seen_rid = set()
 kv = lambda l: [[x['Key']['ID'], x['Value']] for x in l or []]
 for r in read_json('Recipes.json')['Recipes']:
     if r.get('Type') == 'Debug': continue
-    rec = [r['ID'], (r.get('Name') or '').strip(), r.get('Type'), r.get('RelevantSkill'), r.get('MinimumSkill', 0), r.get('FailChance', 0),
+    rid_ = r['ID']
+    if rid_ in seen_rid: rid_ = 1000000 + rid_; notes.append(f'Two recipes share ID {r["ID"]} (“{r.get("Name")}” was given ID {rid_})')   # the game data reuses an ID for Apple mash and Green Orb Mash
+    seen_rid.add(rid_)
+    rec = [rid_, (r.get('Name') or '').strip(), r.get('Type'), r.get('RelevantSkill'), r.get('MinimumSkill', 0), r.get('FailChance', 0),
            r.get('ProcessTime', 0), kv(r.get('input')), kv(r.get('output')), kv(r.get('outputFail')), r.get('RequiredConditions') or [],
            [t for t in r.get('RecipeTags') or [] if t != 'NONE'], 1 if r.get('RecipeRequired') else 0,
            [r.get('SkillFactor', 1), (r.get('metaSettings') or {}).get('qualityFactor', 1), (r.get('metaSettings') or {}).get('fixedQuality', 0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0,
