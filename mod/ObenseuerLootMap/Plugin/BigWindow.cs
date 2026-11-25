@@ -151,9 +151,10 @@ namespace ObenseuerLootMap
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Profit finder", bigTab == 0 ? bigTabOn : bigTabOff)) bigTab = 0;
                 if (GUILayout.Button("Item search", bigTab == 1 ? bigTabOn : bigTabOff)) bigTab = 1;
+                if (craftLastId >= 0 && GUILayout.Button("Resume: " + Db.ItemName(craftLastId), bigTabOff)) { craftId = craftLastId; craftKey = craftLastKey; craftBackTab = bigTab; craftPlanSig = null; }
                 GUILayout.FlexibleSpace();
-                if (GUILayout.Button("A−", bigTabOff, GUILayout.Width(34))) cfgBigScale.Value = Mathf.Max(0.8f, Mathf.Round((cfgBigScale.Value - 0.1f) * 10f) / 10f);
-                if (GUILayout.Button("A+", bigTabOff, GUILayout.Width(34))) cfgBigScale.Value = Mathf.Min(1.8f, Mathf.Round((cfgBigScale.Value + 0.1f) * 10f) / 10f);
+                if (GUILayout.Button("A-", bigTabOff, GUILayout.Width(44))) cfgBigScale.Value = Mathf.Max(0.8f, Mathf.Round((cfgBigScale.Value - 0.1f) * 10f) / 10f);
+                if (GUILayout.Button("A+", bigTabOff, GUILayout.Width(44))) cfgBigScale.Value = Mathf.Min(1.8f, Mathf.Round((cfgBigScale.Value + 0.1f) * 10f) / 10f);
                 if (GUILayout.Button("Close  ·  " + cfgBigKey.Value + " / Esc", bigTabOff)) SetBig(false);
                 GUILayout.EndHorizontal();
                 GUILayout.Space(8);

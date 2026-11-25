@@ -288,7 +288,8 @@ namespace ObenseuerLootMap
             foreach (var s in shopList.steps.Take(4)) sb.Append($"<color=#d9c7a2>⚒ {s.Key} ×{s.Value}</color>\n");
             var content = new GUIContent(sb.ToString().TrimEnd());
             var sz = hudStyle.CalcSize(content);
-            GUI.Box(new Rect(14, 150, sz.x + 6, sz.y + 2), content, hudStyle);
+            // top right, under the clock / money, so it never covers the notifications on the left
+            GUI.Box(new Rect(Screen.width - sz.x - 26f, 105f * Screen.height / 1080f, sz.x + 6, sz.y + 2), content, hudStyle);
         }
 
         void DrawShopListPanel()

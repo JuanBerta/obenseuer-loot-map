@@ -17,7 +17,7 @@ namespace ObenseuerLootMap
             public List<CNode> kids = new List<CNode>();
         }
 
-        int craftId = -1, craftBackTab; string craftKey, craftQtyText = "1", craftPlanSig; int craftQty = 1;
+        int craftId = -1, craftBackTab, craftLastId = -1; string craftLastKey; string craftKey, craftQtyText = "1", craftPlanSig; int craftQty = 1;
         CNode craftRoot; readonly Dictionary<int, float> craftRaw = new Dictionary<int, float>(); readonly List<KeyValuePair<string, int>> craftSteps = new List<KeyValuePair<string, int>>();
         float craftCost; int craftPickFind = -1; bool craftPickList, craftPickMissing, craftPickCopy, craftPickStation, craftBack; int craftStep;
         Dictionary<int, List<string>> outIndex; Vector2 craftScroll;
@@ -61,6 +61,7 @@ namespace ObenseuerLootMap
             craftBackTab = bigTab; craftId = id; craftKey = key; craftStep = 0; craftPlanSig = null; craftScroll = Vector2.zero;
             var l = RecipesFor(id);
             if (craftKey == null && l.Count > 0) craftKey = l[0];
+            craftLastId = craftId; craftLastKey = craftKey;
         }
 
         CNode Expand(int id, float need, int depth, HashSet<int> path, string forceKey)
@@ -158,7 +159,9 @@ namespace ObenseuerLootMap
         {
             if (craftId < 0) return;
             var keys = RecipesFor(craftId);
+            if ((craftKey == null || !Db.trade.ContainsKey(craftKey)) && keys.Count > 0) craftKey = keys[0];
             if (craftKey == null || !Db.trade.ContainsKey(craftKey)) { craftId = -1; return; }
+            craftLastId = craftId; craftLastKey = craftKey;
             var r = Db.trade[craftKey];
 
             // Header: back, name, recipe picker.
