@@ -2043,7 +2043,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 		// The panel can be taller than the screen (profit finder, shopping list): scroll instead of running off the bottom.
 		float panelMaxH = Mathf.Max(220f, (float)Screen.height - panelRect.y - 40f);
 		panelScroll = GUILayout.BeginScrollView(panelScroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, GUIStyle.none, new GUILayoutOption[1] { GUILayout.Height((panelContentH > 1f) ? Mathf.Min(panelContentH + 2f, panelMaxH) : panelMaxH) });
-		Rect panelInner = GUILayout.BeginVertical(Array.Empty<GUILayoutOption>());
+		GUILayout.BeginVertical(Array.Empty<GUILayoutOption>());
 		cfgEnabled.Value = GUILayout.Toggle(cfgEnabled.Value, " " + Loc.T("Show loot markers"), Array.Empty<GUILayoutOption>());
 		if (cfgEnabled.Value)
 		{
@@ -2141,6 +2141,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			GUILayout.Label("<color=#d98e04>■</color> " + Loc.T("container") + "   <color=#1f7a8c>●</color> " + Loc.T("pickup") + "   <color=#2f5d3a>■</color> " + Loc.T("workstation") + "   <color=#d6b23c>●</color> " + Loc.T("shop") + "\n<color=#c81e18>" + Loc.T("red edge = stealing") + "</color> · <color=#9f7ae0>" + Loc.T("purple edge = locked") + "</color> · " + Loc.T("hollow = empty") + "\n" + Loc.T("Hover a marker for its loot. Click it to be guided there.") + string.Format("  [{0}] {1}", cfgToggleKey.Value, Loc.T("Toggle panel")), smallStyle, Array.Empty<GUILayoutOption>());
 		}
 		GUILayout.EndVertical();
+		Rect panelInner = GUILayoutUtility.GetLastRect();
 		if ((int)Event.current.type == 7 && panelInner.height > 1f)
 		{
 			panelContentH = panelInner.height;
