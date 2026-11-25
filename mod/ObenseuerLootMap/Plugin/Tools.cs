@@ -407,13 +407,30 @@ namespace ObenseuerLootMap
         float GetAt(VendorData v, int id) => Mathf.Max(1f, Mathf.Round(Db.ValueOf(id) * (v.sm > 0 ? v.sm : 0.9f)));
         // Quality of what you craft (the game's formula, averaged, with your live skill) and what it does to the sale price.
         static float QualityValue(float q) => q > 1f ? q * q : 0.5f * q * q + 0.25f * q + 0.25f;
+        Dictionary<string, float> stationQ;
+        // The best equipment quality among the workstations that make this kind of recipe (a lathe 5, a table stove 0.5); it multiplies craft quality and cuts the fail chance.
+        float EqOf(string type)
+        {
+            if (stationQ == null)
+            {
+                stationQ = new Dictionary<string, float>();
+                foreach (var f in Db.furniture.Values)
+                {
+                    if (f.Count < 6 || !(f[4] is JArray ts) || !(f[5] is JArray ps)) continue;
+                    float q = 0f; foreach (JToken pe in ps) if (pe is JArray pa && pa.Count > 9) q = Mathf.Max(q, (float)pa[9]);
+                    if (q <= 0f) continue;
+                    foreach (JToken t in ts) { string k = (string)t; if (!stationQ.TryGetValue(k, out var old) || q > old) stationQ[k] = q; }
+                }
+            }
+            return type != null && stationQ.TryGetValue(type, out var v) ? v : 1f;
+        }
         float CraftQuality(JArray r, float fail)
         {
             float fixedQ = r.Count > 9 ? (float)r[9] : 0f; if (fixedQ > 0f) return fixedQ;
             string sk = r.Count > 6 ? (string)r[6] : "None"; if (sk == "None" || !Enum.TryParse(sk, out PlayerStats.PlayerSkillType type)) return 1f;
             float lvl = 5f; try { lvl = PlayerStats.instance.GetSkillWithEffects(type); } catch { }
             float sf = (float)r[7], qf = (float)r[8];
-            return Mathf.Clamp(lvl * 0.2f * sf * (1f - fail) * qf, 0.05f, 2f);
+            return Mathf.Clamp(lvl * 0.2f * sf * (1f - fail) * EqOf((string)r[1]) * qf, 0.05f, 2f);
         }
         // The chance a craft fails at your level (the game's formula): the recipe's fail chance drops 3 points per skill level above its minimum; below the minimum it gets much worse.
         float FailNow(JArray r, float f)
@@ -421,7 +438,7 @@ namespace ObenseuerLootMap
             if (f >= 1f) return 1f; if (f <= 0f) return f;
             string sk = r.Count > 6 ? (string)r[6] : "None"; if (sk == "None" || !Enum.TryParse(sk, out PlayerStats.PlayerSkillType type)) return f;
             float lv = 5f; try { lv = PlayerStats.instance.GetSkillWithEffects(type); } catch { }
-            float mn = r.Count > 11 ? Convert.ToSingle(r[11]) : 0f, sf = Mathf.Max(0.0001f, (float)r[7]), num = Mathf.Max(0f, lv - mn), eq = 1f;
+            float mn = r.Count > 11 ? Convert.ToSingle(r[11]) : 0f, sf = Mathf.Max(0.0001f, (float)r[7]), num = Mathf.Max(0f, lv - mn), eq = EqOf((string)r[1]);
             if (mn > 0f && mn > lv) eq /= 0.5f * (mn - lv) + 1f;
             float n2 = 1f - ((1f - f / (eq > 1f ? eq : 1f)) * (eq < 1f ? eq : 1f) + 0.03f * num * sf);
             if (mn > 0f && mn > lv) n2 *= Mathf.Pow(1f + n2, mn - lv);

@@ -1,6 +1,8 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- Website: furniture pages show the machine's stats read from the game files (electricity or fuel use, idle use, what a generator makes, fuel types, upgrade slots, equipment quality).
+- Profit now counts the workstation's equipment quality (it multiplies craft quality and lowers the fail chance); pick your station on a recipe, the best one is assumed otherwise. The Profit finder in the mod assumes the best station too.
 - Website: every craft profit now uses the same real numbers (shop prices, your skill, quality and fail chance), so a recipe, its item and the "Best craft profit" sort no longer disagree. Base values are only used when no shop buys the product.
 - Profit uses the real fail chance at your level (it drops 3 points per skill level above the recipe's minimum, and is far worse below it) and counts what a failed craft sells for. The website warns when your skill is below a recipe's minimum.
 - Every multi-use item is now counted per use, not only a few: Glue (10 uses) and about 140 others (soap, cigarettes, medicine, wine bottles, pizzas...). Items that take other items as ammo (flashlights, lighters...) are left alone.

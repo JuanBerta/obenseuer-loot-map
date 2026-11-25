@@ -53,6 +53,8 @@ def fid(key):
     if t not in furn_ids:
         furn_ids[t]=len(furn_ids)+1
         furniture[str(furn_ids[t])]=[t, cat_names.get(f.get('cat'), str(f.get('cat'))), f.get('oc') or 0, f.get('rm') or 0, f.get('types') or []]
+        if f.get('power'):   # [5]: power / fuel / equipment quality of each machine in it: [kind(0 electric,1 combustion,2 kinetic), watts used, idle watts (-1 none), needs fuel, fuel categories, liquid fuel, watts made, plugs into grid, upgrade slots, equipment quality]
+            furniture[str(furn_ids[t])].append([[e.get('kind',0), e.get('use',0), e.get('idle',-1), 1 if e.get('fuel') else 0, e.get('fuels') or [], 1 if e.get('liquid') else 0, e.get('gen',0), 1 if e.get('grid') else 0, e.get('maxUp') or 0, round(e.get('quality') or 1, 2)] for e in f['power']])
     return furn_ids[t]
 
 names={}

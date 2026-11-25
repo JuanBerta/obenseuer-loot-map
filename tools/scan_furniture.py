@@ -32,7 +32,7 @@ print(len(furn),'furniture',len(lists),'lists',errs,'errors')
 
 # ---- which crafting station (recipe types) each furniture prefab contains -------------------------
 # Furniture.prefab -> prefab root GameObject; find 'manufacturing' components in that prefab's hierarchy.
-types_by_root={}
+types_by_root={}; power_by_root={}
 def recipe_types():
     import dotnet, struct
     a=ser.asm('Assembly-CSharp'); ti=a.find_type('RecipeType'); consts={}
@@ -70,8 +70,8 @@ for fn in need:
         if c!=114: continue
         try: r,go,sc,nm=usf.mb_head(s,p); n=usf.script_name(s,sc)
         except Exception: continue
-        if not n or n[2]!='manufacturing': continue
-        try: _,d,_=ser.read_mb(s,p,'Assembly-CSharp','manufacturing',upto='Recipes')
+        if not n or n[2] not in ('manufacturing','Generator'): continue
+        try: _,d,_=ser.read_mb(s,p,'Assembly-CSharp',n[2])
         except Exception: continue
         g=go[1]
         # walk up to the prefab root
@@ -82,10 +82,19 @@ for fn in need:
             if not g2: break
             g=g2
         types_by_root.setdefault((fn,g),set()).update(RT.get(x,str(x)) for x in (d.get('Recipes') or []))
+        pw=d.get('_Power')
+        if isinstance(pw,dict):
+            fu=pw.get('_Fuel') if isinstance(pw.get('_Fuel'),dict) else {}
+            e=dict(kind=pw.get('Type',0),use=pw.get('powerConsumption',0),idle=d.get('PowerInput') if False else d.get('PowerConsumptionIdle',-1),fuel=bool(pw.get('RequiresFuel')),
+                   fuels=list(fu.get('FuelCategories') or []),liquid=bool(fu.get('fuelIsLiquid')),gen=d.get('powergeneration',0) if n[2]=='Generator' else 0,
+                   grid=bool(pw.get('PowerInput')),maxUp=d.get('maxUpgrades'),quality=d.get('EquipmentQuality'))
+            power_by_root.setdefault((fn,g),[]).append(e)
     usf._cache.pop(fn,None)
 n=0
 for key,pf in prefab_of.items():
     t=types_by_root.get(pf)
     if t: furn[key]['types']=sorted(t); n+=1
+    pl=power_by_root.get(pf)
+    if pl: furn[key]['power']=pl
 json.dump(dict(furniture=furn,lists=lists),open(os.path.join(sys.argv[2],'furniture_assets.json'),'w'))
 print(n,'furniture pieces with a crafting station')

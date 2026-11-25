@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=7';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=8';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -107,12 +107,20 @@ function buyCost(id) {
 // Quality of what you craft (the game's formula, averaged): skill × 0.2 × the recipe's skill factor × (1 − fail chance) × the recipe's quality factor, from 0.05 to 2; the sale price scales with it.
 let skillLv = {}; try { skillLv = JSON.parse(localStorage.getItem('obs-skills') || '{}') || {}; } catch (e) { skillLv = {}; }
 const lvlOf = sk => { const v = skillLv[sk]; return typeof v === 'number' && v >= 0 && v <= 15 ? v : 5; };
-const qualityOf = r => { const x = r[13] || [1, 1, 0]; if (x[2] > 0) return x[2]; if (!r[3] || r[3] === 'None') return 1; return Math.max(0.05, Math.min(2, lvlOf(r[3]) * 0.2 * x[0] * (1 - (r[5] || 0)) * x[1])); };
+// The workstation you craft at sets an equipment quality (a lathe 5, a table stove 0.5) that multiplies quality and cuts the fail chance. Pick yours on a recipe; the best one is assumed until you do.
+let stationPick = {}; try { stationPick = JSON.parse(localStorage.getItem('obs-stations') || '{}') || {}; } catch (e) { stationPick = {}; }
+const stMemo = {};
+const stationsOf = type => stMemo[type] || (stMemo[type] = Object.entries(DB.furniture).filter(([, f]) => (f[4] || []).includes(type) && f[5]).map(([id, f]) => ({ id, n: f[0], q: Math.max(...f[5].map(e => e[9] || 1)) })).sort((a, b) => b.q - a.q || a.n.localeCompare(b.n)));
+const eqOf = r => { const l = stationsOf(r[2]); if (!l.length) return 1; return (l.find(x => x.id === String(stationPick[r[2]])) || l[0]).q; };
+const stationSelect = r => { const l = stationsOf(r[2]); if (l.length < 2) return l.length ? `${esc(l[0].n)} (quality ${+l[0].q.toFixed(2)})` : ''; const cur = (l.find(x => x.id === String(stationPick[r[2]])) || l[0]).id;
+  return `<select data-station="${esc(r[2])}" aria-label="Your ${esc(r[2])} workstation" title="The workstation sets an equipment quality that multiplies the quality you craft at">${l.map(x => `<option value="${x.id}" ${x.id === cur ? 'selected' : ''}>${esc(x.n)} · quality ${+x.q.toFixed(2)}</option>`).join('')}</select>`; };
+function setStation(type, id) { stationPick[type] = id; try { localStorage.setItem('obs-stations', JSON.stringify(stationPick)); } catch (e) {} clearRP(); if (V.sec === 'recipes' || V.sec === 'items') renderList(); renderDetail(); }
+const qualityOf = r => { const x = r[13] || [1, 1, 0]; if (x[2] > 0) return x[2]; if (!r[3] || r[3] === 'None') return 1; return Math.max(0.05, Math.min(2, lvlOf(r[3]) * 0.2 * x[0] * (1 - (r[5] || 0)) * eqOf(r) * x[1])); };
 // The chance a craft fails at your level (the game's formula): the recipe's fail chance drops 3 points per skill level above its minimum, times the recipe's skill factor; below the minimum it gets much worse.
 const failNow = r => {
   const f = r[5] || 0; if (f >= 1) return 1; if (f === 0 || !r[3] || r[3] === 'None') return f;
   const lv = lvlOf(r[3]), mn = r[4] || 0, sf = (r[13] || [1])[0] || 1, num = Math.max(0, lv - mn);
-  let eq = 1; if (mn > 0 && mn > lv) eq /= 0.5 * (mn - lv) + 1;
+  let eq = eqOf(r); if (mn > 0 && mn > lv) eq /= 0.5 * (mn - lv) + 1;
   let n2 = 1 - ((1 - f / (eq > 1 ? eq : 1)) * (eq < 1 ? eq : 1) + 0.03 * num * sf);
   if (mn > 0 && mn > lv) n2 *= Math.pow(1 + n2, mn - lv);
   return Math.max(0, Math.min(1, n2));
@@ -186,7 +194,7 @@ function tradeBlock(rid) {
   const buy = p.ing.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}${x.div > 1 ? ` use${x.n === 1 ? '' : 's'} of ${x.div}` : ''}</small></span><small>${x.shop ? `${fmt(x.p)} OC ${x.div > 1 ? `per item (≈ ${fmt(x.p / x.div)} OC per use)` : 'each'} at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : `not sold · ≈ ${fmt(x.p)} OC`}</small>`);
   const sell = p.outs.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.v ? `${fmt(x.p)} OC each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : 'no shop buys it'}</small>`);
   return `<h3>Trade at shops</h3><p>${realText(rid)}</p><h3>Buy the ingredients</h3>${ul(buy)}<h3>Sell what it makes</h3>${ul(sell)}
-    <p class="muted">Real shop prices: base value × the shop's multiplier. ${p.estimated ? '* Ingredients no shop sells are counted at base value. ' : ''}${r[3] && r[3] !== 'None' && r[4] > lvlOf(r[3]) ? `<b class="bad">Your ${esc(r[3])} (${lvlOf(r[3])}) is below this recipe's minimum (${r[4]}): it almost always fails.</b> ` : ''}Counts the ${Math.round(p.fail * 100)}% fail chance at your level${p.failOuts.some(o => o.v) ? ' (and what a failed craft sells for)' : ''} and the quality of what you make (${p.outs.some(o => o.q != null) ? 'quality ≈ ' + (+p.q.toFixed(2)) : 'these items have no quality'}, at ${skillSelect(r[3])}). Ignores the quality of bought ingredients and what the shop stocks that day.</p>`;
+    <p class="muted">Real shop prices: base value × the shop's multiplier. ${p.estimated ? '* Ingredients no shop sells are counted at base value. ' : ''}${r[3] && r[3] !== 'None' && r[4] > lvlOf(r[3]) ? `<b class="bad">Your ${esc(r[3])} (${lvlOf(r[3])}) is below this recipe's minimum (${r[4]}): it almost always fails.</b> ` : ''}Counts the ${Math.round(p.fail * 100)}% fail chance at your level${p.failOuts.some(o => o.v) ? ' (and what a failed craft sells for)' : ''} and the quality of what you make (${p.outs.some(o => o.q != null) ? 'quality ≈ ' + (+p.q.toFixed(2)) : 'these items have no quality'}, at ${skillSelect(r[3])}, crafted at ${stationSelect(r) || 'any workstation'}). Ignores the quality of bought ingredients and what the shop stocks that day.</p>`;
 }
 // A trade run: what to buy where, then what to sell where, with the stops of each part in a sensible walking order (same area together, nearest next).
 function tripOrder(vs) {
@@ -591,6 +599,21 @@ function tenantCard(name) {
   h += `<p class="muted">Rented through their own conversation once you hold the “Tenement blueprint” task item. Data checked against the <a href="https://obenseuer-viewer.pages.dev/#/renters" target="_blank" rel="noopener">Obenseuer viewer</a>.</p>${(window.OBS_PEOPLE || {})[name] ? mapBtn(window.OBS_PEOPLE[name][0], '', 'Find ' + name + ' on the map', name) : ''}${mapBtn('interior-player-tenement', '', 'Open your tenement on the map')}`;
   return h + '</div>';
 }
+const KINDS = ['Electricity', 'Combustion', 'Kinetic'];
+function powerBlock(list) {
+  const w = n => n >= 1000 ? +(n / 1000).toFixed(2) + ' kW' : n + ' W';
+  const rows = list.flatMap((e, i) => {
+    const [kind, use, idle, fuel, fuels, liquid, gen, grid, up, q] = e; let t = list.length > 1 ? ` <small class="muted">(part ${i + 1})</small>` : '';
+    const r = [['Power type', KINDS[kind] || '?']];
+    if (gen > 0) r.push(['Makes', w(gen)]); else if (gen < 0) r.push(['Needs', w(-gen) + ' of supply']);
+    if (use > 0 && gen <= 0) r.push([kind === 0 ? 'Electricity use' : 'Power use', w(use) + (idle >= 0 ? ` · ${w(idle)} idle` : '')]);
+    if (fuel || fuels.length) r.push(['Fuel', (fuel ? 'burns ' : 'accepts ') + (fuels.join(', ') || 'fuel') + (liquid ? ' (liquid)' : '')]);
+    if (kind === 0 && !grid) r.push(['Grid', 'not connected to the building grid']);
+    r.push(['Equipment quality', String(q)]); if (up) r.push(['Upgrade slots', String(up)]);
+    return r.map(([a, b]) => { const o = [a + t, b]; t = ''; return o; });
+  });
+  return `<h3>Stats</h3><div class="facts">${rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('')}</div><p class="muted">Read from the game's files. Equipment quality multiplies the quality of what you craft and lowers the fail chance.</p>`;
+}
 function furnCard(id) {
   const f = DB.furniture[id]; if (!f) return missing();
   const types = f[4] || [], sk = skillsFor(types);
@@ -600,6 +623,7 @@ function furnCard(id) {
     const rs = DB.recipes.filter(r => types.includes(r[2])).sort((a, b) => a[1].localeCompare(b[1]));
     h += `<p>Workstation: ${types.map(esc).join(', ')}${sk.length ? ' · trains ' + sk.map(esc).join(', ') : ''}</p><h3>Recipes · ${rs.length}</h3>${ul(rs.map(r => rl(r[0])))}`;
   }
+  if (f[5] && f[5].length) h += powerBlock(f[5]);
   h += `<h3>Sold by · ${sv.length}</h3>${ul(sv.map(vl))}<h3>Bought by · ${bv.length}</h3>${ul(bv.map(vl))}`;
   return h + '</div>';
 }
@@ -785,6 +809,7 @@ $('#regionTabs').addEventListener('click', e => { if (isDb() && e.target.closest
 function fallbackCopy(t, ok) { const a = document.createElement('textarea'); a.value = t; a.style.position = 'fixed'; a.style.opacity = '0'; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); ok(); } catch (_) { } a.remove(); }
 document.addEventListener('change', e => { const q = e.target.closest('[data-shopset]'); if (q) { shopSet(q.dataset.shopset, q.value); if (V.sec === 'list') renderDetail(); else document.querySelectorAll('.shopwrap').forEach(w => { if (w.dataset.rid === q.dataset.shopset) w.innerHTML = shopCtl(q.dataset.shopset); }); return; }
   const sk = e.target.closest('[data-skill]'); if (sk) { setSkill(sk.dataset.skill, +sk.value); return; }
+  const stn = e.target.closest('[data-station]'); if (stn) { setStation(stn.dataset.station, stn.value); return; }
   const si = e.target.closest('[data-skillin]'); if (si) { setSkill(si.dataset.skillin, Math.max(0, Math.min(15, Math.round(+si.value || 0)))); return; }
   const sf = e.target.closest('[data-saveinput]'); if (sf) { if (sf.files.length) loadSaves([...sf.files]); return; }
   const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
