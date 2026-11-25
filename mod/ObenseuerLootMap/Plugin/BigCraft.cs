@@ -47,7 +47,7 @@ namespace ObenseuerLootMap
             (float p, VendorData v) c;
             if (tradeCheap.TryGetValue(id, out c)) return c;
             c = (-1f, null);
-            foreach (var v in vendors) if (Db.Sells(v, id)) { var p = PayAt(v, id); if (c.v == null || p < c.p) c = (p, v); }
+            foreach (var v in vendors) if (v.rm == 0 && Db.Sells(v, id)) { var p = PayAt(v, id); if (c.v == null || p < c.p) c = (p, v); }
             return tradeCheap[id] = c;
         }
 

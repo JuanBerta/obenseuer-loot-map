@@ -66,6 +66,7 @@ if site:
 TRASH={'Dumpster','TrashBin','Trashcan','Trash','Trash Machineshop','Trash Organic','TrashBale','CrateSack','CrateSackMines'}
 OWNER_PLACEHOLDER={'','name','default male','default female','player'}
 S={}; need=set(); used_stock=set()
+MARKETS=json.load(open(os.path.join(ext_dir,'markets.json'))) if os.path.exists(os.path.join(ext_dir,'markets.json')) else {}
 for i,name in enumerate(scenes):
     pf=os.path.join(ext_dir,'level%d.json'%i); ff=os.path.join(ext_dir,'level%d_feat.json'%i)
     if not os.path.exists(pf): continue
@@ -139,6 +140,22 @@ for i,name in enumerate(scenes):
             if f.get('buyForbid'): e['bf']=f['buyForbid']
             if f.get('buysStolen'): e['bs']=1
         if 't' in e or 'i' in e or 'b' in e: V.append(e)
+    # self-service markets (take from the shelves, pay at the register): they sell what their shelves can hold, at value x the market's price factor
+    for m in MARKETS.get(str(i),{}).get('markets',[]):
+        if not m.get('active'): continue
+        ids=set()
+        for p in P:
+            if p.get('s')==1: continue   # a locked / owned stock room, not the shelves
+            if p.get('t') in loot: ids.update(loot[p['t']][0]); ids.update(loot[p['t']][1])
+            ids.update(p.get('f') or [])
+        near=next((v for v in V if (v['x']-m['x'])**2+(v['z']-m['z'])**2<15**2 and ('t' in v or 'i' in v or 'b' in v)), None)
+        if near and not m.get('currency')==1:   # the market is already a shop of its own (a trader): add what its shelves hold
+            if ids: near['i']=sorted(set(near.get('i',[]))|ids); need.update(ids)
+            continue
+        e=dict(n=m.get('name') or names.get(name,name),x=m['x'],y=m['y'],z=m['z'],bm=m['factor'],mk=1)
+        if m.get('currency')==1: e['rm']=1
+        if ids: e['i']=sorted(ids); need.update(ids)
+        V.append(e)
     mk=None
     if fe.get('map') and fe['map'].get('sprite'): mk=fe['map']['sprite'][1]
     if P or F or V or D:

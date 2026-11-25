@@ -388,7 +388,7 @@ namespace ObenseuerLootMap
             return Loc.T("Closed");
         }
         internal bool IsClosedNow(VendorData v) { var t = HoursText(v, out var open); return t != null && !open; }
-        internal int BuyPrice(VendorData v, int id) => v.bm > 0 ? Mathf.RoundToInt(Db.ValueOf(id) * v.bm) : -1;     // what you pay
+        internal int BuyPrice(VendorData v, int id) => v.rm == 0 && v.bm > 0 ? Mathf.RoundToInt(Db.ValueOf(id) * v.bm) : -1;     // what you pay
         internal int SellPrice(VendorData v, int id) => v.sm > 0 ? Mathf.RoundToInt(Db.ValueOf(id) * v.sm) : -1;    // what you get
         // The single item a search is about (price comparison needs exactly one), or -1.
         internal int PriceItem()
@@ -453,7 +453,7 @@ namespace ObenseuerLootMap
             {
                 if (cheapest.TryGetValue(id, out var c)) return c;
                 c = (-1f, null);
-                foreach (var v in vendors) if (Db.Sells(v, id)) { var p = PayAt(v, id); if (c.v == null || p < c.p) c = (p, v); }
+                foreach (var v in vendors) if (v.rm == 0 && Db.Sells(v, id)) { var p = PayAt(v, id); if (c.v == null || p < c.p) c = (p, v); }
                 return cheapest[id] = c;
             }
             (float p, VendorData v) Best(int id)

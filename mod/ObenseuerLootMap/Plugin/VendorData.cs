@@ -27,6 +27,10 @@ public class VendorData
 
 	public int bs;
 
+	public int mk;
+
+	public int rm;
+
 	public List<int> fs;
 
 	public JToken fb;

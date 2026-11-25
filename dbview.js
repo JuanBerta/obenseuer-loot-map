@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=9';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=10';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -95,7 +95,7 @@ const furnBuys = (v, id) => v.fb === 'any' || (v.fb === 'same' && furnSells(v, i
 const payAt = (v, id) => Math.max(1, Math.round(DB.items[id][1] * (v.bm != null ? v.bm : 1.1)));   // what you pay the shop
 const getAt = (v, id) => Math.max(1, Math.round(DB.items[id][1] * (v.sm != null ? v.sm : 0.9)));   // what the shop pays you
 const sellersMemo = {}, buyersMemo = {};
-const sellersOf = id => sellersMemo[id] || (sellersMemo[id] = DB.items[id] ? DB.vendors.filter(v => sells(v, +id)).map(v => ({ v, p: payAt(v, id) })).sort((a, b) => a.p - b.p || a.v.n.localeCompare(b.v.n)) : []);
+const sellersOf = id => sellersMemo[id] || (sellersMemo[id] = DB.items[id] ? DB.vendors.filter(v => !v.rm && sells(v, +id)).map(v => ({ v, p: payAt(v, id) })).sort((a, b) => a.p - b.p || a.v.n.localeCompare(b.v.n)) : []);
 const buyersOf = id => buyersMemo[id] || (buyersMemo[id] = DB.items[id] ? DB.vendors.filter(v => buys(v, +id)).map(v => ({ v, p: getAt(v, id) })).sort((a, b) => b.p - a.p || a.v.n.localeCompare(b.v.n)) : []);
 // The cheapest way to pay for one of an ingredient: a group counts as its cheapest member; nothing sells it → its base value, marked as an estimate.
 function buyCost(id) {
