@@ -1,0 +1,20 @@
+=== FILE DESCRIPTION ===
+Obenseuer-LootMap-BepInEx6-v0.8.0.zip : Loot Map 0.8.0 (in-game mod, BepInEx 6). Extract into the Obenseuer folder.
+
+=== NEXUS CHANGELOG: Loot Map 0.8.0 ===
+New
+- Press Home anywhere in the game for a big Loot Map window: Profit finder (top 100 by profit or profit per hour), Item search, and a new Craft view that shows the whole chain of what you need for any craftable item (buy / craft / find), with your skill, fail chance and cost, and can turn the plan into your shopping list. Text size A- / A+ buttons.
+- Shops where you take things from shelves and pay at the register (O-Market, Mine Market and others) now count as places that sell items, at their own prices. Shops that show goods on separate shelves (Alco, the butcher shop) list everything they sell.
+- Profit finder prices liquids by the container they are sold in (a Fancy Glass Bottle pays about double per liter, a canister less) with a "Sell liquids in" button. Liquids are shown in liters on the shopping list and counted from your bottles.
+- Profit uses your real skill, quality, fail chance, workstation quality and per-use costs for multi-use items (glue, ink and about 140 more).
+- Mashing / fermenting / distilling furniture now lists the recipes it crafts.
+
+Fixed
+- Searching a single letter or any search with hundreds of matches could freeze or crash the game; searches now need 2+ letters and are throttled.
+- The locked-door check could crash the game; it is now an experimental option, off by default (MarkBehindLockedDoorsExperimental).
+- Zoom to me no longer blocks zooming out; long Profit finder lines wrap; the panel scrolls when taller than the screen.
+- Two recipes that shared an ID (Apple mash, Green Orb Mash) were dropped from the Profit finder.
+- Clear list on the shopping list now asks for a second click.
+
+=== VERSION ===
+0.8.0
