@@ -1,6 +1,8 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- Home window: A- / A+ buttons (and a BigWindowTextScale setting) change its text size, the Close button says Home / Esc, and "Clear list" on the shopping list now needs a second click to confirm.
+- Website: filter and sort menus have names for screen readers, the database has a page heading and main area, the scrolling side panels can be reached with the keyboard, and all tabs and buttons are at least 44 px tall on phones.
 - Shops that show their goods on separate shelves (Alco, the butcher shop) now list everything they sell, and empty market shelf slots no longer show as an item. The slow stations (Mashing Barrel/Kettle, Fermenting Barrel/Bucket/Container, distilleries and others) now show the recipes they craft, their power and their upgrades.
 - Profit finder (mod and website): liquids are now priced by the container they are sold in. A shop pays for the whole filled container, and each container multiplies the liquid's value (Fancy Glass Bottle x2, Plastic Canister x0.7, and so on). Pick the container with the new "Sell liquids in" button/menu; the default is the best one, and "plain liters" gives the old numbers.
 - Liquids (Rice Wine, etc.) on the shopping list and in the Craft view are labelled "(liters)", and the have/need count now includes liquid held in your bottles instead of showing 0.

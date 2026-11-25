@@ -422,11 +422,11 @@ function rows() {
   return [];
 }
 function filters() {
-  const opt = (list, all) => `<select id="dbF"><option value="">${all}</option>${list.map(c => `<option ${V.f === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
+  const opt = (list, all) => `<select id="dbF" aria-label="Filter: ${esc(all)}"><option value="">${all}</option>${list.map(c => `<option ${V.f === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
   const so = (k, t) => `<option value="${k}" ${V.sort === k ? 'selected' : ''}>${t}</option>`;
   const contSel = () => { const l = contList(); if (!l.length) return ''; const c = saleCont(), nm = c => `${iname(c[0])} (${c[1]} L, ×${c[2]})`;
   return ` <select id="dbCont" aria-label="Sell liquids in" title="Liquids sell for more or less depending on the container. A shop pays for the whole filled container."><option value="best"${contPick === 'best' ? ' selected' : ''}>Liquids in: best container</option>${l.map(x => `<option value="${x[0]}"${contPick === String(x[0]) ? ' selected' : ''}>Liquids in: ${esc(nm(x))}</option>`).join('')}<option value="none"${contPick === 'none' ? ' selected' : ''}>Liquids in: plain liters</option></select>`; };
-const sort = `<select id="dbSort"><option value="name">A–Z</option>${so('value', 'Price ↓')}${V.sec === 'items' && V.e ? so('eh', 'Strongest effect first') + so('el', 'Weakest effect first') : ''}</select>`;
+const sort = `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('value', 'Price ↓')}${V.sec === 'items' && V.e ? so('eh', 'Strongest effect first') + so('el', 'Weakest effect first') : ''}</select>`;
   if (V.sec === 'items') {
     const effOpts = cur => STATS.flatMap(([k, , up, down]) => [[k + '+', up], [k + '-', down]]).filter(([key, t]) => t && X.statCount[key])
       .map(([key, t]) => `<option value="${key}" ${cur === key ? 'selected' : ''}>${esc(t)} (${X.statCount[key]})</option>`).join('');
@@ -442,7 +442,7 @@ const sort = `<select id="dbSort"><option value="name">A–Z</option>${so('value
   if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('rprofit', 'Best profit at shops')}${so('rhour', 'Best profit per hour')}${so('profit', 'Best craft profit (base values)')}${so('cost', 'Cheapest ingredients')}</select>` + contSel();
   if (V.sec === 'tenants') return `<select id="dbF" aria-label="Filter tenants"><option value="">All tenants</option>${[['Small', 'Accept a small apartment'], ['Medium', 'Accept a medium apartment'], ['Large', 'Accept a large apartment'], ['OC', 'Pay OC'], ['RM', 'Pay RM']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   if (V.sec === 'furniture') return opt(X.fCats, 'All categories') + sort;
-  if (V.sec === 'vendors') return `<select id="dbF"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  if (V.sec === 'vendors') return `<select id="dbF" aria-label="Filter vendors"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   return '';
 }
 const INTRO = {

@@ -232,6 +232,7 @@ namespace ObenseuerLootMap
             }
             catch { shopListMsg = Loc.T("Nothing to paste: use \"Copy list for the mod\" on the website first"); }
         }
+        float clearArmedAt = -10f;
         void ClearShopList()
         {
             shopList = null; trackList = false; shopListMsg = null;
@@ -300,7 +301,8 @@ namespace ObenseuerLootMap
                 GUILayout.Label(miss.Count == 0 ? "<color=#7fd88a>✔ " + Loc.T("You have everything on the list") + "</color>" : $"<b>{miss.Count}</b> {Loc.T("items missing")}", labelStyle);
                 GUILayout.BeginHorizontal();
                 if (miss.Count > 0 && GUILayout.Button(trackList ? Loc.T("Highlighting missing items") : Loc.T("Find the missing items"), btnStyle)) StartTrackingList();
-                if (GUILayout.Button(Loc.T("Clear list"), btnStyle)) ClearShopList();
+                bool clearArmed = Time.unscaledTime - clearArmedAt < 3f;
+                if (GUILayout.Button(clearArmed ? Loc.T("Click again to clear") : Loc.T("Clear list"), btnStyle)) { if (clearArmed) { clearArmedAt = -10f; ClearShopList(); } else clearArmedAt = Time.unscaledTime; }   // two clicks: a stray click must not drop the list
                 GUILayout.EndHorizontal();
                 cfgShopHud.Value = GUILayout.Toggle(cfgShopHud.Value, " " + Loc.T("Show the list on screen"));
             }

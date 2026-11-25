@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 <meta name="theme-color" content="#101216">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
@@ -18,6 +18,7 @@
 <body>
 <a class="skip" href="#q">Skip to search</a>
 <header class="top">
+  <h1 class="sr">Obenseuer Loot Map</h1>
   <button id="menuBtn" class="icon-btn" aria-label="Show places list" title="Places">☰</button>
   <div class="brand"><b>OBENSEUER</b><span>loot map</span></div>
   <nav class="tabs" id="regionTabs" aria-label="Regions"></nav>
@@ -29,9 +30,9 @@
   <button id="infoBtn" class="icon-btn" aria-label="Show details" title="Details">ⓘ</button>
 </header>
 <main>
-  <aside id="side">
+  <aside id="side" aria-label="Places">
     <div id="sideHead" aria-live="polite"></div>
-    <div id="sideBody"></div>
+    <div id="sideBody" tabindex="0" role="region" aria-label="Places list"></div>
   </aside>
   <section id="frame">
     <div id="mapWrap">
@@ -75,10 +76,10 @@
       <div id="loading" class="hidden" role="status">Unfolding the map…</div>
     </div>
   </section>
-  <aside id="detail"></aside>
+  <aside id="detail" aria-label="Details" tabindex="0"></aside>
 </main>
-<section id="db" aria-label="Database">
-  <aside id="dbSide"></aside>
+<section id="db" role="main" aria-label="Database">
+  <div id="dbSide" role="region" aria-label="Database list and filters"></div>
   <div id="dbDetail"></div>
 </section>
 <footer>

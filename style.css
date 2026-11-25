@@ -249,7 +249,9 @@ footer a{color:var(--ochre3)}
   /* bigger tap targets */
   #dbList .row{min-height:52px}
   .dbbar input,.dbbar select{min-height:44px;font-size:1rem}
-  .dbnav a{padding:11px 13px}
+  .dbnav a{padding:11px 13px;min-height:44px;display:inline-flex;align-items:center}
+  .tab,.dbtab,.icon-btn,.skip,#hintClose{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+  .tg{min-height:44px;display:inline-flex;align-items:center}
   .tg{padding:10px 14px;font-size:0.9375rem}
   .dbmore,.shopbtn{padding:12px 18px;min-height:44px}
   .qty button,.shopctl button{min-width:44px;height:44px}
@@ -272,6 +274,7 @@ img.ic{filter:drop-shadow(0 1px 1px #0006)}
 :focus-visible{outline:3px solid var(--ochre3);outline-offset:2px}
 .card :focus-visible,#hint :focus-visible,.dbbar :focus-visible{outline-color:#1f4fa0}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .skip{position:absolute;left:8px;top:-60px;z-index:20;background:var(--ochre3);color:#1a1205;padding:8px 14px;border-radius:3px;font-weight:600}
 .skip:focus{top:8px}
 .pop .sub{margin:8px 0 0;padding-top:6px;border-top:1px solid var(--edge)}

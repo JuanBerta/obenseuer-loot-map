@@ -11,7 +11,8 @@ namespace ObenseuerLootMap
     // 0.7.7: a big in-game window (Home key) with the website's Profit finder and item search, usable anywhere in the game.
     public partial class LootMapPlugin
     {
-        ConfigEntry<KeyCode> cfgBigKey;
+        ConfigEntry<KeyCode> cfgBigKey; ConfigEntry<float> cfgBigScale; float bigScaleApplied = -1f;
+        int FS(int n) => Mathf.Max(8, Mathf.RoundToInt(n * (cfgBigScale != null ? cfgBigScale.Value : 1f)));   // text size of the big window
         bool bigOpen, bigTyping, bigPrevVis; int bigTab, bigSort; Vector2 bigScroll; string bigSearch = "";
         Rect bigRect; List<TradeRow> bigRows; GameObject bigHolder; CursorLockMode bigPrevLock; UnityEngine.EventSystems.EventSystem bigEvents;
         GUIStyle bigWrap;
@@ -19,6 +20,7 @@ namespace ObenseuerLootMap
         void BindBigConfig()
         {
             cfgBigKey = Config.Bind("General", "BigWindowKey", KeyCode.Home, "Key that opens the big Loot Map window (profit finder and item search) anywhere in the game. Set to None to turn it off.");
+            cfgBigScale = Config.Bind("General", "BigWindowTextScale", 1f, new ConfigDescription("Text size of the big Loot Map window (1 = normal). Also changed with the A- / A+ buttons in the window.", new AcceptableValueRange<float>(0.8f, 1.8f)));
         }
 
         static bool InGameNow() { return PlayerStats.instance != null && SceneManager.GetActiveScene().name != "Main Menu"; }
@@ -100,25 +102,26 @@ namespace ObenseuerLootMap
 
         void BigStyles()
         {
-            if (bigCard != null && bigCard.normal.background != null) return;
+            if (bigCard != null && bigCard.normal.background != null && Mathf.Approximately(bigScaleApplied, cfgBigScale.Value)) return;
+            bigScaleApplied = cfgBigScale.Value;
             bigBadges.Clear();
             bigCard = new GUIStyle(GUI.skin.box) { border = new RectOffset(2, 2, 2, 2), padding = new RectOffset(12, 12, 8, 8), margin = new RectOffset(0, 4, 0, 5) };
             bigCard.normal.background = BigBox(new Color(0.125f, 0.11f, 0.095f), new Color(0.26f, 0.21f, 0.13f));
-            bigSection = new GUIStyle(labelStyle) { fontSize = 12, fontStyle = FontStyle.Bold, padding = new RectOffset(2, 0, 8, 2) };
+            bigSection = new GUIStyle(labelStyle) { fontSize = FS(12), fontStyle = FontStyle.Bold, padding = new RectOffset(2, 0, 8, 2) };
             bigSection.normal.textColor = BigOchre;
-            bigTabOff = new GUIStyle(btnStyle) { fontSize = 13, padding = new RectOffset(16, 16, 6, 6), margin = new RectOffset(0, 4, 0, 0) };
+            bigTabOff = new GUIStyle(btnStyle) { fontSize = FS(13), padding = new RectOffset(16, 16, 6, 6), margin = new RectOffset(0, 4, 0, 0) };
             bigTabOff.normal.background = Solid(new Color(0.17f, 0.15f, 0.12f)); bigTabOff.hover.background = Solid(new Color(0.26f, 0.21f, 0.12f)); bigTabOff.onNormal.background = bigTabOff.normal.background;
             bigTabOff.normal.textColor = new Color(0.72f, 0.67f, 0.58f);
             bigTabOn = new GUIStyle(bigTabOff) { fontStyle = FontStyle.Bold };
             bigTabOn.normal.background = Solid(new Color(0.55f, 0.37f, 0.09f)); bigTabOn.hover.background = bigTabOn.normal.background;
             bigTabOn.normal.textColor = new Color(1f, 0.96f, 0.85f);
-            bigPrimary = new GUIStyle(btnStyle) { fontSize = 13, fontStyle = FontStyle.Bold, padding = new RectOffset(12, 12, 6, 6) };
+            bigPrimary = new GUIStyle(btnStyle) { fontSize = FS(13), fontStyle = FontStyle.Bold, padding = new RectOffset(12, 12, 6, 6) };
             bigPrimary.normal.background = Solid(new Color(0.58f, 0.39f, 0.08f)); bigPrimary.hover.background = Solid(new Color(0.75f, 0.52f, 0.12f));
-            bigTitle = new GUIStyle(labelStyle) { fontSize = 20, fontStyle = FontStyle.Bold, richText = true };
+            bigTitle = new GUIStyle(labelStyle) { fontSize = FS(20), fontStyle = FontStyle.Bold, richText = true };
             bigTitle.normal.textColor = new Color(0.97f, 0.92f, 0.8f);
-            bigName = new GUIStyle(labelStyle) { fontSize = 14, fontStyle = FontStyle.Bold, richText = true, wordWrap = true };
+            bigName = new GUIStyle(labelStyle) { fontSize = FS(14), fontStyle = FontStyle.Bold, richText = true, wordWrap = true };
             bigName.normal.textColor = new Color(0.96f, 0.93f, 0.85f);
-            bigWrap = new GUIStyle(labelStyle) { wordWrap = true, richText = true, fontSize = 13 };
+            bigWrap = new GUIStyle(labelStyle) { wordWrap = true, richText = true, fontSize = FS(13) };
             bigRule = new GUIStyle(GUI.skin.box) { margin = new RectOffset(0, 4, 2, 4), padding = new RectOffset(0, 0, 0, 0), fixedHeight = 1 };
             bigRule.normal.background = Solid(new Color(0.3f, 0.24f, 0.13f));
         }
@@ -127,7 +130,7 @@ namespace ObenseuerLootMap
         {
             GUIStyle g;
             if (bigBadges.TryGetValue(c, out g) && g.normal.background != null) return g;
-            g = new GUIStyle(labelStyle) { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, padding = new RectOffset(7, 7, 2, 2), margin = new RectOffset(0, 5, 2, 0), richText = true, wordWrap = false };
+            g = new GUIStyle(labelStyle) { fontSize = FS(11), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, padding = new RectOffset(7, 7, 2, 2), margin = new RectOffset(0, 5, 2, 0), richText = true, wordWrap = false };
             g.normal.background = Solid(c); g.normal.textColor = new Color(0.97f, 0.95f, 0.9f);
             return bigBadges[c] = g;
         }
@@ -149,7 +152,9 @@ namespace ObenseuerLootMap
                 if (GUILayout.Button("Profit finder", bigTab == 0 ? bigTabOn : bigTabOff)) bigTab = 0;
                 if (GUILayout.Button("Item search", bigTab == 1 ? bigTabOn : bigTabOff)) bigTab = 1;
                 GUILayout.FlexibleSpace();
-                if (GUILayout.Button("Close  ·  " + cfgBigKey.Value, bigTabOff)) SetBig(false);
+                if (GUILayout.Button("A−", bigTabOff, GUILayout.Width(34))) cfgBigScale.Value = Mathf.Max(0.8f, Mathf.Round((cfgBigScale.Value - 0.1f) * 10f) / 10f);
+                if (GUILayout.Button("A+", bigTabOff, GUILayout.Width(34))) cfgBigScale.Value = Mathf.Min(1.8f, Mathf.Round((cfgBigScale.Value + 0.1f) * 10f) / 10f);
+                if (GUILayout.Button("Close  ·  " + cfgBigKey.Value + " / Esc", bigTabOff)) SetBig(false);
                 GUILayout.EndHorizontal();
                 GUILayout.Space(8);
                 if (bigTab == 0) BigProfit(); else BigItems();
