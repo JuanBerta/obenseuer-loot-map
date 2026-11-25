@@ -327,7 +327,7 @@ function expandNeeds(base, opt) {
   const visit = (id, n, stack) => {
     id = +id; const it = DB.items[id];
     const rid = wantCraft(id, opt) && !(it && it[6].length) && stack.length < 8 && !stack.includes(id) ? bestRecipe(id) : null;
-    if (!rid) { raw[id] = (raw[id] || 0) + n; return; }
+    if (rid == null) { raw[id] = (raw[id] || 0) + n; return; }
     const r = X.R[rid], per = r[8].find(x => x[0] === id)[1], b = n / per;
     r[7].forEach(x => visit(x[0], x[1] * b / X.div(r, x[0]), stack.concat(id)));
     if (!(rid in steps)) { order.push(rid); outs[rid] = id; }
@@ -690,7 +690,7 @@ function listCard() {
     <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span class="rn">${rl(rid)}</span>${qtyCtl(rid, L[rid])}</div>`).join('')}
     ${crafted ? `<h3>Craft these first · ${crafted}</h3>${ul(E.order.map(rid => { const out = E.outs[rid], per = X.R[rid][8].find(x => x[0] === out)[1], b = up(E.steps[rid]);
       return `<span>${rl(rid)} <small class="muted">× ${b} → ${num(per * b)} ${esc(iname(out))}</small></span><button type="button" class="shopbtn mini" data-pref="${out}:buy" title="Find or buy it instead of crafting it">Find or buy instead</button>`; }))}` : ''}
-    <h3>${o.mode !== 'off' || crafted ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = bestRecipe(+id) && !(DB.items[id] && DB.items[id][6].length);
+    <h3>${o.mode !== 'off' || crafted ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = bestRecipe(+id) != null && !(DB.items[id] && DB.items[id][6].length);
       return `<span>${il(id)} <small class="muted">× ${num(up(n))}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}${o.pref[id] === 'find' ? `<button type="button" class="shopbtn mini" data-pref="${id}:buy" title="Count it as bought again">Buy it instead</button>` : `<button type="button" class="shopbtn mini" data-pref="${id}:find" title="You will find it, not buy it: it stays out of the cost and the shopping route">Find it instead</button>`}`; }))}
     <h3>You will make</h3>${ul(byName(Object.entries(make)).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}</small>`))}
     ${tradeRun(E.raw, make, o)}
