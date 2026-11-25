@@ -15,7 +15,7 @@ def stats(it):
                nic=a.get('Nicotine',0)+(amt if t=='Smoke' else 0))
         return {k:round(x,3) for k,x in v.items() if x} or None
     return None
-items={it['ID']:[it['Title'],it.get('BaseValue',0),it.get('Categories') or [],sorted({str(m.get('$type','')).split('.')[-1] for m in (it.get('Meta') or []) if isinstance(m,dict)}),stats(it),next((int(m.get('maxAmmo',0)) for m in (it.get('Meta') or []) if isinstance(m,dict) and str(m.get('$type','')).endswith('ItemAmmodata') and m.get('maxAmmo',0)>1 and not (m.get('ammoItems') or m.get('ammoItemcategories'))),0)] for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig'))}
+items={it['ID']:[it['Title'],it.get('BaseValue',0),it.get('Categories') or [],sorted({str(m.get('$type','')).split('.')[-1] for m in (it.get('Meta') or []) if isinstance(m,dict)}),stats(it),next((int(m.get('maxAmmo',0)) for m in (it.get('Meta') or []) if isinstance(m,dict) and str(m.get('$type','')).endswith('ItemAmmodata') and m.get('maxAmmo',0)>1 and not (isinstance(m.get('ammoItems'),dict) and m['ammoItems'].get('$content') or isinstance(m.get('ammoItems'),list) and m['ammoItems'] or m.get('ammoItemcategories'))),0)] for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig'))}
 loot={c['Name']:[c.get('ItemCommon') or [],c.get('ItemRare') or []] for c in json.load(open(os.path.join(SA,'StorageSpawnCategory.json'),encoding='utf-8-sig'))['$content']}
 raw=open(os.path.join(SA,'Recipes.json'),'rb').read()
 txt=raw.decode('utf-16') if raw[:2] in (b'\xff\xfe',b'\xfe\xff') else raw.decode('utf-8-sig')
@@ -26,7 +26,7 @@ for r in json.loads(txt)['Recipes']:
     recipe_inputs[str(r['ID'])]=[r.get('Name') or '', r.get('Type') or '', sorted(set(ids))]
     if r.get('Type')!='Debug' and r.get('output'):   # amounts, outputs, time and fail chance for the Trade panel (profit at real shop prices)
         kv=lambda l:[[x['Key']['ID'],x['Value']] for x in l or []]
-        trade[str(r['ID'])]=[r.get('Name') or '', r.get('Type') or '', r.get('ProcessTime',0), r.get('FailChance',0), kv(r.get('input')), kv(r.get('output')), r.get('RelevantSkill') or 'None', r.get('SkillFactor',1), (r.get('metaSettings') or {}).get('qualityFactor',1), (r.get('metaSettings') or {}).get('fixedQuality',0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0, 1 if (r.get('metaSettings') or {}).get('useAmmoAsInput') else 0]
+        trade[str(r['ID'])]=[r.get('Name') or '', r.get('Type') or '', r.get('ProcessTime',0), r.get('FailChance',0), kv(r.get('input')), kv(r.get('output')), r.get('RelevantSkill') or 'None', r.get('SkillFactor',1), (r.get('metaSettings') or {}).get('qualityFactor',1), (r.get('metaSettings') or {}).get('fixedQuality',0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0, 1 if (r.get('metaSettings') or {}).get('useAmmoAsInput') else 0, r.get('MinimumSkill',0), kv(r.get('outputFail'))]
     if r.get('RelevantSkill') and r['RelevantSkill']!='None': skill_count[r['Type']][r['RelevantSkill']]+=1
 # recipe type -> skills it trains (main skill, plus others used by several recipes)
 type_skills={t:[k for k,n in c.most_common() if n>=2 or k==c.most_common(1)[0][0]] for t,c in skill_count.items()}

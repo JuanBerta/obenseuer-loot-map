@@ -415,6 +415,18 @@ namespace ObenseuerLootMap
             float sf = (float)r[7], qf = (float)r[8];
             return Mathf.Clamp(lvl * 0.2f * sf * (1f - fail) * qf, 0.05f, 2f);
         }
+        // The chance a craft fails at your level (the game's formula): the recipe's fail chance drops 3 points per skill level above its minimum; below the minimum it gets much worse.
+        float FailNow(JArray r, float f)
+        {
+            if (f >= 1f) return 1f; if (f <= 0f) return f;
+            string sk = r.Count > 6 ? (string)r[6] : "None"; if (sk == "None" || !Enum.TryParse(sk, out PlayerStats.PlayerSkillType type)) return f;
+            float lv = 5f; try { lv = PlayerStats.instance.GetSkillWithEffects(type); } catch { }
+            float mn = r.Count > 11 ? Convert.ToSingle(r[11]) : 0f, sf = Mathf.Max(0.0001f, (float)r[7]), num = Mathf.Max(0f, lv - mn), eq = 1f;
+            if (mn > 0f && mn > lv) eq /= 0.5f * (mn - lv) + 1f;
+            float n2 = 1f - ((1f - f / (eq > 1f ? eq : 1f)) * (eq < 1f ? eq : 1f) + 0.03f * num * sf);
+            if (mn > 0f && mn > lv) n2 *= Mathf.Pow(1f + n2, mn - lv);
+            return Mathf.Clamp01(n2);
+        }
         List<TradeRow> BuildTrade()
         {
             var vendors = tradeVendors ??= Db.scenes.Values.SelectMany(sc => sc.vendors).ToList();
@@ -453,7 +465,14 @@ namespace ObenseuerLootMap
                     if (b.v != null) { float qv = Db.ItemField(id, 3).Contains("ItemQualityData") ? QualityValue(CraftQuality(r, fail)) : 1f; row.rev += Mathf.Max(1f, Mathf.Round(b.p * qv)) * n; sellAt ??= b.v.n; }
                 }
                 if (sellAt == null) continue;
-                row.rev *= 1f - fail; row.profit = row.rev - row.cost; row.perHour = time > 0 ? row.profit * 3600f / time : float.MinValue;
+                float failNow = FailNow(r, fail), failRev = 0f;
+                if (r.Count > 12 && r[12] is JArray fo)
+                    foreach (JArray x in fo)
+                    {
+                        int id = (int)x[0]; var b = Best(id);
+                        if (b.v != null) { float qv = Db.ItemField(id, 3).Contains("ItemQualityData") ? QualityValue(CraftQuality(r, fail) * 0.5f) : 1f; failRev += Mathf.Max(1f, Mathf.Round(b.p * qv)) * (float)x[1]; }
+                    }
+                row.rev = row.rev * (1f - failNow) + failRev * failNow; row.profit = row.rev - row.cost; row.perHour = time > 0 ? row.profit * 3600f / time : float.MinValue;
                 row.route = (buyAt.Count > 0 ? Loc.T("Buy at") + " " + string.Join(", ", buyAt.Take(3)) + " · " : "") + Loc.T("sell at") + " " + sellAt;
                 rows.Add(row);
             }

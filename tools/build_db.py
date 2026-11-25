@@ -52,7 +52,7 @@ for it in read_json('Items.json'):
     items[it['ID']] = [it['Title'].strip(), it.get('BaseValue', 0), it.get('Categories') or [], (it.get('Description') or '').strip(),
                        it.get('Stackable', 1), eff, grp, wall,
                        sorted({str(m.get('$type', '')).split('.')[-1] for m in it.get('Meta') or [] if isinstance(m, dict)}), stats(it),
-                       next((int(m.get('maxAmmo', 0)) for m in it.get('Meta') or [] if isinstance(m, dict) and str(m.get('$type', '')).endswith('ItemAmmodata') and m.get('maxAmmo', 0) > 1 and not (m.get('ammoItems') or m.get('ammoItemcategories'))), 0)]   # [10]: uses per item (ink = 50), 0 = single use
+                       next((int(m.get('maxAmmo', 0)) for m in it.get('Meta') or [] if isinstance(m, dict) and str(m.get('$type', '')).endswith('ItemAmmodata') and m.get('maxAmmo', 0) > 1 and not (isinstance(m.get('ammoItems'), dict) and m['ammoItems'].get('$content') or isinstance(m.get('ammoItems'), list) and m['ammoItems'] or m.get('ammoItemcategories'))), 0)]   # [10]: uses per item (ink = 50), 0 = single use
 # ---- recipes
 recipes = []
 kv = lambda l: [[x['Key']['ID'], x['Value']] for x in l or []]

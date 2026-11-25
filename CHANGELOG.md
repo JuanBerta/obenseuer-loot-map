@@ -1,6 +1,8 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- Profit uses the real fail chance at your level (it drops 3 points per skill level above the recipe's minimum, and is far worse below it) and counts what a failed craft sells for. The website warns when your skill is below a recipe's minimum.
+- Every multi-use item is now counted per use, not only a few: Glue (10 uses) and about 140 others (soap, cigarettes, medicine, wine bottles, pizzas...). Items that take other items as ammo (flashlights, lighters...) are left alone.
 - Searching marks spots behind locked doors: the mod asks the game's pathfinder what you can walk to with locked doors treated as walls, and dims the rest with a purple (lockpick) or brown (key / cannot be opened) edge and a tooltip line. New options: mark them (on) and hide them (off); hidden spots are also left out of planned routes.
 - Multi-use items count per use: a Bottle of Ink is 50 uses, so a recipe that spends one use is charged about 1/50 of the bottle in the Profit finder, the website's profit and the shopping list (which buys whole items, rounded up).
 
