@@ -499,3 +499,7 @@ dl.kv dt{color:var(--mut,#9aa0aa)}dl.kv dd{margin:0;font-variant-numeric:tabular
 .tierhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:1rem}.tierhead .grow{flex:1}
 .tiermeta{margin:6px 0;font-size:.85rem;color:var(--mut,#9aa0aa)}
 table.tbl.up td,table.tbl.up th{text-align:left}table.tbl.up tr.grp th{background:var(--s2,#1a1d23);color:var(--acc,#d9b45a);font-size:.8rem;letter-spacing:.04em}
+
+/* layers panel: sit above the legend and stay inside the map */
+.pop{z-index:40;max-height:calc(100vh - 290px);min-height:200px}
+.legend{z-index:5}
