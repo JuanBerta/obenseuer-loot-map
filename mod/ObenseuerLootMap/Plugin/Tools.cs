@@ -400,7 +400,7 @@ namespace ObenseuerLootMap
 
 
         // ---------------- profit finder: recipes ranked by what they earn at real shop prices ----------------
-        class TradeRow { public string name; public float cost, rev, profit, perHour; public bool estimated; public string route; public HashSet<int> ids = new HashSet<int>(); }
+        class TradeRow { public string key, name; public float cost, rev, profit, perHour; public bool estimated; public string route; public HashSet<int> ids = new HashSet<int>(); }
         List<TradeRow> tradeAll; bool tradeOpen; int tradeSort; List<VendorData> tradeVendors;
         readonly Dictionary<int, (float p, VendorData v)> tradeCheap = new Dictionary<int, (float p, VendorData v)>(), tradeBest = new Dictionary<int, (float p, VendorData v)>();
         static string Money(float x) => (x >= 0 ? "+" : "−") + Mathf.Abs(x).ToString("0.#");
@@ -467,7 +467,7 @@ namespace ObenseuerLootMap
             foreach (var kv in Db.trade)
             {
                 var r = kv.Value; if (r.Count < 6) continue;
-                var row = new TradeRow { name = (string)r[0] };
+                var row = new TradeRow { key = kv.Key, name = (string)r[0] };
                 float fail = (float)r[3], time = (float)r[2]; bool bad = false; var buyAt = new List<string>(); string sellAt = null;
                 foreach (JArray x in (JArray)r[4])
                 {

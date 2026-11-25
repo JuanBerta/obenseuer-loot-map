@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- Home window: new Craft view for any craftable item (and from the Profit finder). It shows the recipe, station, your skill, fail chance, how many to make, the full chain of what you need (buy / craft / find / already have), the crafting order, the raw items with what you hold, the cost of what you still lack, and buttons to find missing items, find a workstation, copy the plan or use it as your shopping list. Redesigned the window with cards and badges.
 - New: press Home anywhere in the game for a big Loot Map window with the Profit finder (top 100, by profit or profit per hour) and an item search. Find marks the result on the map and in the world. Key setting: BigWindowKey.
 - Fixed: after pressing Zoom to me you could only zoom in, not out.
 - Fixed: long Profit finder lines ran past the right edge of the panel; they now wrap.

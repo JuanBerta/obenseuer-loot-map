@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Configuration;
 using UnityEngine;
+using Newtonsoft.Json.Linq;
 using UnityEngine.SceneManagement;
 
 namespace ObenseuerLootMap
@@ -84,58 +85,133 @@ namespace ObenseuerLootMap
             bigRect = GUILayout.Window(1280266069, bigRect, DrawBig, "LOOT MAP", panelStyle, GUILayout.Width(w), GUILayout.Height(h));
         }
 
+        // ---- Look ----
+        GUIStyle bigCard, bigSection, bigTabOff, bigTabOn, bigPrimary, bigTitle, bigRule, bigName;
+        readonly Dictionary<Color, GUIStyle> bigBadges = new Dictionary<Color, GUIStyle>();
+        static readonly Color BigOchre = new Color(0.9f, 0.62f, 0.18f), BigGood = new Color(0.36f, 0.65f, 0.3f), BigBad = new Color(0.78f, 0.3f, 0.24f), BigInfo = new Color(0.3f, 0.45f, 0.62f), BigMuted = new Color(0.35f, 0.33f, 0.3f), BigGold = new Color(0.72f, 0.58f, 0.18f);
+
+        static Texture2D BigBox(Color fill, Color edge)
+        {
+            var t = new Texture2D(6, 6) { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Point };
+            for (int y = 0; y < 6; y++) for (int x = 0; x < 6; x++) t.SetPixel(x, y, (x == 0 || y == 0 || x == 5 || y == 5) ? edge : fill);
+            t.Apply();
+            return t;
+        }
+
+        void BigStyles()
+        {
+            if (bigCard != null && bigCard.normal.background != null) return;
+            bigBadges.Clear();
+            bigCard = new GUIStyle(GUI.skin.box) { border = new RectOffset(2, 2, 2, 2), padding = new RectOffset(12, 12, 8, 8), margin = new RectOffset(0, 4, 0, 5) };
+            bigCard.normal.background = BigBox(new Color(0.125f, 0.11f, 0.095f), new Color(0.26f, 0.21f, 0.13f));
+            bigSection = new GUIStyle(labelStyle) { fontSize = 12, fontStyle = FontStyle.Bold, padding = new RectOffset(2, 0, 8, 2) };
+            bigSection.normal.textColor = BigOchre;
+            bigTabOff = new GUIStyle(btnStyle) { fontSize = 13, padding = new RectOffset(16, 16, 6, 6), margin = new RectOffset(0, 4, 0, 0) };
+            bigTabOff.normal.background = Solid(new Color(0.17f, 0.15f, 0.12f)); bigTabOff.hover.background = Solid(new Color(0.26f, 0.21f, 0.12f)); bigTabOff.onNormal.background = bigTabOff.normal.background;
+            bigTabOff.normal.textColor = new Color(0.72f, 0.67f, 0.58f);
+            bigTabOn = new GUIStyle(bigTabOff) { fontStyle = FontStyle.Bold };
+            bigTabOn.normal.background = Solid(new Color(0.55f, 0.37f, 0.09f)); bigTabOn.hover.background = bigTabOn.normal.background;
+            bigTabOn.normal.textColor = new Color(1f, 0.96f, 0.85f);
+            bigPrimary = new GUIStyle(btnStyle) { fontSize = 13, fontStyle = FontStyle.Bold, padding = new RectOffset(12, 12, 6, 6) };
+            bigPrimary.normal.background = Solid(new Color(0.58f, 0.39f, 0.08f)); bigPrimary.hover.background = Solid(new Color(0.75f, 0.52f, 0.12f));
+            bigTitle = new GUIStyle(labelStyle) { fontSize = 20, fontStyle = FontStyle.Bold, richText = true };
+            bigTitle.normal.textColor = new Color(0.97f, 0.92f, 0.8f);
+            bigName = new GUIStyle(labelStyle) { fontSize = 14, fontStyle = FontStyle.Bold, richText = true, wordWrap = true };
+            bigName.normal.textColor = new Color(0.96f, 0.93f, 0.85f);
+            bigWrap = new GUIStyle(labelStyle) { wordWrap = true, richText = true, fontSize = 13 };
+            bigRule = new GUIStyle(GUI.skin.box) { margin = new RectOffset(0, 4, 2, 4), padding = new RectOffset(0, 0, 0, 0), fixedHeight = 1 };
+            bigRule.normal.background = Solid(new Color(0.3f, 0.24f, 0.13f));
+        }
+
+        GUIStyle BigBadge(Color c)
+        {
+            GUIStyle g;
+            if (bigBadges.TryGetValue(c, out g) && g.normal.background != null) return g;
+            g = new GUIStyle(labelStyle) { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, padding = new RectOffset(7, 7, 2, 2), margin = new RectOffset(0, 5, 2, 0), richText = true, wordWrap = false };
+            g.normal.background = Solid(c); g.normal.textColor = new Color(0.97f, 0.95f, 0.9f);
+            return bigBadges[c] = g;
+        }
+
+        void Badge(string text, Color c) { GUILayout.Label(text, BigBadge(c), GUILayout.ExpandWidth(false)); }
+
+        void Section(string text) { GUILayout.Label(text.ToUpperInvariant(), bigSection); GUILayout.Box(GUIContent.none, bigRule, GUILayout.ExpandWidth(true)); }
+
         void DrawBig(int id)
         {
-            if (bigWrap == null || bigWrap.font != labelStyle.font) { bigWrap = new GUIStyle(labelStyle) { wordWrap = true, richText = true }; }
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Toggle(bigTab == 0, "Profit finder", btnStyle, GUILayout.Height(28))) bigTab = 0;
-            if (GUILayout.Toggle(bigTab == 1, "Item search", btnStyle, GUILayout.Height(28))) bigTab = 1;
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Close (" + cfgBigKey.Value + ")", btnStyle, GUILayout.Width(110), GUILayout.Height(28))) SetBig(false);
-            GUILayout.EndHorizontal();
-            GUILayout.Space(6);
-            if (bigTab == 0) BigProfit(); else BigItems();
-            bigTyping = GUI.GetNameOfFocusedControl() == "lootmap_big_search";
+            BigStyles();
+            if (craftId >= 0)
+            {
+                BigCraft();
+            }
+            else
+            {
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Profit finder", bigTab == 0 ? bigTabOn : bigTabOff)) bigTab = 0;
+                if (GUILayout.Button("Item search", bigTab == 1 ? bigTabOn : bigTabOff)) bigTab = 1;
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Close  ·  " + cfgBigKey.Value, bigTabOff)) SetBig(false);
+                GUILayout.EndHorizontal();
+                GUILayout.Space(8);
+                if (bigTab == 0) BigProfit(); else BigItems();
+            }
+            bigTyping = (GUI.GetNameOfFocusedControl() ?? "").StartsWith("lootmap_big");
             GUI.DragWindow(new Rect(0, 0, 10000, 26));
         }
 
         void BigProfit()
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Sort by", labelStyle, GUILayout.Width(70));
-            if (GUILayout.Button(bigSort == 0 ? "Profit" : "Profit per hour", btnStyle, GUILayout.Width(150))) bigSort = 1 - bigSort;
-            if (GUILayout.Button("Refresh", btnStyle, GUILayout.Width(90))) { try { bigRows = BuildTrade(); } catch (Exception) { } }
+            GUILayout.Label("Sort by", labelStyle, GUILayout.Width(60));
+            if (GUILayout.Button(bigSort == 0 ? "Profit" : "Profit per hour", bigTabOff)) bigSort = 1 - bigSort;
+            if (GUILayout.Button("Refresh", bigTabOff)) { try { bigRows = BuildTrade(); } catch (Exception) { } }
+            GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
-            GUILayout.Label("Real shop prices, after the fail chance and with the quality your current skills would give. ~ means an ingredient is not sold in any shop. Find marks it on the map and in the world.", smallStyle);
+            GUILayout.Label("Real shop prices, after the fail chance and with the quality your current skills would give. ~ = an ingredient is not sold in any shop.", smallStyle);
             var rows = (bigRows ?? new List<TradeRow>());
             var list = (bigSort == 0 ? rows.OrderByDescending(r => r.profit) : rows.OrderByDescending(r => r.perHour)).Take(100).ToList();
-            TradeRow pick = null;
+            TradeRow pick = null, pickCraft = null;
             bigScroll = GUILayout.BeginScrollView(bigScroll);
             if (list.Count == 0) GUILayout.Label("No profitable recipes found", smallStyle);
             foreach (var r in list)
             {
+                GUILayout.BeginHorizontal(bigCard);
+                GUILayout.BeginVertical();
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("<b>" + r.name + (r.estimated ? " ~" : "") + "</b>  ·  " + Money(r.profit) + " OC" + (r.perHour > float.MinValue ? "  ·  " + Money(r.perHour) + "/h" : ""), bigWrap, GUILayout.ExpandWidth(true));
-                if (GUILayout.Button(Loc.T("Find"), btnStyle, GUILayout.Width(70))) pick = r;
+                GUILayout.Label(r.name + (r.estimated ? "  ~" : ""), bigName, GUILayout.ExpandWidth(false));
+                GUILayout.FlexibleSpace();
+                Badge(Money(r.profit) + " OC", r.profit >= 0 ? BigGood : BigBad);
+                if (r.perHour > float.MinValue) Badge(Money(r.perHour) + " /h", BigInfo);
                 GUILayout.EndHorizontal();
                 GUILayout.Label(r.route, smallStyle);
-                GUILayout.Space(4);
+                GUILayout.EndVertical();
+                GUILayout.BeginVertical(GUILayout.Width(74));
+                if (GUILayout.Button("Craft", bigPrimary)) pickCraft = r;
+                if (GUILayout.Button(Loc.T("Find"), btnStyle)) pick = r;
+                GUILayout.EndVertical();
+                GUILayout.EndHorizontal();
             }
             GUILayout.EndScrollView();
             if (pick != null) { SetIdSearch(new HashSet<int>(pick.ids), pick.name); SetBig(false); }
+            if (pickCraft != null && pickCraft.key != null)
+            {
+                var rr = Db.trade[pickCraft.key];
+                int outId = rr[5] is JArray oa && oa.Count > 0 ? (int)((JArray)oa[0])[0] : -1;
+                if (outId >= 0) OpenCraft(outId, pickCraft.key);
+            }
         }
 
         void BigItems()
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Item", labelStyle, GUILayout.Width(50));
+            GUILayout.Label("Item", labelStyle, GUILayout.Width(44));
             GUI.SetNextControlName("lootmap_big_search");
             bigSearch = GUILayout.TextField(bigSearch ?? "", 40, fieldStyle);
             GUILayout.EndHorizontal();
+            GUILayout.Space(4);
             string q = (bigSearch ?? "").Trim().ToLowerInvariant();
-            int pickId = -1;
+            int pickId = -1, craftOpen = -1;
             bigScroll = GUILayout.BeginScrollView(bigScroll);
-            if (q.Length < 2) GUILayout.Label("Type at least 2 letters.", smallStyle);
+            if (q.Length < 2) GUILayout.Label("Type at least 2 letters. Craft shows everything an item needs.", smallStyle);
             else
             {
                 int shown = 0, total = 0;
@@ -147,15 +223,20 @@ namespace ObenseuerLootMap
                     total++;
                     if (shown >= 60) continue;
                     shown++;
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Label("<b>" + name + "</b>  ·  worth " + Db.ValueOf(id) + " OC", bigWrap, GUILayout.ExpandWidth(true));
-                    if (GUILayout.Button(Loc.T("Find"), btnStyle, GUILayout.Width(70))) pickId = id;
+                    bool craftable = RecipesFor(id).Count > 0;
+                    GUILayout.BeginHorizontal(bigCard);
+                    GUILayout.Label(name, bigName, GUILayout.ExpandWidth(true));
+                    Badge(Db.ValueOf(id) + " OC", BigGold);
+                    if (craftable) Badge("CRAFTABLE", BigInfo);
+                    if (craftable) { if (GUILayout.Button("Craft", bigPrimary, GUILayout.Width(74))) craftOpen = id; }
+                    else if (GUILayout.Button(Loc.T("Find"), btnStyle, GUILayout.Width(74))) pickId = id;
                     GUILayout.EndHorizontal();
                 }
                 if (total == 0) GUILayout.Label("No items match.", smallStyle);
                 else if (total > shown) GUILayout.Label((total - shown) + " more. Type more letters to narrow it down.", smallStyle);
             }
             GUILayout.EndScrollView();
+            if (craftOpen >= 0) OpenCraft(craftOpen, null);
             if (pickId >= 0) { SetIdSearch(new HashSet<int> { pickId }, Db.ItemName(pickId)); SetBig(false); }
         }
     }
