@@ -70,7 +70,7 @@ for fn in need:
         if c!=114: continue
         try: r,go,sc,nm=usf.mb_head(s,p); n=usf.script_name(s,sc)
         except Exception: continue
-        if not n or n[2] not in ('manufacturing','Generator'): continue
+        if not n or n[2] not in ('manufacturing','manufacturingProcess','Generator'): continue   # manufacturingProcess = the slow ones (mashing, fermenting, distilling)
         try: _,d,_=ser.read_mb(s,p,'Assembly-CSharp',n[2])
         except Exception: continue
         g=go[1]

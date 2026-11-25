@@ -148,6 +148,7 @@ for i,name in enumerate(scenes):
             if p.get('s')==1: continue   # a locked / owned stock room, not the shelves
             if p.get('t') in loot: ids.update(loot[p['t']][0]); ids.update(loot[p['t']][1])
             ids.update(p.get('f') or [])
+        ids={x for x in ids if x and x>0}   # 0 = an empty shelf slot
         near=next((v for v in V if (v['x']-m['x'])**2+(v['z']-m['z'])**2<15**2 and ('t' in v or 'i' in v or 'b' in v)), None)
         if near and not m.get('currency')==1:   # the market is already a shop of its own (a trader): add what its shelves hold
             if ids: near['i']=sorted(set(near.get('i',[]))|ids); need.update(ids)

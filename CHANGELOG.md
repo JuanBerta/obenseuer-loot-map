@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- Shops that show their goods on separate shelves (Alco, the butcher shop) now list everything they sell, and empty market shelf slots no longer show as an item. The slow stations (Mashing Barrel/Kettle, Fermenting Barrel/Bucket/Container, distilleries and others) now show the recipes they craft, their power and their upgrades.
 - Profit finder (mod and website): liquids are now priced by the container they are sold in. A shop pays for the whole filled container, and each container multiplies the liquid's value (Fancy Glass Bottle x2, Plastic Canister x0.7, and so on). Pick the container with the new "Sell liquids in" button/menu; the default is the best one, and "plain liters" gives the old numbers.
 - Liquids (Rice Wine, etc.) on the shopping list and in the Craft view are labelled "(liters)", and the have/need count now includes liquid held in your bottles instead of showing 0.
 - Self-service markets (O-Market, Mine Market, and others where you take things from shelves and pay at the register) now count as places that sell items, at the market's own price. They show up as shops in the mod and website and in the cheapest-price, profit and shopping calculations. Markets that charge RM are listed but left out of OC price comparisons.
