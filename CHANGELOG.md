@@ -1,6 +1,8 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- Fixed: after pressing Zoom to me you could only zoom in, not out.
+- Fixed: long Profit finder lines ran past the right edge of the panel; they now wrap.
 - Faster searching: the map is rebuilt at most about twice a second instead of many times in a row while things load.
 - The locked-door marking is now an experimental option, off by default (config MarkBehindLockedDoorsExperimental) while a crash is investigated.
 - Fixed: searching a single letter (or any search matching hundreds of items) marked the whole map and could crash the game. Searches now need 2+ letters, ask for more letters when too many items match, and the map shows at most 2500 markers.

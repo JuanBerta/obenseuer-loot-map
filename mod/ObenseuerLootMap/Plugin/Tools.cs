@@ -511,13 +511,16 @@ namespace ObenseuerLootMap
             foreach (var r in top)
             {
                 GUILayout.BeginHorizontal();
-                GUILayout.Label($"{r.name}{(r.estimated ? " ~" : "")} · {Money(r.profit)} OC" + (r.perHour > float.MinValue ? $" · {Money(r.perHour)}/h" : ""), labelStyle);
+                if (tradeWrap == null || tradeWrapSrc != labelStyle) { tradeWrapSrc = labelStyle; tradeWrap = new GUIStyle(labelStyle) { wordWrap = true, clipping = TextClipping.Clip }; }
+                GUILayout.Label($"{r.name}{(r.estimated ? " ~" : "")} · {Money(r.profit)} OC" + (r.perHour > float.MinValue ? $" · {Money(r.perHour)}/h" : ""), tradeWrap, GUILayout.ExpandWidth(true), GUILayout.MaxWidth(215));
                 if (GUILayout.Button(Loc.T("Find"), btnStyle, GUILayout.Width(50))) SetIdSearch(new HashSet<int>(r.ids), r.name);
                 GUILayout.EndHorizontal();
                 GUILayout.Label(r.route, smallStyle);
             }
             GUILayout.Label(Loc.T("Real shop prices, after the fail chance and with the quality your current skills would give. ~ means some ingredient is not sold in any shop (counted at its base value)."), smallStyle);
         }
+
+        GUIStyle tradeWrap, tradeWrapSrc;
 
         // ---------------- panel ----------------
         void DrawToolsPanel()

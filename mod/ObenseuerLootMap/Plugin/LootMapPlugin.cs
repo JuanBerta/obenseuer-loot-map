@@ -278,6 +278,8 @@ public partial class LootMapPlugin : BaseUnityPlugin
 
 	private static readonly AccessTools.FieldRef<Map, float> MaxZoom = AccessTools.FieldRefAccess<Map, float>("maxZoom");
 
+	private static readonly AccessTools.FieldRef<Map, Vector3> MapScale = AccessTools.FieldRefAccess<Map, Vector3>("scale");
+
 	private static readonly AccessTools.FieldRef<Map, float> SliderValue = AccessTools.FieldRefAccess<Map, float>("currentSliderValue");
 
 	private static readonly AccessTools.FieldRef<Map, Slider> MapSlider = AccessTools.FieldRefAccess<Map, Slider>("mapSlider");
@@ -3571,6 +3573,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 					val3 = Vector3.one;
 				}
 				((Transform)val).localScale = val3 * Mathf.Max(1f, MaxZoom.Invoke(map));
+				MapScale.Invoke(map) = ((Transform)val).localScale;   // the game zooms from its own copy of the scale; keep it in step or zooming out stops working
 				Transform parent = ((Transform)val).parent;
 				RectTransform val4 = (RectTransform)(object)((parent is RectTransform) ? parent : null);
 				Vector3 val5;
