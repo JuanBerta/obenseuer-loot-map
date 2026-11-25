@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- Faster searching: the map is rebuilt at most about twice a second instead of many times in a row while things load.
 - The locked-door marking is now an experimental option, off by default (config MarkBehindLockedDoorsExperimental) while a crash is investigated.
 - Fixed: searching a single letter (or any search matching hundreds of items) marked the whole map and could crash the game. Searches now need 2+ letters, ask for more letters when too many items match, and the map shows at most 2500 markers.
 - Fixed: the locked-door check could freeze or crash the game in big places (like the Bazaar) while typing in the search box. It now only looks about 90 m around you, rescans doors every 20 s, and waits while you type.

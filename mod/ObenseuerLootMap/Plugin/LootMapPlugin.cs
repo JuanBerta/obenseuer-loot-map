@@ -115,6 +115,8 @@ public partial class LootMapPlugin : BaseUnityPlugin
 
 	private Vector2 panelScroll;
 
+	private float lastBuildAt;
+
 	private float panelContentH;
 
 	private bool panelInit;
@@ -2692,8 +2694,9 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			}
 		}
 		string text = string.Join("|", CurrentScene, CurrentMap, appliedSearch, searchIdsLabel, cfgEnabled.Value, cfgContainers.Value, cfgPickups.Value, cfgRecipes.Value, cfgStations.Value, cfgShops.Value, cfgFreeOnly.Value, cfgOnlyNow.Value, cfgFloorOnly.Value, cfgWholeMap.Value, cfgMarkerSize.Value, floorBand, LiveKey(), Loc.Lang, TrashRoute, ScavengerBridge.SearchedTodayCount, lootedVersion, cfgHideEmpty.Value, HourKey(), accessVersion, cfgAccess.Value, cfgHideLocked.Value);
-		if ((Object)(object)layer == (Object)null || text != builtKey)
+		if ((Object)(object)layer == (Object)null || builtKey == null || (text != builtKey && Time.unscaledTime - lastBuildAt >= 0.6f))
 		{
+			lastBuildAt = Time.unscaledTime;
 			Rebuild();
 			builtKey = text;
 		}
