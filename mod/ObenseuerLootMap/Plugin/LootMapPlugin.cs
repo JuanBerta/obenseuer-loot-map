@@ -2620,6 +2620,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			string trimmed = search.Trim();
 			bool quoted = trimmed.Length >= 3 && (trimmed[0] == '"' || trimmed[0] == '(');
 			searchWarn = null;
+			Logger.LogInfo("Search typed: '" + trimmed + "'");
 			if (trimmed.Length > 0 && trimmed.Length < 2 && !quoted)
 			{
 				// One letter matches almost every item and would mark the whole map.
@@ -3136,6 +3137,10 @@ public partial class LootMapPlugin : BaseUnityPlugin
 
 	private void Rebuild()
 	{
+		if (Q.Length > 0)
+		{
+			Logger.LogInfo("Rebuild start, search '" + Q + "'");
+		}
 		//IL_0095: Unknown result type (might be due to invalid IL or missing references)
 		//IL_009c: Expected Obj, but got Unknown
 		//IL_00d9: Unknown result type (might be due to invalid IL or missing references)
@@ -3278,6 +3283,10 @@ public partial class LootMapPlugin : BaseUnityPlugin
 		foreach (Marker item5 in markers.Where((Marker k) => k.top))
 		{
 			((Transform)item5.rt).SetAsLastSibling();
+		}
+		if (Q.Length > 0)
+		{
+			Logger.LogInfo("Rebuild done: " + markers.Count + " markers, search '" + Q + "'");
 		}
 		lastZoom = -1f;
 	}

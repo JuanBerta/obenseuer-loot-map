@@ -15,7 +15,7 @@ namespace ObenseuerLootMap
 
         void BindAccessConfig()
         {
-            cfgAccess = Config.Bind("Filters", "MarkBehindLockedDoors", true, "While searching, mark spots you cannot walk to without passing a locked door (lockpick or key).");
+            cfgAccess = Config.Bind("Filters", "MarkBehindLockedDoorsExperimental", false, "While searching, mark spots you cannot walk to without passing a locked door (lockpick or key).");
             cfgHideLocked = Config.Bind("Filters", "HideBehindLockedDoors", false, "While searching, hide the spots behind locked doors (and leave them out of planned routes).");
         }
 
