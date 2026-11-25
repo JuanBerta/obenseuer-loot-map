@@ -243,7 +243,7 @@ namespace ObenseuerLootMap
             try
             {
                 foreach (var r in shopList.raw)
-                    have[r.Key] = Inventory.instance != null ? Mathf.FloorToInt((float)Inventory.instance.CountItemsDialogue(r.Key, false, true, -1.0, false)) : 0;
+                    have[r.Key] = Inventory.instance != null ? Mathf.FloorToInt((float)Inventory.instance.CountItemsDialogue(r.Key, false, true, -1.0, Db.IsLiquid(r.Key))) : 0;
             }
             catch { }
         }
@@ -280,7 +280,7 @@ namespace ObenseuerLootMap
             {
                 bool ok = Have(r.Key) >= r.Value; if (ok) done++;
                 if (shown++ >= 12) continue;
-                sb.Append(ok ? $"<color=#7fd88a>✔ {Db.ItemName(r.Key)}  {Have(r.Key)}/{r.Value}</color>\n" : $"{Db.ItemName(r.Key)}  <b>{Have(r.Key)}/{r.Value}</b>\n");
+                sb.Append(ok ? $"<color=#7fd88a>✔ {Db.AmtName(r.Key)}  {Have(r.Key)}/{r.Value}</color>\n" : $"{Db.AmtName(r.Key)}  <b>{Have(r.Key)}/{r.Value}</b>\n");
             }
             if (shopList.raw.Count > 12) sb.Append($"<color=#a8a08a>+{shopList.raw.Count - 12} {Loc.T("more")} ({done}/{shopList.raw.Count} ✔)</color>\n");
             foreach (var s in shopList.steps.Take(4)) sb.Append($"<color=#d9c7a2>⚒ {s.Key} ×{s.Value}</color>\n");

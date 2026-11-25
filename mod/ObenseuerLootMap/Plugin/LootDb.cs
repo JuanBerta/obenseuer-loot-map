@@ -134,6 +134,11 @@ public class LootDb
 		return value;
 	}
 
+	public bool IsLiquid(int id) => ItemField(id, 2).Contains("Liquid");
+
+	// shown where an amount is counted: a liquid is counted in liters held in bottles, not in items
+	public string AmtName(int id) => IsLiquid(id) ? ItemName(id) + " (liters)" : ItemName(id);
+
 	public string ItemName(int id)
 	{
 		if (!items.TryGetValue(id.ToString(), out var value) || value.Count <= 0)

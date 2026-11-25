@@ -51,9 +51,9 @@ namespace ObenseuerLootMap
             return tradeCheap[id] = c;
         }
 
-        static int InvCount(int id)
+        int InvCount(int id)
         {
-            try { return Inventory.instance != null ? Mathf.FloorToInt((float)Inventory.instance.CountItemsDialogue(id, false, true, -1.0, false)) : 0; } catch { return 0; }
+            try { return Inventory.instance != null ? Mathf.FloorToInt((float)Inventory.instance.CountItemsDialogue(id, false, true, -1.0, Db.IsLiquid(id))) : 0; } catch { return 0; }
         }
 
         void OpenCraft(int id, string key)
@@ -130,7 +130,7 @@ namespace ObenseuerLootMap
             GUILayout.BeginHorizontal(bigCard);
             Badge(tag, tagColor);
             GUILayout.BeginVertical();
-            GUILayout.Label(Mathf.CeilToInt(n.need - 0.001f) + "×  " + Db.ItemName(n.id) + (n.have > 0 && n.how != "have" ? "   <color=#9fdc8a>you have " + n.have + "</color>" : ""), bigName);
+            GUILayout.Label(Mathf.CeilToInt(n.need - 0.001f) + "×  " + Db.AmtName(n.id) + (n.have > 0 && n.how != "have" ? "   <color=#9fdc8a>you have " + n.have + "</color>" : ""), bigName);
             string detail = n.how == "buy" ? n.vendor + "  ·  " + n.price.ToString("0.#") + " OC each"
                 : n.how == "craft" ? n.recipe + "  ×" + n.crafts + "  ·  at " + n.station
                 : n.how == "have" ? "already in your inventory"
@@ -150,7 +150,7 @@ namespace ObenseuerLootMap
             sb.AppendLine(craftQty + "× " + Db.ItemName(craftId));
             foreach (var s in craftSteps) sb.AppendLine("Craft " + s.Key + " ×" + s.Value);
             sb.AppendLine("Needs:");
-            foreach (var kv in craftRaw) sb.AppendLine("  " + Mathf.CeilToInt(kv.Value - 0.001f) + "× " + Db.ItemName(kv.Key));
+            foreach (var kv in craftRaw) sb.AppendLine("  " + Mathf.CeilToInt(kv.Value - 0.001f) + "× " + Db.AmtName(kv.Key));
             return sb.ToString();
         }
 
@@ -227,7 +227,7 @@ namespace ObenseuerLootMap
                 int need = Mathf.CeilToInt(kv.Value - 0.001f), got = InvCount(kv.Key); var c = CheapOf(kv.Key);
                 bool ok = got >= need;
                 GUILayout.BeginHorizontal();
-                GUILayout.Label((ok ? "<color=#9fdc8a>✔  " : "") + Db.ItemName(kv.Key) + (ok ? "</color>" : ""), bigWrap, GUILayout.ExpandWidth(true));
+                GUILayout.Label((ok ? "<color=#9fdc8a>✔  " : "") + Db.AmtName(kv.Key) + (ok ? "</color>" : ""), bigWrap, GUILayout.ExpandWidth(true));
                 GUILayout.Label(got + " / " + need, ok ? bigWrap : bigWrap, GUILayout.Width(80));
                 GUILayout.Label(c.v != null ? "<color=#d6b23c>" + c.v.n + " · " + c.p.ToString("0.#") + "</color>" : "<color=#9aa3b0>not sold</color>", bigWrap, GUILayout.Width(220));
                 if (GUILayout.Button(Loc.T("Find"), btnStyle, GUILayout.Width(56))) craftPickFind = kv.Key;

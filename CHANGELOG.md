@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- Liquids (Rice Wine, etc.) on the shopping list and in the Craft view are labelled "(liters)", and the have/need count now includes liquid held in your bottles instead of showing 0.
 - Self-service markets (O-Market, Mine Market, and others where you take things from shelves and pay at the register) now count as places that sell items, at the market's own price. They show up as shops in the mod and website and in the cheapest-price, profit and shopping calculations. Markets that charge RM are listed but left out of OC price comparisons.
 - Home window: new Craft view for any craftable item (and from the Profit finder). It shows the recipe, station, your skill, fail chance, how many to make, the full chain of what you need (buy / craft / find / already have), the crafting order, the raw items with what you hold, the cost of what you still lack, and buttons to find missing items, find a workstation, copy the plan or use it as your shopping list. Redesigned the window with cards and badges.
 - New: press Home anywhere in the game for a big Loot Map window with the Profit finder (top 100, by profit or profit per hour) and an item search. Find marks the result on the map and in the world. Key setting: BigWindowKey.
