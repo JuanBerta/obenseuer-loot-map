@@ -1692,6 +1692,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			cfgEnabled.Value = value;
 			current.Use();
 		}
+		BigGui();
 		if (!MapOpen)
 		{
 			Typing = false;

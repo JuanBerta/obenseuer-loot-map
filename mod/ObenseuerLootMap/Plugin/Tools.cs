@@ -20,6 +20,7 @@ namespace ObenseuerLootMap
         {
             BindInsideConfig();
             BindAccessConfig();
+            BindBigConfig();
             BindMemoryConfig();
             cfgHideEmpty = Config.Bind("Filters", "HideEmptiedContainers", false, "Hide containers you have already emptied (they are shown hollow otherwise).");
             cfgShopHud = Config.Bind("Display", "ShoppingListOnScreen", true, "Show the shopping list (from the website) as a checklist on screen.");

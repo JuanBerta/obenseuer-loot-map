@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- New: press Home anywhere in the game for a big Loot Map window with the Profit finder (top 100, by profit or profit per hour) and an item search. Find marks the result on the map and in the world. Key setting: BigWindowKey.
 - Fixed: after pressing Zoom to me you could only zoom in, not out.
 - Fixed: long Profit finder lines ran past the right edge of the panel; they now wrap.
 - Faster searching: the map is rebuilt at most about twice a second instead of many times in a row while things load.
