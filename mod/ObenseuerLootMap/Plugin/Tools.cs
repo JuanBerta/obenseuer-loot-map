@@ -19,6 +19,7 @@ namespace ObenseuerLootMap
         void BindToolsConfig()
         {
             BindInsideConfig();
+            BindAccessConfig();
             BindMemoryConfig();
             cfgHideEmpty = Config.Bind("Filters", "HideEmptiedContainers", false, "Hide containers you have already emptied (they are shown hollow otherwise).");
             cfgShopHud = Config.Bind("Display", "ShoppingListOnScreen", true, "Show the shopping list (from the website) as a checklist on screen.");
@@ -312,6 +313,7 @@ namespace ObenseuerLootMap
             if (!PointMatches(p)) return false;
             if (p.k == "r" ? !cfgRecipes.Value : p.k == "p" ? !cfgPickups.Value : !cfgContainers.Value) return false;
             if ((p.live && p.empty) || IsEmptied(cur, p)) return false;
+            if (cfgHideLocked.Value && Access(cur, p) > 0) return false;
             if (cfgFreeOnly.Value && p.s == 1) return false;
             if (cfgOnlyNow.Value && Searching && !HasNow(p)) return false;
             if (Indoors && cfgFloorOnly.Value && Mathf.Abs(p.y - PlayerY()) > 2.2f) return false;

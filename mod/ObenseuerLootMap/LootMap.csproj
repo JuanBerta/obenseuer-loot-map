@@ -37,6 +37,7 @@
     <Reference Include="UnityEngine.AudioModule"><HintPath>$(ObenseuerDir)\Obenseuer_Data\Managed\UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(ObenseuerDir)\Obenseuer_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.InputSystem"><HintPath>$(ObenseuerDir)\Obenseuer_Data\Managed\Unity.InputSystem.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AstarPathfindingProject"><HintPath>$(ObenseuerDir)\Obenseuer_Data\Managed\AstarPathfindingProject.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Newtonsoft.Json"><HintPath>$(ObenseuerDir)\Obenseuer_Data\Managed\Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
   <ItemGroup>

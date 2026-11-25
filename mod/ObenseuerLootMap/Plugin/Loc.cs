@@ -12,6 +12,10 @@ internal static class Loc
 	private static readonly Dictionary<string, string> Es = new Dictionary<string, string>
 	{
 		["Profit finder"] = "Buscador de beneficios",
+		["Behind a locked door"] = "Tras una puerta cerrada",
+		["needs a key or cannot be opened"] = "necesita llave o no se puede abrir",
+		["Searching: mark spots behind locked doors"] = "Búsqueda: marcar sitios tras puertas cerradas",
+		["Searching: hide spots behind locked doors"] = "Búsqueda: ocultar sitios tras puertas cerradas",
 		["Profit"] = "Beneficio",
 		["Profit per hour"] = "Beneficio por hora",
 		["Sort by"] = "Ordenar por",
@@ -207,6 +211,10 @@ internal static class Loc
 	private static readonly Dictionary<string, string> Fi = new Dictionary<string, string>
 	{
 		["Profit finder"] = "Voitonetsijä",
+		["Behind a locked door"] = "Lukitun oven takana",
+		["needs a key or cannot be opened"] = "vaatii avaimen tai ei aukea",
+		["Searching: mark spots behind locked doors"] = "Haku: merkitse lukittujen ovien takaiset paikat",
+		["Searching: hide spots behind locked doors"] = "Haku: piilota lukittujen ovien takaiset paikat",
 		["Profit"] = "Voitto",
 		["Profit per hour"] = "Voitto tunnissa",
 		["Sort by"] = "Järjestä",

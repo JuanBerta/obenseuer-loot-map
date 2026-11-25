@@ -2088,6 +2088,8 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			cfgInside.Value = GUILayout.Toggle(cfgInside.Value, " " + Loc.T("Inside doors, stairs, lifts"), Array.Empty<GUILayoutOption>());
 			cfgFreeOnly.Value = GUILayout.Toggle(cfgFreeOnly.Value, " " + Loc.T("Only free to take"), Array.Empty<GUILayoutOption>());
 			cfgOnlyNow.Value = GUILayout.Toggle(cfgOnlyNow.Value, " " + Loc.T("Searching: only where it is now"), Array.Empty<GUILayoutOption>());
+			cfgAccess.Value = GUILayout.Toggle(cfgAccess.Value, " " + Loc.T("Searching: mark spots behind locked doors"), Array.Empty<GUILayoutOption>());
+			cfgHideLocked.Value = GUILayout.Toggle(cfgHideLocked.Value, " " + Loc.T("Searching: hide spots behind locked doors"), Array.Empty<GUILayoutOption>());
 			cfgFloorOnly.Value = GUILayout.Toggle(cfgFloorOnly.Value, " " + Loc.T("Indoors: only my floor"), Array.Empty<GUILayoutOption>());
 			cfgWholeMap.Value = GUILayout.Toggle(cfgWholeMap.Value, " " + Loc.T("Search other buildings too"), Array.Empty<GUILayoutOption>());
 			cfgWorld.Value = GUILayout.Toggle(cfgWorld.Value, " " + Loc.T("Highlight matches in the world"), Array.Empty<GUILayoutOption>());
@@ -2432,6 +2434,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			{
 				stringBuilder.Append("<color=#7a6f5c>" + Loc.T("in") + " " + Db.SceneName(marker.scene) + "</color>\n");
 			}
+			stringBuilder.Append(AccessTip(Searching ? Access(marker.scene, p) : 0));
 			if (HasNow(p))
 			{
 				stringBuilder.Append("<color=#1f8a3a><b>✔ " + Loc.T(p.mem ? "Probably has it" : "Has it now") + "</b></color>\n");
@@ -2573,6 +2576,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			return;
 		}
 		ToolsTick();
+		AccessTick();
 		if ((Object)(object)map == (Object)null && Time.unscaledTime > nextMapSearch)
 		{
 			nextMapSearch = Time.unscaledTime + 1f;
@@ -2639,7 +2643,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 				builtKey = null;
 			}
 		}
-		string text = string.Join("|", CurrentScene, CurrentMap, appliedSearch, searchIdsLabel, cfgEnabled.Value, cfgContainers.Value, cfgPickups.Value, cfgRecipes.Value, cfgStations.Value, cfgShops.Value, cfgFreeOnly.Value, cfgOnlyNow.Value, cfgFloorOnly.Value, cfgWholeMap.Value, cfgMarkerSize.Value, floorBand, LiveKey(), Loc.Lang, TrashRoute, ScavengerBridge.SearchedTodayCount, lootedVersion, cfgHideEmpty.Value, HourKey());
+		string text = string.Join("|", CurrentScene, CurrentMap, appliedSearch, searchIdsLabel, cfgEnabled.Value, cfgContainers.Value, cfgPickups.Value, cfgRecipes.Value, cfgStations.Value, cfgShops.Value, cfgFreeOnly.Value, cfgOnlyNow.Value, cfgFloorOnly.Value, cfgWholeMap.Value, cfgMarkerSize.Value, floorBand, LiveKey(), Loc.Lang, TrashRoute, ScavengerBridge.SearchedTodayCount, lootedVersion, cfgHideEmpty.Value, HourKey(), accessVersion, cfgAccess.Value, cfgHideLocked.Value);
 		if ((Object)(object)layer == (Object)null || text != builtKey)
 		{
 			Rebuild();
@@ -3166,7 +3170,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 				}
 				else
 				{
-					if (((item2.k == "r") ? (!cfgRecipes.Value) : ((item2.k == "p") ? (!cfgPickups.Value) : (!cfgContainers.Value))) || (cfgFreeOnly.Value && item2.s == 1) || (cfgHideEmpty.Value && IsEmptied(item, item2)) || (flag && cfgOnlyNow.Value && Searching && !HasNow(item2)) || (flag2 && Mathf.Abs(item2.y - num) > 2.2f))
+					if (((item2.k == "r") ? (!cfgRecipes.Value) : ((item2.k == "p") ? (!cfgPickups.Value) : (!cfgContainers.Value))) || (cfgFreeOnly.Value && item2.s == 1) || (cfgHideEmpty.Value && IsEmptied(item, item2)) || (flag && cfgOnlyNow.Value && Searching && !HasNow(item2)) || (cfgHideLocked.Value && Searching && Access(item, item2) > 0) || (flag2 && Mathf.Abs(item2.y - num) > 2.2f))
 					{
 						continue;
 					}
@@ -3375,6 +3379,11 @@ public partial class LootMapPlugin : BaseUnityPlugin
 				break;
 			}
 		}
+		int accessState = (Searching && match) ? Access(scene, p) : 0;
+		if (accessState > 0)
+		{
+			val5 = ToColor(DoorColor(accessState == 1 ? "pick" : "key"));
+		}
 		bool flag6 = TrashRoute && IsTrash(p) && !flag2;
 		if (flag6)
 		{
@@ -3395,6 +3404,10 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			num2 = (flag3 ? 0.75f : 1f);
 		}
 		if (v != null && !(Searching && match) && IsClosedNow(v))
+		{
+			num2 = Mathf.Min(num2, 0.5f);
+		}
+		if (accessState > 0)
 		{
 			num2 = Mathf.Min(num2, 0.5f);
 		}

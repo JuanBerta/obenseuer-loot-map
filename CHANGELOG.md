@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- Searching marks spots behind locked doors: the mod asks the game's pathfinder what you can walk to with locked doors treated as walls, and dims the rest with a purple (lockpick) or brown (key / cannot be opened) edge and a tooltip line. New options: mark them (on) and hide them (off); hidden spots are also left out of planned routes.
 - Multi-use items count per use: a Bottle of Ink is 50 uses, so a recipe that spends one use is charged about 1/50 of the bottle in the Profit finder, the website's profit and the shopping list (which buys whole items, rounded up).
 
 ## 0.7.6
