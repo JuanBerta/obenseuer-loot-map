@@ -274,6 +274,7 @@ function secIcon(k) {
 }
 
 // ---------- helpers ----------
+const unit = id => DB.items[id] && DB.items[id][2].includes('Liquid') ? ' liters' : '';   // a liquid is counted in liters held in bottles
 const iname = id => DB.items[id] ? DB.items[id][0] : 'Item #' + id;
 const sceneName = slug => SCN[slug] ? SCN[slug].name : slug;
 const link = (sec, key, text) => `<a class="dbl" href="#/db/${sec}/${encodeURIComponent(key)}">${esc(text)}</a>`;
@@ -729,8 +730,8 @@ function listCard() {
     ${crafted ? `<h3>Craft these first · ${crafted}</h3>${ul(E.order.map(rid => { const out = E.outs[rid], per = X.R[rid][8].find(x => x[0] === out)[1], b = up(E.steps[rid]);
       return `<span>${rl(rid)} <small class="muted">× ${b} → ${num(per * b)} ${esc(iname(out))}</small></span><button type="button" class="shopbtn mini" data-pref="${out}:buy" title="Find or buy it instead of crafting it">Find or buy instead</button>`; }))}` : ''}
     <h3>${o.mode !== 'off' || crafted ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = bestRecipe(+id) != null && !(DB.items[id] && DB.items[id][6].length);
-      return `<span>${il(id)} <small class="muted">× ${num(up(n))}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}${o.pref[id] === 'find' ? `<button type="button" class="shopbtn mini" data-pref="${id}:buy" title="Count it as bought again">Buy it instead</button>` : `<button type="button" class="shopbtn mini" data-pref="${id}:find" title="You will find it, not buy it: it stays out of the cost and the shopping route">Find it instead</button>`}`; }))}
-    <h3>You will make</h3>${ul(byName(Object.entries(make)).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}</small>`))}
+      return `<span>${il(id)} <small class="muted">× ${num(up(n))}${unit(id)}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}${o.pref[id] === 'find' ? `<button type="button" class="shopbtn mini" data-pref="${id}:buy" title="Count it as bought again">Buy it instead</button>` : `<button type="button" class="shopbtn mini" data-pref="${id}:find" title="You will find it, not buy it: it stays out of the cost and the shopping route">Find it instead</button>`}`; }))}
+    <h3>You will make</h3>${ul(byName(Object.entries(make)).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}${unit(id)}</small>`))}
     ${tradeRun(E.raw, make, o)}
     <button type="button" class="dbmore" data-copymod>Copy list for the mod</button> <button type="button" class="dbmore" data-shop="clear">Clear the list</button>
     <p class="muted">In the game, open the Loot Map panel and press “Paste list from the website”: the mod shows what you still need and where to find it.</p></div>`;
