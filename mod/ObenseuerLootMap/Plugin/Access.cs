@@ -19,6 +19,8 @@ namespace ObenseuerLootMap
             cfgHideLocked = Config.Bind("Filters", "HideBehindLockedDoors", false, "While searching, hide the spots behind locked doors (and leave them out of planned routes).");
         }
 
+        internal const float ReachRadius = 90f;
+
         class LockedDoorPos { public Vector3 pos; public bool pick; }
 
         class DoorBlocker : ITraversalProvider
@@ -29,6 +31,8 @@ namespace ObenseuerLootMap
             {
                 if (!path.CanTraverse(node)) return false;
                 Vector3 p = (Vector3)node.position;
+                float fx = p.x - start.x, fz = p.z - start.z;
+                if (fx * fx + fz * fz > ReachRadius * ReachRadius || Mathf.Abs(p.y - start.y) > 30f) return false;   // keep the search small
                 if ((p - start).sqrMagnitude < 2.25f) return true;   // never block the spot you stand on
                 foreach (var d in doors)
                 {
@@ -46,6 +50,7 @@ namespace ObenseuerLootMap
         ConstantPath pathAny, pathKey; string reachSig; string reachScene; float reachNext, reachStamp; Vector3 reachFrom; int accessVersion;
         readonly Dictionary<PointData, int> accessMemo = new Dictionary<PointData, int>();
         List<LockedDoorPos> lockedNow = new List<LockedDoorPos>();
+        string doorScene; float doorScanAt;
 
         void ScanLockedDoors(string scene)
         {
@@ -75,19 +80,20 @@ namespace ObenseuerLootMap
                     return;
                 }
                 string scene = CurrentScene;
+                if (Typing) return;   // never do heavy work while the search box is being typed in
                 if (!Searching || string.IsNullOrEmpty(scene) || AstarPath.active == null) { if (reachAny != null && !Searching) { reachAny = null; reachKey = null; accessMemo.Clear(); accessVersion++; } return; }
                 if (Time.unscaledTime < reachNext) return;
                 reachNext = Time.unscaledTime + 1.5f;
                 if (liveScene != scene) return;
-                ScanLockedDoors(scene);
+                if (scene != doorScene || Time.unscaledTime - doorScanAt > 20f) { ScanLockedDoors(scene); doorScene = scene; doorScanAt = Time.unscaledTime; }
                 if (lockedNow.Count == 0) { if (reachAny != null) { reachAny = null; reachKey = null; accessMemo.Clear(); accessVersion++; } return; }
                 Camera cam = Camera.main; if (cam == null) return;
                 Vector3 me = cam.transform.position; me.y -= 1.6f;
                 string sig = scene + "|" + string.Join(",", lockedNow.Select(d => Mathf.RoundToInt(d.pos.x) + ":" + Mathf.RoundToInt(d.pos.z) + (d.pick ? "p" : "k"))) + "|" + Mathf.RoundToInt(me.x / 5f) + ":" + Mathf.RoundToInt(me.z / 5f) + ":" + Mathf.RoundToInt(me.y / 2f);
                 if (sig == reachSig && Time.unscaledTime - reachStamp < 20f) return;
                 reachSig = sig; reachScene = scene; reachFrom = me;
-                pathAny = ConstantPath.Construct(me, 4000000); pathAny.traversalProvider = new DoorBlocker(lockedNow, false, me);
-                pathKey = ConstantPath.Construct(me, 4000000); pathKey.traversalProvider = new DoorBlocker(lockedNow, true, me);
+                pathAny = ConstantPath.Construct(me, 150000); pathAny.traversalProvider = new DoorBlocker(lockedNow, false, me);
+                pathKey = ConstantPath.Construct(me, 150000); pathKey.traversalProvider = new DoorBlocker(lockedNow, true, me);
                 AstarPath.StartPath(pathAny); AstarPath.StartPath(pathKey);
             }
             catch (Exception ex) { pathAny = null; pathKey = null; reachNext = Time.unscaledTime + 10f; Logger.LogWarning("Access check failed: " + ex.Message); }
@@ -95,7 +101,7 @@ namespace ObenseuerLootMap
 
         static HashSet<GraphNode> Collect(ConstantPath p)
         {
-            if (p == null || p.error || p.allNodes == null || p.allNodes.Count == 0) return null;
+            if (p == null || p.error || p.allNodes == null || p.allNodes.Count == 0 || p.allNodes.Count > 200000) return null;
             return new HashSet<GraphNode>(p.allNodes);
         }
 
@@ -109,6 +115,8 @@ namespace ObenseuerLootMap
             try
             {
                 var pos = new Vector3(p.x, p.y, p.z);
+                float gx = pos.x - reachFrom.x, gz = pos.z - reachFrom.z;
+                if (gx * gx + gz * gz > (ReachRadius - 5f) * (ReachRadius - 5f) || Mathf.Abs(pos.y - reachFrom.y) > 28f) { accessMemo[p] = 0; return 0; }
                 NNInfo nn = AstarPath.active.GetNearest(pos);
                 if (nn.node != null && (nn.position - pos).sqrMagnitude < 9f && !reachAny.Contains(nn.node))
                     r = reachKey.Contains(nn.node) ? 1 : 2;

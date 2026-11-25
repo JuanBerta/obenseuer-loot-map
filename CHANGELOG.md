@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## Next
+- Fixed: the locked-door check could freeze or crash the game in big places (like the Bazaar) while typing in the search box. It now only looks about 90 m around you, rescans doors every 20 s, and waits while you type.
 - Mod: the in-game panel now scrolls when it is taller than the screen, so the Profit finder and shopping list no longer run off the bottom.
 - Fixed two recipes that share an ID in the game data (Apple mash and Green Orb Mash): one of them was dropped from the website and the Profit finder. Items nothing can make, drop or sell (like Sugar Beet Wine in this game version) now say so.
 - Website: furniture pages show the machine's stats read from the game files (electricity or fuel use, idle use, what a generator makes, fuel types, upgrade slots, equipment quality).
