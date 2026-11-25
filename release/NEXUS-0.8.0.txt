@@ -15,6 +15,7 @@ Fixed
 - Zoom to me no longer blocks zooming out; long Profit finder lines wrap; the panel scrolls when taller than the screen.
 - Two recipes that shared an ID (Apple mash, Green Orb Mash) were dropped from the Profit finder.
 - Clear list on the shopping list now asks for a second click.
+- The shopping-list checklist no longer shows on the main menu.
 
 === VERSION ===
 0.8.0

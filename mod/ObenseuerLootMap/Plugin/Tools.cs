@@ -273,7 +273,7 @@ namespace ObenseuerLootMap
         GUIStyle hudStyle;
         void DrawShopHud()
         {
-            if (shopList == null || !cfgShopHud.Value || !cfgEnabled.Value) return;
+            if (shopList == null || !cfgShopHud.Value || !cfgEnabled.Value || !InGameNow()) return;   // not on the main menu
             if (hudStyle == null || hudStyle.normal.background == null)
                 hudStyle = new GUIStyle(doorStyle) { fontSize = 12, alignment = TextAnchor.UpperLeft, padding = new RectOffset(9, 9, 6, 6), wordWrap = false, richText = true };
             var sb = new StringBuilder($"<b>{Loc.T("Shopping list")}</b>\n");
