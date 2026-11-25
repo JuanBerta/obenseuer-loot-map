@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -193,6 +193,10 @@ public partial class LootMapPlugin : BaseUnityPlugin
 	private string search = "";
 
 	private string appliedSearch = "";
+
+	private string searchWarn;
+
+	private string evalSearch;
 
 	private float searchChangedAt;
 
@@ -2079,7 +2083,11 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			{
 				GUILayout.Label(searchIdsLabel, smallStyle, Array.Empty<GUILayoutOption>());
 			}
-			if (search != appliedSearch)
+			if (searchWarn != null && search.Trim().Length > 0 && appliedSearch.Length == 0)
+			{
+				GUILayout.Label("<color=#d98e04>" + searchWarn + "</color>", smallStyle, Array.Empty<GUILayoutOption>());
+			}
+			if (search != appliedSearch && searchWarn == null)
 			{
 				GUILayout.Label(Loc.T("searching…"), smallStyle, Array.Empty<GUILayoutOption>());
 			}
@@ -2593,12 +2601,36 @@ public partial class LootMapPlugin : BaseUnityPlugin
 			lastTyped = search;
 			searchChangedAt = Time.unscaledTime;
 		}
-		if (search != appliedSearch && (Time.unscaledTime - searchChangedAt > 0.35f || search.Length == 0))
+		if (search == appliedSearch)
 		{
-			appliedSearch = search;
-			if (search.Length > 0)
+			evalSearch = null;
+		}
+		if (search != appliedSearch && search != evalSearch && (Time.unscaledTime - searchChangedAt > 0.35f || search.Length == 0))
+		{
+			evalSearch = search;
+			string trimmed = search.Trim();
+			bool quoted = trimmed.Length >= 3 && (trimmed[0] == '"' || trimmed[0] == '(');
+			searchWarn = null;
+			if (trimmed.Length > 0 && trimmed.Length < 2 && !quoted)
 			{
-				searchIds = null;
+				// One letter matches almost every item and would mark the whole map.
+				appliedSearch = "";
+				searchWarn = Loc.T("Type at least 2 letters");
+			}
+			else
+			{
+				appliedSearch = search;
+				if (search.Length > 0)
+				{
+					searchIds = null;
+					HashSet<int> broad = MatchedIds;
+					if (broad != null && broad.Count > 600)
+					{
+						appliedSearch = "";
+						matchedIdsQ = null;
+						searchWarn = string.Format(Loc.T("Too many items match \"{0}\" ({1}). Type more letters."), trimmed, broad.Count);
+					}
+				}
 			}
 		}
 		UpdateSlotHighlights();
@@ -3256,6 +3288,10 @@ public partial class LootMapPlugin : BaseUnityPlugin
 
 	private void AddMarker(info_map info, float w, float h, Vector3 world, string scene, bool match, PointData p, StationData st, VendorData v)
 	{
+		if (markers.Count >= 2500)
+		{
+			return;
+		}
 		//IL_014e: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0150: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0155: Unknown result type (might be due to invalid IL or missing references)

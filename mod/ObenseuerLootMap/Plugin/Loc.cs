@@ -92,6 +92,8 @@ internal static class Loc
 		["Zoom to me"] = "Centrar en mí",
 		["Clear search"] = "Borrar búsqueda",
 		["searching…"] = "buscando…",
+		["Type at least 2 letters"] = "Escribe al menos 2 letras",
+		["Too many items match \"{0}\" ({1}). Type more letters."] = "Demasiados objetos coinciden con \"{0}\" ({1}). Escribe más letras.",
 		["Containers"] = "Contenedores",
 		["Pickup spots"] = "Objetos sueltos",
 		["Workstations"] = "Estaciones de trabajo",
