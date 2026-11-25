@@ -461,7 +461,7 @@ function renderSide() {
   const el = $('#dbSide');
   const head = `<div class="dbnav">${SECTIONS.map(([k, t]) => `<a href="#/db/${k}" class="${V.sec === k ? 'on' : ''}">${secIcon(k)}${t}${k === 'notes' ? ` <b>${DB.notes.length}</b>` : k === 'list' ? ` <b id="shopN">${shopCount()}</b>` : ''}</a>`).join('')}</div>`;
   if (V.sec === 'notes' || V.sec === 'list' || V.sec === 'skills') { el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p>`; return; }
-  el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p><div class="dbbar${V.sec === 'items' ? ' multi' : ''}"><input id="dbQ" type="search" placeholder="Search ${esc(SECTIONS.find(s => s[0] === V.sec)[1].toLowerCase())}…" value="${esc(V.q)}" autocomplete="off">${filters()}</div><div id="dbList"></div>`;
+  el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p><div class="dbbar multi"><input id="dbQ" type="search" placeholder="Search ${esc(SECTIONS.find(s => s[0] === V.sec)[1].toLowerCase())}…" value="${esc(V.q)}" autocomplete="off">${filters()}</div><div id="dbList"></div>`;
   const q = $('#dbQ'); q.oninput = () => { V.q = q.value; V.lim = 300; renderList(); };
   const f = $('#dbF'); if (f) f.onchange = () => { V.f = f.value; V.lim = 300; renderList(); };
   const s = $('#dbSort'); if (s) s.onchange = () => { V.sort = s.value; renderList(); };
