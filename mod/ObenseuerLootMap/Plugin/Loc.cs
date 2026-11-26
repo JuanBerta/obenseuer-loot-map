@@ -43,6 +43,7 @@ internal static class Loc
 		["You have everything on the list"] = "Tienes todo lo de la lista",
 		["Shopping list loaded"] = "Lista cargada",
 		["Still to buy"] = "Falta comprar",
+		["inside packages it sells (random)"] = "dentro de los paquetes que vende (al azar)",
 		["not sold in shops"] = "no se venden en tiendas",
 		["Nothing to paste: use \"Copy list for the mod\" on the website first"] = "Nada que pegar: usa \"Copy list for the mod\" en la web primero",
 		["Highlighting missing items"] = "Resaltando lo que falta",

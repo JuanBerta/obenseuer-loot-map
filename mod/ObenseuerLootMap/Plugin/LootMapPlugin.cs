@@ -2196,6 +2196,11 @@ public partial class LootMapPlugin : BaseUnityPlugin
 	{
 		StringBuilder stringBuilder = new StringBuilder();
 		int pid = PriceItem();
+		HashSet<int> pkIds = MatchedIds;
+		if (v.pk != null && pkIds != null && pkIds.Any((int id) => Db.SellsInPackage(v, id)) && !pkIds.Any((int id) => Db.Sells(v, id)))
+		{
+			stringBuilder.Append(" \u00b7 <color=#c9b27a>" + Loc.T("inside packages it sells (random)") + "</color>");
+		}
 		if (pid > 0)
 		{
 			if ((mode & 1) != 0 && BuyPrice(v, pid) > 0)
@@ -2938,7 +2943,7 @@ public partial class LootMapPlugin : BaseUnityPlugin
 		HashSet<int> matchedIds = MatchedIds;
 		if (matchedIds != null && matchedIds.Count > 0)
 		{
-			flag = matchedIds.Any((int id) => Db.Sells(v, id));
+			flag = matchedIds.Any((int id) => Db.Sells(v, id) || Db.SellsInPackage(v, id));
 			flag2 = matchedIds.Any((int id) => Db.Buys(v, id));
 		}
 		HashSet<int> matchedFurniture = MatchedFurniture;

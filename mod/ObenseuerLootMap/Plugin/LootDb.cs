@@ -211,6 +211,23 @@ public class LootDb
 		return true;
 	}
 
+	// A shop that sells packages (a Trash Bale) filled at random from loot tables: the item can be inside one. Not a price, so it is kept apart from Sells.
+	public bool SellsInPackage(VendorData v, int id)
+	{
+		if (v.pk == null)
+		{
+			return false;
+		}
+		foreach (string t in v.pk)
+		{
+			if (TableItems.TryGetValue(t, out var value) && value.Contains(id))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public bool Buys(VendorData v, int id)
 	{
 		if (v.b != 1 || !items.TryGetValue(id.ToString(), out var value))

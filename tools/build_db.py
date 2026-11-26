@@ -92,12 +92,12 @@ for scene, sc in M['scenes'].items():
     slug = slug_of.get(scene)
     for v in sc.get('vendors', []):
         if not slug: skipped[scene] += 1; continue
-        e = {k: v[k] for k in ('n', 'o', 't', 'i', 'b', 'ba', 'bf', 'bs', 'fs', 'fb', 'sm', 'bm', 'fp', 'h', 'rm', 'mk') if k in v}
+        e = {k: v[k] for k in ('n', 'o', 't', 'i', 'pk', 'b', 'ba', 'bf', 'bs', 'fs', 'fb', 'sm', 'bm', 'fp', 'h', 'rm', 'mk') if k in v}
         e['sc'] = slug; e['x'] = v['x']; e['z'] = v['z']
         same = next((w for w in vendors if w['sc'] == slug and w['n'] == e['n'] and (w['x'] - e['x']) ** 2 + (w['z'] - e['z']) ** 2 < 36), None)
         if same:   # one shop split over several counters / furniture shop components
             for k, val in e.items():
-                if k in ('i', 'fs', 'ba', 'bf'): same[k] = sorted(set(same.get(k, [])) | set(val), key=str)
+                if k in ('i', 'pk', 'fs', 'ba', 'bf'): same[k] = sorted(set(same.get(k, [])) | set(val), key=str)
                 elif k not in same: same[k] = val
             continue
         vendors.append(e)

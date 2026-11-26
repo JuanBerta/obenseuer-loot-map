@@ -19,6 +19,8 @@ public class VendorData
 
 	public List<int> i;
 
+	public List<string> pk;
+
 	public int b;
 
 	public List<string> ba;

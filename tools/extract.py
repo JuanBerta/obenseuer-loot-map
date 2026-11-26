@@ -310,11 +310,15 @@ def features(sf):
                 e['title']=(d.get('title') or '').strip() or None
                 ow=(d.get('Trader') or {}).get('name') or ''
                 if ow.strip().lower() not in PLACEHOLDER_OWNERS: e['owner']=ow.strip()
-                items=[]
+                items=[]; pk=[]
                 for it in d.get('sellableItems') or []:
                     iid=(it.get('item') or {}).get('ID')
                     if iid is not None and iid not in items: items.append(iid)
+                    # a package (a Trash Bale) is filled from a loot table when you buy it: what is inside is random, drawn from that table
+                    pkg=((it.get('metaValues') or {}).get('package') or {})
+                    if pkg.get('spawnFromCategory') and pkg.get('spawnCategoroyName') and pkg['spawnCategoroyName'] not in pk: pk.append(pkg['spawnCategoroyName'])
                 e['items']=items
+                if pk: e['packages']=pk
         except Exception as ex:
             continue
         if not e.get('stock') and not e.get('items') and not e.get('trader'): continue

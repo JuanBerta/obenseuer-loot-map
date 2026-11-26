@@ -134,6 +134,9 @@ for i,name in enumerate(scenes):
         if f.get('owner'): e['o']=f['owner']
         if f.get('stock') in loot: e['t']=f['stock']; used_stock.add(f['stock'])
         if f.get('items'): e['i']=f['items']; need.update(f['items'])
+        if f.get('packages'):
+            e['pk']=[t for t in f['packages'] if t in loot]
+            for t in e['pk']: used_stock.add(t); need.update(loot[t][0]); need.update(loot[t][1])
         if f.get('trader'):
             e['b']=1
             if f.get('hours'): e['h']=f['hours']
@@ -143,7 +146,7 @@ for i,name in enumerate(scenes):
             if f.get('buyAllow'): e['ba']=f['buyAllow']
             if f.get('buyForbid'): e['bf']=f['buyForbid']
             if f.get('buysStolen'): e['bs']=1
-        if 't' in e or 'i' in e or 'b' in e: V.append(e)
+        if 't' in e or 'i' in e or 'b' in e or 'pk' in e: V.append(e)
     # self-service markets (take from the shelves, pay at the register): they sell what their shelves can hold, at value x the market's price factor
     for m in MARKETS.get(str(i),{}).get('markets',[]):
         if not m.get('active'): continue
