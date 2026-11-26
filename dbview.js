@@ -453,8 +453,10 @@ function rows() {
       .sort(V.sort === 'rprofit' ? (a, b) => realProfit(b[0]).profit - realProfit(a[0]).profit || a[1].localeCompare(b[1])
         : V.sort === 'rhour' ? (a, b) => (realProfit(b[0]).hour ?? -1e12) - (realProfit(a[0]).hour ?? -1e12) || a[1].localeCompare(b[1])
         : V.sort === 'profit' ? (a, b) => recipeProfit(b[0]) - recipeProfit(a[0]) || a[1].localeCompare(b[1])
+        : V.sort === 'lvhi' ? (a, b) => (b[4] || 0) - (a[4] || 0) || a[1].localeCompare(b[1])
+        : V.sort === 'lvlo' ? (a, b) => (a[4] || 0) - (b[4] || 0) || a[1].localeCompare(b[1])
         : V.sort === 'cost' ? (a, b) => X.RC[a[0]].cost - X.RC[b[0]].cost || a[1].localeCompare(b[1]) : (a, b) => a[1].localeCompare(b[1]))
-      .map(r => [r[0], r[1], V.sort === 'rprofit' ? profitTxt(realProfit(r[0]).profit) : V.sort === 'rhour' ? (realProfit(r[0]).hour == null ? '–' : profitTxt(realProfit(r[0]).hour) + '/h') : V.sort === 'profit' ? (recipeProfit(r[0]) >= 0 ? '+' : '−') + fmt(Math.abs(recipeProfit(r[0]))) + ' OC' : V.sort === 'cost' ? fmt(X.RC[r[0]].cost) + ' OC' : r[2], rIco(r[0])]);
+      .map(r => [r[0], r[1], V.sort === 'rprofit' ? profitTxt(realProfit(r[0]).profit) : V.sort === 'rhour' ? (realProfit(r[0]).hour == null ? '–' : profitTxt(realProfit(r[0]).hour) + '/h') : V.sort === 'profit' ? (recipeProfit(r[0]) >= 0 ? '+' : '−') + fmt(Math.abs(recipeProfit(r[0]))) + ' OC' : V.sort === 'cost' ? fmt(X.RC[r[0]].cost) + ' OC' : (V.sort === 'lvhi' || V.sort === 'lvlo') ? (r[3] && r[3] !== 'None' ? r[3] + ' ' : '') + 'lv ' + (r[4] || 0) : r[2], rIco(r[0])]);
     case 'vendors': return DB.vendors.filter(v => m(v.n) || m(v.o || '') || m(sceneName(v.sc)) || (q.length > 2 && (v.t && m(v.t))))
       .filter(v => !V.f || (V.f === 'items' ? (v.t || v.i) : V.f === 'buys' ? v.b : V.f === 'furniture' ? (v.fs || v.fb) : V.f === 'vending' ? /vending|soda fountain/i.test(v.n) : true))
       .sort((a, b) => a.n.localeCompare(b.n) || sceneName(a.sc).localeCompare(sceneName(b.sc)))
@@ -486,7 +488,7 @@ const sort = `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</
   }
   if (V.sec === 'upgrades') return '';
   if (V.sec === 'tenement') return opt(X.itemCats, 'All categories') + sort;
-  if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + recSkillSel() + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('rprofit', 'Best profit at shops')}${so('rhour', 'Best profit per hour')}${so('profit', 'Best craft profit (base values)')}${so('cost', 'Cheapest ingredients')}</select>` + contSel();
+  if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + recSkillSel() + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('rprofit', 'Best profit at shops')}${so('rhour', 'Best profit per hour')}${so('profit', 'Best craft profit (base values)')}${so('cost', 'Cheapest ingredients')}${so('lvhi', 'Highest skill level needed')}${so('lvlo', 'Lowest skill level needed')}</select>` + contSel();
   if (V.sec === 'tenants') return `<select id="dbF" aria-label="Filter tenants"><option value="">All tenants</option>${[['Small', 'Accept a small apartment'], ['Medium', 'Accept a medium apartment'], ['Large', 'Accept a large apartment'], ['OC', 'Pay OC'], ['RM', 'Pay RM']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   if (V.sec === 'furniture') return opt(X.fCats, 'All categories') + sort;
   if (V.sec === 'vendors') return `<select id="dbF" aria-label="Filter vendors"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
