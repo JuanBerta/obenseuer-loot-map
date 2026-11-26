@@ -14,7 +14,7 @@ namespace ObenseuerLootMap
     // 0.6.0: door lock states, emptied-container memory, value / effect search, shopping list, route planner, shop hours and prices.
     public partial class LootMapPlugin
     {
-        ConfigEntry<bool> cfgHideEmpty, cfgShopHud, cfgMoreTools; ConfigEntry<int> cfgSaleContainer;
+        ConfigEntry<bool> cfgHideEmpty, cfgShopHud, cfgMoreTools; ConfigEntry<int> cfgSaleContainer, cfgShopChoice;
 
         void BindToolsConfig()
         {
@@ -25,6 +25,7 @@ namespace ObenseuerLootMap
             cfgHideEmpty = Config.Bind("Filters", "HideEmptiedContainers", false, "Hide containers you have already emptied (they are shown hollow otherwise).");
             cfgShopHud = Config.Bind("Display", "ShoppingListOnScreen", true, "Show the shopping list (from the website) as a checklist on screen.");
             cfgCountBank = Config.Bind("Display", "CountBankInventory", true, "Count the items stored in the Bank Inventory mod as owned on the shopping list.");
+            cfgShopChoice = Config.Bind("Profit", "ShopChoice", 0, "How the shop is chosen for what you buy (profit finder and crafting plan): 0 = price and availability, 1 = lowest price only, 2 = most reliable stock first.");
             cfgSaleContainer = Config.Bind("Profit", "SaleContainer", 0, "Container that liquids are sold in for the profit finder: 0 = the best one, -1 = none (plain liters), or an item ID such as 17780.");
             cfgMoreTools = Config.Bind("Display", "ShowMoreTools", true, "Show the value / effect / shopping list / route tools in the panel.");
         }
@@ -466,6 +467,22 @@ namespace ObenseuerLootMap
         List<TradeRow> tradeAll; bool tradeOpen; int tradeSort; List<VendorData> tradeVendors;
         readonly Dictionary<int, (float p, VendorData v)> tradeCheap = new Dictionary<int, (float p, VendorData v)>(), tradeBest = new Dictionary<int, (float p, VendorData v)>();
         static string Money(float x) => (x >= 0 ? "+" : "−") + Mathf.Abs(x).ToString("0.#");
+        // The shop to buy an item from. 0: the price divided by how reliably it is stocked (fixed list 1, usually 0.8, sometimes 0.5); 1: lowest price; 2: most reliable stock first, then the price.
+        (float p, VendorData v) PickShop(int id, List<VendorData> vendors)
+        {
+            (float p, VendorData v) c = (-1f, null); float bestScore = float.MaxValue; int mode = cfgShopChoice != null ? cfgShopChoice.Value : 1;
+            foreach (var v in vendors)
+            {
+                if (!Db.Sells(v, id)) continue;
+                var p = PayAt(v, id); int tr = Db.StockTier(v, id);
+                float sc = mode == 1 ? p : mode == 2 ? (4 - tr) * 1e6f + p : p / (tr == 3 ? 1f : tr == 2 ? 0.8f : 0.5f);
+                if (c.v == null || sc < bestScore) { c = (p, v); bestScore = sc; }
+            }
+            return c;
+        }
+        string StockWord(int tier) => tier == 3 ? "always stocked" : tier == 2 ? "usually stocked" : "sometimes stocked";
+        string ShopChoiceLabel() => cfgShopChoice.Value == 1 ? "lowest price" : cfgShopChoice.Value == 2 ? "most reliable" : "price + availability";
+        void NextShopChoice() { cfgShopChoice.Value = (cfgShopChoice.Value + 1) % 3; tradeCheap.Clear(); craftPlanSig = null; }
         float PayAt(VendorData v, int id) => Mathf.Max(1f, Mathf.Round(Db.ValueOf(id) * (v.bm > 0 ? v.bm : 1.1f)));
         float GetAt(VendorData v, int id) => Mathf.Max(1f, Mathf.Round(Db.ValueOf(id) * (v.sm > 0 ? v.sm : 0.9f)));
         // Quality of what you craft (the game's formula, averaged, with your live skill) and what it does to the sale price.
@@ -542,7 +559,7 @@ namespace ObenseuerLootMap
             {
                 if (cheapest.TryGetValue(id, out var c)) return c;
                 c = (-1f, null);
-                foreach (var v in vendors) if (Db.Sells(v, id)) { var p = PayAt(v, id); if (c.v == null || p < c.p) c = (p, v); }
+                c = PickShop(id, vendors);
                 return cheapest[id] = c;
             }
             (float p, VendorData v) Best(int id)
@@ -597,6 +614,7 @@ namespace ObenseuerLootMap
             GUILayout.Label(Loc.T("Sort by"), labelStyle, GUILayout.Width(70));
             if (GUILayout.Button(Loc.T(tradeSort == 0 ? "Profit" : "Profit per hour"), btnStyle)) tradeSort = 1 - tradeSort;
             GUILayout.EndHorizontal();
+            if (GUILayout.Button(Loc.T("Shops") + ": " + ShopChoiceLabel(), btnStyle)) { NextShopChoice(); tradeAll = BuildTrade(); }
             if (Db.containers.Count > 0 && GUILayout.Button("Sell liquids in: " + SaleContainerLabel(), btnStyle)) { NextSaleContainer(); tradeAll = BuildTrade(); }
             var top = (tradeSort == 0 ? tradeAll.OrderByDescending(r => r.profit) : tradeAll.OrderByDescending(r => r.perHour)).Take(8).ToList();
             if (top.Count == 0) { GUILayout.Label(Loc.T("No profitable recipes found"), smallStyle); return; }

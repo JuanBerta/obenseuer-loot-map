@@ -48,7 +48,7 @@ namespace ObenseuerLootMap
             (float p, VendorData v) c;
             if (tradeCheap.TryGetValue(id, out c)) return c;
             c = (-1f, null);
-            foreach (var v in vendors) if (Db.Sells(v, id)) { var p = PayAt(v, id); if (c.v == null || p < c.p) c = (p, v); }
+            c = PickShop(id, vendors);
             return tradeCheap[id] = c;
         }
 
@@ -252,7 +252,7 @@ namespace ObenseuerLootMap
                 GUILayout.BeginHorizontal();
                 GUILayout.Label((ok ? "<color=#9fdc8a>✔  " : "") + Db.AmtName(kv.Key) + (ok ? "</color>" : ""), bigWrap, GUILayout.ExpandWidth(true));
                 GUILayout.Label(got + " / " + need, ok ? bigWrap : bigWrap, GUILayout.Width(80));
-                GUILayout.Label(c.v != null ? "<color=#d6b23c>" + c.v.n + " · " + c.p.ToString("0.#") + "</color>" : "<color=#9aa3b0>not sold</color>", bigWrap, GUILayout.Width(220));
+                GUILayout.Label(c.v != null ? "<color=#d6b23c>" + c.v.n + " · " + c.p.ToString("0.#") + " (" + StockWord(Db.StockTier(c.v, kv.Key)) + ")</color>" : "<color=#9aa3b0>not sold</color>", bigWrap, GUILayout.Width(300));
                 if (GUILayout.Button(Loc.T("Find"), btnStyle, GUILayout.Width(56))) craftPickFind = kv.Key;
                 GUILayout.EndHorizontal();
             }
@@ -261,10 +261,11 @@ namespace ObenseuerLootMap
 
             // Footer: totals and actions.
             GUILayout.BeginHorizontal(bigCard);
-            GUILayout.Label("Still to buy, at the cheapest shops:  <b>" + craftCost.ToString("0.#") + " OC</b>", bigWrap, GUILayout.ExpandWidth(true));
+            GUILayout.Label("Still to buy, at the chosen shops:  <b>" + craftCost.ToString("0.#") + " OC</b>", bigWrap, GUILayout.ExpandWidth(true));
             GUILayout.Label("Result worth about  <b>" + (Db.ValueOf(craftId) * craftQty) + " OC</b>", bigWrap, GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Shops: " + ShopChoiceLabel(), btnStyle)) NextShopChoice();
             if (GUILayout.Button("Use as shopping list", bigPrimary)) craftPickList = true;
             if (GUILayout.Button("Find missing items", btnStyle)) craftPickMissing = true;
             if (GUILayout.Button("Find a workstation", btnStyle)) craftPickStation = true;

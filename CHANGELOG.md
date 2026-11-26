@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## 0.8.1
+- New: shops are chosen by price and availability, not only the lowest price, in the profit finder and the Craft plan. A shop with a fixed list always has the item; one that rolls a stock list only usually or sometimes has it, so its price counts for more. The Craft plan shows how reliably each shop stocks the item. A Shops button switches between price + availability, lowest price only and most reliable stock (setting ShopChoice). The website's trade run got the same choice, and its furniture pages now show descriptions, modifiers, dismantle items and the in-game station names.
 - Website: recipe profits and the trade run now show money in both currencies (for example "sell 6 RM" or "30 OC + 204 RM"), with the net result in OC value next to it.
 - New: in the Craft plan, every item below the top one has a Method picker (< >) to choose how to get it: buy it from a shop or any of its recipes. Before, it always took the first option. The shopping list follows your picks.
 - Fix: shops that deal in Real Money are now handled. The data records, per shop, whether it pays you in RM or charges you in RM (for example the Bazaar Butchershop pays RM for chicken, pig, salmon, perch and pike). The website shows those prices in RM (1 RM = 10 OC), counts RM shops in the cheapest/best-price search, and the mod shows RM in the shop info and profit finder.

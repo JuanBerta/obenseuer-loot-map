@@ -38,6 +38,8 @@ public class LootDb
 	[JsonIgnore]
 	public Dictionary<string, HashSet<int>> TableItems = new Dictionary<string, HashSet<int>>();
 
+	public Dictionary<string, HashSet<int>> UsuallyItems = new Dictionary<string, HashSet<int>>();
+
 	[JsonIgnore]
 	public Dictionary<string, string> StationText = new Dictionary<string, string>();
 
@@ -131,6 +133,7 @@ public class LootDb
 		{
 			List<int> list = item.Value.SelectMany((List<int> l) => l).ToList();
 			lootDb.TableItems[item.Key] = new HashSet<int>(list);
+			lootDb.UsuallyItems[item.Key] = new HashSet<int>(item.Value.Count > 0 ? item.Value[0] : new List<int>());
 			lootDb.TableText[item.Key] = (item.Key + "\n" + string.Join("\n", list.Select(lootDb.ItemName))).ToLowerInvariant();
 		}
 		foreach (SceneData value in lootDb.scenes.Values)
@@ -196,6 +199,14 @@ public class LootDb
 			return Enumerable.Empty<string>();
 		}
 		return ((IEnumerable<JToken>)val).Select((JToken x) => ((object)x).ToString());
+	}
+
+	// How reliably a shop has an item: 3 = a fixed list (always there), 2 = in the usual part of its stock list, 1 = only sometimes.
+	public int StockTier(VendorData v, int id)
+	{
+		if (v.i != null && v.i.Contains(id)) return 3;
+		if (v.t != null && UsuallyItems.TryGetValue(v.t, out var u) && u.Contains(id)) return 2;
+		return 1;
 	}
 
 	public bool Sells(VendorData v, int id)
