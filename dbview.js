@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=17';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=18';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -451,7 +451,7 @@ function rows() {
       .map(v => [v.key, v.n, sceneName(v.sc), vIco(v)]);
     case 'tenants': return RT.r.filter(r => (m(r.n) || r.w.some(m) || r.at.some(m)) && (!V.f || (V.f === 'OC' ? r.oc : V.f === 'RM' ? r.rm : r.sz.includes(V.f))))
       .sort((a, b) => a.n.localeCompare(b.n)).map(r => [r.n, r.n, rentLine(r), pIco(r.n)]);
-    case 'furniture': return Object.entries(DB.furniture).filter(([id, f]) => m(f[0]) && (!V.f || f[1] === V.f))
+    case 'furniture': return Object.entries(DB.furniture).filter(([id, f]) => (m(f[0]) || (f[9] || []).some(m)) && (!V.f || f[1] === V.f))
       .sort(V.sort === 'value' ? (a, b) => (b[1][2] + b[1][3] * 10) - (a[1][2] + a[1][3] * 10) : (a, b) => a[1][0].localeCompare(b[1][0]))
       .map(([id, f]) => [id, f[0], (f[4] && f[4].length ? '⚒ ' : '') + price(f), fIco(id)]);
   }
@@ -677,6 +677,7 @@ function furnCard(id) {
   }
   if (f[6]) h += `<p>${esc(f[6])}</p>`;
   if (f[7] && f[7].length) h += `<h3>Dismantling it gives</h3>${ul(f[7].map(x => `<span>${il(x[0])} <small class="muted">x ${x[1]}</small></span>`))}`;
+  if (f[9] && f[9].length) h += `<p>Shown in game as: ${f[9].map(x => '"' + esc(x) + '"').join(', ')}</p>`;
   if (f[8] && f[8].length) h += `<p>Modifiers: ${f[8].map(esc).join(', ')} <small class="muted">(what its crafting station offers; recipes that say the station must be one of these need it)</small></p>`;
   if (f[5] && f[5].length) h += powerBlock(f[5]);
   h += `<h3>Sold by · ${sv.length}</h3>${ul(sv.map(vl))}<h3>Bought by · ${bv.length}</h3>${ul(bv.map(vl))}`;

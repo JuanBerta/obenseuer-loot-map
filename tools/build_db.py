@@ -134,7 +134,7 @@ for _f in furniture.values():   # [6] description from the game, [7] what disman
     _v = _fa.get(_f[0])
     if not _v: continue
     while len(_f) < 6: _f.append([])
-    _f.append(_v.get('details') or ''); _f.append(_v.get('dis') or []); _f.append(_v.get('mods') or [])
+    _f.append(_v.get('details') or ''); _f.append(_v.get('dis') or []); _f.append(_v.get('mods') or []); _f.append([x for x in (_v.get('lbl') or []) if x.lower() != _f[0].lower()])
 # ---- tenants
 chars = read_json('Characters.json') or []
 people = {c['Name']: [c.get('ID'), c.get('GenderString'), c.get('Age'), c.get('Relationship'), c.get('Job')] for c in chars if c.get('ID', -1) >= 0}
