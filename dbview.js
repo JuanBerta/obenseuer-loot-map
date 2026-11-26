@@ -101,6 +101,8 @@ const isRm = (v, buying) => buying ? !!(v.rm || v.br) : !!v.sr;
 // A total split by currency: tot is in OC value, rm is the part of it paid in Real Money
 const mixTxt = (tot, rm) => { rm = rm || 0; const oc = tot - rm, a = []; if (oc > 0.0005 || rm <= 0.0005) a.push(fmt(oc) + ' OC'); if (rm > 0.0005) a.push(+(rm * RMX).toFixed(2) + ' RM'); return a.join(' + '); };
 const netMix = (oc, rm) => [Math.abs(oc) > 0.0005 && (oc > 0 ? '+' : '-') + fmt(Math.abs(oc)) + ' OC', Math.abs(rm) > 0.0005 && (rm > 0 ? '+' : '-') + +(Math.abs(rm) * RMX).toFixed(2) + ' RM'].filter(Boolean).join(' and ') || '0';
+// When an OC shop and an RM shop pay the same for an item, show both: the best buyer in the other currency at the same price
+const altBuyer = id => { const bl = buyersOf(id), b0 = bl[0]; return b0 ? bl.find(x => isRm(x.v) !== isRm(b0.v) && x.p >= b0.p) : null; };
 const pxt = (v, p, buying) => isRm(v, buying) ? `${+(p * RMX).toFixed(2)} RM` : `${fmt(p)} OC`;
 const sellersOf = id => sellersMemo[id] || (sellersMemo[id] = DB.items[id] ? DB.vendors.filter(v => sells(v, +id)).map(v => ({ v, p: payAt(v, id) })).sort((a, b) => a.p - b.p || a.v.n.localeCompare(b.v.n)) : []);
 const buyersOf = id => buyersMemo[id] || (buyersMemo[id] = DB.items[id] ? DB.vendors.filter(v => buys(v, +id)).map(v => ({ v, p: getAt(v, id) })).sort((a, b) => b.p - a.p || a.v.n.localeCompare(b.v.n)) : []);
@@ -225,7 +227,7 @@ function rangeRows(rid) {
 function tradeBlock(rid) {
   const p = realProfit(rid), r = X.R[rid];
   const buy = p.ing.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}${x.div > 1 ? ` use${x.n === 1 ? '' : 's'} of ${x.div}` : ''}</small></span><small>${x.shop ? `${pxt(x.v, x.p, true)} ${x.div > 1 ? `per item (≈ ${fmt(x.p / x.div)} OC per use)` : 'each'} at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : `not sold · ≈ ${fmt(x.p)} OC`}</small>`);
-  const sell = p.outs.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.v ? `${pxt(x.v, x.p)} each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : 'no shop buys it'}</small>`);
+  const sell = p.outs.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.v ? `${pxt(x.v, x.p)} each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}${(() => { const a = x.v && altBuyer(x.id); return a ? ` <small class="muted">or ${pxt(a.v, Math.max(1, Math.round(a.p * (x.p / Math.max(1, buyersOf(x.id)[0].p)))))} each at ${esc(a.v.n)} · ${esc(sceneName(a.v.sc))}</small>` : ''; })()}` : 'no shop buys it'}</small>`);
   return `<h3>Trade at shops</h3><p>${realText(rid)}</p>${qualityRows(rid)}${rangeRows(rid)}<h3>Buy the ingredients</h3>${ul(buy)}<h3>Sell what it makes</h3>${ul(sell)}
     <p class="muted">Shops that deal in Real Money show RM (1 RM = 10 OC); the profit counts them at their OC value. Real shop prices: base value × the shop's multiplier. ${p.estimated ? '* Ingredients no shop sells are counted at base value. ' : ''}${r[3] && r[3] !== 'None' && r[4] > lvlOf(r[3]) ? `<b class="bad">Your ${esc(r[3])} (${lvlOf(r[3])}) is below this recipe's minimum (${r[4]}): it almost always fails.</b> ` : ''}Counts the ${Math.round(p.fail * 100)}% fail chance at your level${p.failOuts.some(o => o.v) ? ' (and what a failed craft sells for)' : ''} and the quality of what you make (${p.outs.some(o => o.q != null) ? 'quality ≈ ' + (+p.q.toFixed(2)) : 'these items have no quality'}, at ${skillSelect(r[3])}, crafted at ${stationSelect(r) || 'any workstation'}). Ignores the quality of bought ingredients and what the shop stocks that day.</p>`;
 }
@@ -241,16 +243,17 @@ function tripOrder(vs) {
   return out;
 }
 function tradeRun(raw, make, o) {
-  const buy = new Map(), sell = new Map(), find = [], nosell = []; let bt = 0, st = 0, bRm = 0, sRm = 0;
+  const buy = new Map(), sell = new Map(), find = [], nosell = []; let bt = 0, st = 0, bRm = 0, sRm = 0; const alts = [];
   const add = (m, v, l) => { if (!m.has(v)) m.set(v, []); m.get(v).push(l); };
   for (const [id, n0] of Object.entries(raw)) { const n = Math.ceil(n0 - 1e-9), c = buyCost(id); if (!c.shop || (o && o.pref[id] === 'find')) { find.push([+id, n]); continue; } add(buy, c.v, { id: c.id, n, p: c.p }); bt += c.p * n; if (isRm(c.v, true)) bRm += c.p * n; }
-  for (const [id, n] of Object.entries(make)) { const b = buyersOf(+id)[0]; if (!b) { nosell.push(+id); continue; } add(sell, b.v, { id: +id, n, p: b.p }); st += b.p * n; if (isRm(b.v)) sRm += b.p * n; }
+  for (const [id, n] of Object.entries(make)) { const b = buyersOf(+id)[0]; if (!b) { nosell.push(+id); continue; } add(sell, b.v, { id: +id, n, p: b.p }); st += b.p * n; if (isRm(b.v)) sRm += b.p * n; const a = altBuyer(+id); if (a) alts.push([+id, a]); }
   if (!buy.size && !sell.size) return '';
   const stop = (v, ls, k, buying) => `<span>${vl(v)}<br>${ls.map(l => `<small class="muted">${il(l.id)} × ${num(l.n)} · ${pxt(v, l.p, buying)} each = ${pxt(v, l.p * l.n, buying)}</small>`).join('<br>')}</span>${mapBtn(v.sc, iname(ls[0].id), k, v.n)}`;
   let h = `<h3>Trade run</h3><p>Buy ≈ ${mixTxt(bt, bRm)} · sell ≈ ${mixTxt(st, sRm)} · <b class="${st - bt >= 0 ? 'good' : 'bad'}">${profitTxt(st - bt)}</b>${bRm || sRm ? ` <small class="muted">(in OC value: ${netMix((st - sRm) - (bt - bRm), sRm - bRm)})</small>` : ''}</p>`;
   if (buy.size) h += `<p class="muted">1. Buy, in this order:</p>${ul(tripOrder([...buy.keys()]).map(v => stop(v, buy.get(v), 'Show the shop', true)))}`;
   if (sell.size) h += `<p class="muted">2. Sell, in this order:</p>${ul(tripOrder([...sell.keys()]).map(v => stop(v, sell.get(v), 'Show the shop')))}`;
   if (find.length) h += `<p class="muted">To find, not buy (left out of the cost and the route): ${find.map(([id, n]) => `${il(id)} × ${num(n)}`).join(', ')}</p>`;
+  if (alts.length) h += `<p class="muted">Same price in the other currency: ${alts.map(([id, a]) => `${il(id)} at ${esc(a.v.n)} (${esc(sceneName(a.v.sc))}) for ${pxt(a.v, a.p)}`).join(', ')}</p>`;
   if (nosell.length) h += `<p class="muted">No shop buys: ${nosell.map(il).join(', ')}</p>`;
   return h + `<p class="muted">Cheapest shop for each ingredient, best price for each product. Item quality, stolen goods and daily stock are ignored.</p>`;
 }
