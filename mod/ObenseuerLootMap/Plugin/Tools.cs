@@ -463,10 +463,28 @@ namespace ObenseuerLootMap
 
 
         // ---------------- profit finder: recipes ranked by what they earn at real shop prices ----------------
-        class TradeRow { public string key, name; public float cost, rev, profit, perHour; public bool estimated; public float liters, litersRev; public string route; public HashSet<int> ids = new HashSet<int>(); }
+        class TradeRow { public string key, name, skill; public int minLv; public float cost, rev, profit, perHour; public bool estimated; public float liters, litersRev; public string route; public HashSet<int> ids = new HashSet<int>(); }
         List<TradeRow> tradeAll; bool tradeOpen; int tradeSort; List<VendorData> tradeVendors;
         readonly Dictionary<int, (float p, VendorData v)> tradeCheap = new Dictionary<int, (float p, VendorData v)>(), tradeBest = new Dictionary<int, (float p, VendorData v)>();
         static string Money(float x) => (x >= 0 ? "+" : "−") + Mathf.Abs(x).ToString("0.#");
+        // Profit finder filters and sorts: by skill, by the skill level a recipe needs, and highest / lowest level first
+        int rowSkill, rowLv = -1;   // rowSkill 0 = all skills, else an index into RowSkills(); rowLv -1 = any, 0..10 = up to that level, 11 = at your own skill levels
+        List<string> rowSkillList;
+        static readonly string[] RowSortNames = { "Profit", "Profit per hour", "Highest skill level needed", "Lowest skill level needed" };
+        List<string> RowSkills() => rowSkillList ??= Db.trade.Values.Where(x => x.Count > 6).Select(x => (string)x[6]).Where(s => !string.IsNullOrEmpty(s) && s != "None").Distinct().OrderBy(s => s).ToList();
+        string RowSkillLabel() => rowSkill <= 0 || rowSkill > RowSkills().Count ? "All skills" : RowSkills()[rowSkill - 1];
+        string RowLvLabel() => rowLv < 0 ? "Any level needed" : rowLv == 0 ? "No level needed" : rowLv == 11 ? "At my skill levels" : "Up to level " + rowLv;
+        void NextRowSkill() { rowSkill = (rowSkill + 1) % (RowSkills().Count + 1); }
+        void NextRowLv() { rowLv = rowLv >= 11 ? -1 : rowLv + 1; }
+        float MySkill(string sk) { if (!Enum.TryParse(sk, out PlayerStats.PlayerSkillType t)) return 5f; try { return PlayerStats.instance.GetSkillWithEffects(t); } catch { return 5f; } }
+        IEnumerable<TradeRow> FilterRows(IEnumerable<TradeRow> rows)
+        {
+            string sk = rowSkill <= 0 || rowSkill > RowSkills().Count ? null : RowSkills()[rowSkill - 1];
+            return rows.Where(r => (sk == null || r.skill == sk) && (rowLv < 0 || (rowLv == 11 ? r.minLv <= MySkill(r.skill) : r.minLv <= rowLv)));
+        }
+        IOrderedEnumerable<TradeRow> SortRows(IEnumerable<TradeRow> rows, int sort) =>
+            sort == 0 ? rows.OrderByDescending(r => r.profit) : sort == 1 ? rows.OrderByDescending(r => r.perHour)
+            : sort == 2 ? rows.OrderByDescending(r => r.minLv).ThenByDescending(r => r.profit) : rows.OrderBy(r => r.minLv).ThenByDescending(r => r.profit);
         // The shop to buy an item from. 0: the price divided by how reliably it is stocked (fixed list 1, usually 0.8, sometimes 0.5); 1: lowest price; 2: most reliable stock first, then the price.
         (float p, VendorData v) PickShop(int id, List<VendorData> vendors)
         {
@@ -573,7 +591,7 @@ namespace ObenseuerLootMap
             foreach (var kv in Db.trade)
             {
                 var r = kv.Value; if (r.Count < 6) continue;
-                var row = new TradeRow { key = kv.Key, name = (string)r[0] };
+                var row = new TradeRow { key = kv.Key, name = (string)r[0] }; row.skill = r.Count > 6 ? (string)r[6] : "None"; row.minLv = r.Count > 11 ? Mathf.RoundToInt(Convert.ToSingle(r[11])) : 0;
                 float fail = (float)r[3], time = (float)r[2]; bool bad = false; var buyAt = new List<string>(); string sellAt = null;
                 foreach (JArray x in (JArray)r[4])
                 {
@@ -612,11 +630,13 @@ namespace ObenseuerLootMap
             if (!was || tradeAll == null) tradeAll = BuildTrade();   // rebuilt each time it opens, so it follows your current skills
             GUILayout.BeginHorizontal();
             GUILayout.Label(Loc.T("Sort by"), labelStyle, GUILayout.Width(70));
-            if (GUILayout.Button(Loc.T(tradeSort == 0 ? "Profit" : "Profit per hour"), btnStyle)) tradeSort = 1 - tradeSort;
+            if (GUILayout.Button(RowSortNames[tradeSort], btnStyle)) tradeSort = (tradeSort + 1) % 4;
             GUILayout.EndHorizontal();
+            if (GUILayout.Button("Skill: " + RowSkillLabel(), btnStyle)) NextRowSkill();
+            if (GUILayout.Button("Level: " + RowLvLabel(), btnStyle)) NextRowLv();
             if (GUILayout.Button(Loc.T("Shops") + ": " + ShopChoiceLabel(), btnStyle)) { NextShopChoice(); tradeAll = BuildTrade(); }
             if (Db.containers.Count > 0 && GUILayout.Button("Sell liquids in: " + SaleContainerLabel(), btnStyle)) { NextSaleContainer(); tradeAll = BuildTrade(); }
-            var top = (tradeSort == 0 ? tradeAll.OrderByDescending(r => r.profit) : tradeAll.OrderByDescending(r => r.perHour)).Take(8).ToList();
+            var top = SortRows(FilterRows(tradeAll), tradeSort).Take(8).ToList();
             if (top.Count == 0) { GUILayout.Label(Loc.T("No profitable recipes found"), smallStyle); return; }
             foreach (var r in top)
             {
@@ -625,7 +645,7 @@ namespace ObenseuerLootMap
                 GUILayout.Label($"{r.name}{(r.estimated ? " ~" : "")} · {Money(r.profit)} OC" + (r.perHour > float.MinValue ? $" · {Money(r.perHour)}/h" : ""), tradeWrap, GUILayout.ExpandWidth(true), GUILayout.MaxWidth(215));
                 if (GUILayout.Button(Loc.T("Find"), btnStyle, GUILayout.Width(50))) SetIdSearch(new HashSet<int>(r.ids), r.name);
                 GUILayout.EndHorizontal();
-                GUILayout.Label(r.route, smallStyle);
+                GUILayout.Label((r.minLv > 0 ? r.skill + " lv " + r.minLv + " - " : "") + r.route, smallStyle);
             }
             GUILayout.Label(Loc.T("Real shop prices, after the fail chance and with the quality your current skills would give. ~ means some ingredient is not sold in any shop (counted at its base value)."), smallStyle);
         }

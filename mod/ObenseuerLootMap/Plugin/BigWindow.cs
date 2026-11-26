@@ -168,7 +168,9 @@ namespace ObenseuerLootMap
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label("Sort by", labelStyle, GUILayout.Width(60));
-            if (GUILayout.Button(bigSort == 0 ? "Profit" : "Profit per hour", bigTabOff)) bigSort = 1 - bigSort;
+            if (GUILayout.Button(RowSortNames[bigSort], bigTabOff)) bigSort = (bigSort + 1) % 4;
+            if (GUILayout.Button("Skill: " + RowSkillLabel(), bigTabOff)) NextRowSkill();
+            if (GUILayout.Button("Level: " + RowLvLabel(), bigTabOff)) NextRowLv();
             if (GUILayout.Button("Refresh", bigTabOff)) { try { bigRows = BuildTrade(); } catch (Exception) { } }
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
@@ -192,7 +194,7 @@ namespace ObenseuerLootMap
             GUILayout.EndHorizontal();
             GUILayout.Label(qualityPick > 0f ? "Prices assume everything you craft comes out at quality " + qualityPick.ToString("0.#") + " (items without quality are not affected)." : "Real shop prices, after the fail chance and with the quality your current skills would give. ~ = an ingredient is not sold in any shop.", smallStyle);
             var rows = (bigRows ?? new List<TradeRow>());
-            var list = (bigSort == 0 ? rows.OrderByDescending(r => r.profit) : rows.OrderByDescending(r => r.perHour)).Take(100).ToList();
+            var list = SortRows(FilterRows(rows), bigSort).Take(100).ToList();
             TradeRow pick = null, pickCraft = null;
             bigScroll = GUILayout.BeginScrollView(bigScroll);
             if (list.Count == 0) GUILayout.Label("No profitable recipes found", smallStyle);
@@ -206,7 +208,7 @@ namespace ObenseuerLootMap
                 Badge(Money(r.profit) + " OC / " + Money(r.profit * 0.1f) + " RM", r.profit >= 0 ? BigGood : BigBad);
                 if (r.perHour > float.MinValue) Badge(Money(r.perHour) + " /h", BigInfo);
                 GUILayout.EndHorizontal();
-                GUILayout.Label(r.route, smallStyle);
+                GUILayout.Label((r.minLv > 0 ? r.skill + " lv " + r.minLv + " - " : "") + r.route, smallStyle);
                 GUILayout.EndVertical();
                 GUILayout.BeginVertical(GUILayout.Width(74));
                 if (GUILayout.Button("Craft", bigPrimary)) pickCraft = r;
