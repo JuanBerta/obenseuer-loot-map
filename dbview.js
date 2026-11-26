@@ -109,6 +109,12 @@ const sellersOf = id => sellersMemo[id] || (sellersMemo[id] = DB.items[id] ? DB.
 const buyersOf = id => buyersMemo[id] || (buyersMemo[id] = DB.items[id] ? DB.vendors.filter(v => buys(v, +id)).map(v => ({ v, p: getAt(v, id) })).sort((a, b) => b.p - a.p || a.v.n.localeCompare(b.v.n)) : []);
 // The cheapest way to pay for one of an ingredient: a group counts as its cheapest member; nothing sells it → its base value, marked as an estimate.
 // How reliably a shop has an item: 3 = a fixed list (always there), 2 = in its stock list 'usually', 1 = 'sometimes'. A rarer item is worth less to a trade run, so its price counts for more.
+// Opening hours: v.h = 7 days (Monday first) of [opens, closes]; the same hour means closed, a later closing hour than opening wraps past midnight. Shops without hours are always open.
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const openAt = (v, d, h) => { if (!v.h || v.h.length < 7 || d < 0) return true; const o = v.h[d][0], c = v.h[d][1]; if (o === c) return false; return o > c ? (h >= o || h < c) : (h >= o && h < c); };
+const hoursTxt = v => { if (!v.h || v.h.length < 7) return ''; const all = v.h.map(x => x[0] === x[1] ? 'closed' : x[0] + ':00-' + x[1] + ':00'); if (all.every(x => x === all[0])) return 'Every day ' + all[0]; const out = []; let i = 0; while (i < 7) { let j = i; while (j + 1 < 7 && all[j + 1] === all[i]) j++; out.push((i === j ? DAYS[i].slice(0, 3) : DAYS[i].slice(0, 3) + '-' + DAYS[j].slice(0, 3)) + ' ' + all[i]); i = j + 1; } return out.join(', '); };
+const hoursNote = (v, o) => { const t = hoursTxt(v); if (!t) return ''; const cl = o && o.day >= 0 && !openAt(v, o.day, o.hour); return `<br><small class="${cl ? 'bad' : 'muted'}">${cl ? 'Closed then. ' : ''}${esc(t)}</small>`; };
+const ordHrs = (t, o) => o && o.day >= 0 ? [...t.filter(v => openAt(v, o.day, o.hour)), ...t.filter(v => !openAt(v, o.day, o.hour))] : t;
 const STOCK_W = { 3: 1, 2: 0.8, 1: 0.5 };
 const stockTier = (v, id) => { if (v.i && v.i.includes(+id)) return 3; const t = v.t && DB.loot[v.t]; if (!t) return 2; return t[1].includes(+id) ? 2 : 1; };
 const stockTxt = t => t === 3 ? 'always stocked' : t === 2 ? 'usually stocked' : 'sometimes stocked';
@@ -257,10 +263,10 @@ function tradeRun(raw, make, o) {
   for (const [id, n0] of Object.entries(raw)) { const n = Math.ceil(n0 - 1e-9), c = buyCost(id, false, o && o.shop); if (!c.shop || (o && o.pref[id] === 'find')) { find.push([+id, n]); continue; } add(buy, c.v, { id: c.id, n, p: c.p, tier: c.tier || stockTier(c.v, c.id) }); bt += c.p * n; if (isRm(c.v, true)) bRm += c.p * n; }
   for (const [id, n] of Object.entries(make)) { const b = buyersOf(+id)[0]; if (!b) { nosell.push(+id); continue; } add(sell, b.v, { id: +id, n, p: b.p }); st += b.p * n; if (isRm(b.v)) sRm += b.p * n; const a = altBuyer(+id); if (a) alts.push([+id, a]); }
   if (!buy.size && !sell.size) return '';
-  const stop = (v, ls, k, buying) => `<span>${vl(v)}<br>${ls.map(l => `<small class="muted">${il(l.id)} × ${num(l.n)} · ${pxt(v, l.p, buying)} each = ${pxt(v, l.p * l.n, buying)}${buying && l.tier ? ' - ' + stockTxt(l.tier) : ''}</small>`).join('<br>')}</span>${mapBtn(v.sc, iname(ls[0].id), k, v.n)}`;
-  let h = `<h3>Trade run</h3><label class="shopopt">Choose shops by <select data-shopbuy aria-label="How to choose the shop for each ingredient">${[['balanced', 'Price and availability'], ['cheap', 'Lowest price only'], ['reliable', 'Most reliable stock']].map(([k, t]) => `<option value="${k}" ${((o && o.shop) || 'balanced') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label><p>Buy ≈ ${mixTxt(bt, bRm)} · sell ≈ ${mixTxt(st, sRm)} · <b class="${st - bt >= 0 ? 'good' : 'bad'}">${profitTxt(st - bt)}</b>${bRm || sRm ? ` <small class="muted">(in OC value: ${netMix((st - sRm) - (bt - bRm), sRm - bRm)})</small>` : ''}</p>`;
-  if (buy.size) h += `<p class="muted">1. Buy, in this order:</p>${ul(tripOrder([...buy.keys()]).map(v => stop(v, buy.get(v), 'Show the shop', true)))}`;
-  if (sell.size) h += `<p class="muted">2. Sell, in this order:</p>${ul(tripOrder([...sell.keys()]).map(v => stop(v, sell.get(v), 'Show the shop')))}`;
+  const stop = (v, ls, k, buying) => `<span>${vl(v)}${hoursNote(v, o)}<br>${ls.map(l => `<small class="muted">${il(l.id)} × ${num(l.n)} · ${pxt(v, l.p, buying)} each = ${pxt(v, l.p * l.n, buying)}${buying && l.tier ? ' - ' + stockTxt(l.tier) : ''}</small>`).join('<br>')}</span>${mapBtn(v.sc, iname(ls[0].id), k, v.n)}`;
+  let h = `<h3>Trade run</h3><label class="shopopt">Choose shops by <select data-shopbuy aria-label="How to choose the shop for each ingredient">${[['balanced', 'Price and availability'], ['cheap', 'Lowest price only'], ['reliable', 'Most reliable stock']].map(([k, t]) => `<option value="${k}" ${((o && o.shop) || 'balanced') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label><label class="shopopt">Shopping on <select data-shopday aria-label="Day you will shop"><option value="-1">any day (ignore opening hours)</option>${DAYS.map((d, i) => `<option value="${i}" ${o && o.day === i ? 'selected' : ''}>${d}</option>`).join('')}</select> at <select data-shophour aria-label="Hour you will shop">${[...Array(24).keys()].map(n => `<option value="${n}" ${o && o.hour === n ? 'selected' : ''}>${n}:00</option>`).join('')}</select></label><p>Buy ≈ ${mixTxt(bt, bRm)} · sell ≈ ${mixTxt(st, sRm)} · <b class="${st - bt >= 0 ? 'good' : 'bad'}">${profitTxt(st - bt)}</b>${bRm || sRm ? ` <small class="muted">(in OC value: ${netMix((st - sRm) - (bt - bRm), sRm - bRm)})</small>` : ''}</p>`;
+  if (buy.size) h += `<p class="muted">1. Buy, in this order:</p>${ul(ordHrs(tripOrder([...buy.keys()]), o).map(v => stop(v, buy.get(v), 'Show the shop', true)))}`;
+  if (sell.size) h += `<p class="muted">2. Sell, in this order:</p>${ul(ordHrs(tripOrder([...sell.keys()]), o).map(v => stop(v, sell.get(v), 'Show the shop')))}`;
   if (find.length) h += `<p class="muted">To find, not buy (left out of the cost and the route): ${find.map(([id, n]) => `${il(id)} × ${num(n)}`).join(', ')}</p>`;
   if (alts.length) h += `<p class="muted">Same price in the other currency: ${alts.map(([id, a]) => `${il(id)} at ${esc(a.v.n)} (${esc(sceneName(a.v.sc))}) for ${pxt(a.v, a.p)}`).join(', ')}</p>`;
   if (nosell.length) h += `<p class="muted">No shop buys: ${nosell.map(il).join(', ')}</p>`;
@@ -372,7 +378,7 @@ function shopChange(rid, d) { const L = shopGet(), n = Math.max(0, (L[rid] || 0)
 let optMem = null;
 const shopOpt = () => {
   if (!optMem) { try { optMem = JSON.parse(localStorage.getItem('obs-shop-opt') || 'null'); } catch (e) {} if (!optMem || typeof optMem !== 'object') optMem = {}; }
-  if (!['all', 'missing', 'off'].includes(optMem.mode)) optMem.mode = 'all'; if (!['balanced', 'cheap', 'reliable'].includes(optMem.shop)) optMem.shop = 'balanced'; if (!optMem.pref || typeof optMem.pref !== 'object') optMem.pref = {}; if (!optMem.rec || typeof optMem.rec !== 'object') optMem.rec = {};   // pref: item id -> 'craft', 'buy' or 'find' (you will find it, not buy it), overriding the default
+  if (!['all', 'missing', 'off'].includes(optMem.mode)) optMem.mode = 'all'; if (!['balanced', 'cheap', 'reliable'].includes(optMem.shop)) optMem.shop = 'balanced'; if (typeof optMem.day !== 'number') optMem.day = -1; if (typeof optMem.hour !== 'number') optMem.hour = 12; if (!optMem.pref || typeof optMem.pref !== 'object') optMem.pref = {}; if (!optMem.rec || typeof optMem.rec !== 'object') optMem.rec = {};   // pref: item id -> 'craft', 'buy' or 'find' (you will find it, not buy it), overriding the default
   return optMem;
 };
 const optSave = () => { try { localStorage.setItem('obs-shop-opt', JSON.stringify(optMem)); } catch (e) {} };
@@ -643,6 +649,7 @@ function vendorCard(key) {
     if (v.bf && v.bf.length) h += `<p class="muted">Except:</p><div class="tags">${v.bf.map(r => `<span class="tag red">${rule(r)}</span>`).join('')}</div>`;
     h += v.bs ? '<p><b>Buys stolen goods.</b></p>' : '<p class="muted">Does not buy stolen goods.</p>';
   }
+  if (hoursTxt(v)) h += `<p>Opening hours: ${esc(hoursTxt(v))}</p>`;
   if (v.fs) h += `<h3>Furniture for sale · ${v.fs.length}</h3>${ul(v.fs.slice().sort((a, b) => DB.furniture[a][0].localeCompare(DB.furniture[b][0])).map(id => `<span>${fl(id)}</span><small>${price(DB.furniture[id])}</small>`))}`;
   if (v.fb) h += `<h3>Buys furniture</h3><p>${v.fb === 'any' ? 'Any furniture.' : v.fb === 'same' ? 'The pieces it sells.' : v.fb.map(fl).join(', ')}</p>`;
   return h + '</div>';
@@ -883,7 +890,7 @@ document.addEventListener('change', e => { const q = e.target.closest('[data-sho
   const stn = e.target.closest('[data-station]'); if (stn) { setStation(stn.dataset.station, stn.value); return; }
   const si = e.target.closest('[data-skillin]'); if (si) { setSkill(si.dataset.skillin, Math.max(0, Math.min(10, Math.round(+si.value || 0)))); return; }
   const sf = e.target.closest('[data-saveinput]'); if (sf) { if (sf.files.length) loadSaves([...sf.files]); return; }
-  const sb = e.target.closest('[data-shopbuy]'); if (sb) { shopOpt().shop = sb.value; optSave(); renderDetail(); return; } const rp = e.target.closest('[data-recpick]'); if (rp) { shopOpt().rec[rp.dataset.recpick] = rp.value; optSave(); renderDetail(); return; } const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
+  const sd = e.target.closest('[data-shopday]'); if (sd) { shopOpt().day = +sd.value; optSave(); renderDetail(); return; } const sh = e.target.closest('[data-shophour]'); if (sh) { shopOpt().hour = +sh.value; optSave(); renderDetail(); return; } const sb = e.target.closest('[data-shopbuy]'); if (sb) { shopOpt().shop = sb.value; optSave(); renderDetail(); return; } const rp = e.target.closest('[data-recpick]'); if (rp) { shopOpt().rec[rp.dataset.recpick] = rp.value; optSave(); renderDetail(); return; } const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
 window.addEventListener('hashchange', () => { route(); setReport(); });
 // footer: game version, theme switch
 fetch('data/meta.json?v=1').then(r => r.json()).then(m => {
