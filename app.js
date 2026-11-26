@@ -15,7 +15,9 @@ const LOOT = IDX.loot, ITEMS = IDX.items;
 const itemName = id => (ITEMS[id] ? ITEMS[id][0] : 'Item #' + id);
 const hasTable = c => !!(c && LOOT[c]);
 const tableText = {};
-for (const [n, t] of Object.entries(LOOT)) tableText[n] = (n + '\n' + [...t.common, ...t.rare].map(itemName).join('\n')).toLowerCase();
+const GROUPS = IDX.groups || {};   // item groups: Metal Recycle is found through the nails and tin cans that count as one
+const nameWithGroups = id => itemName(id) + (GROUPS[id] ? '\n' + GROUPS[id].join('\n') : '');
+for (const [n, t] of Object.entries(LOOT)) tableText[n] = (n + '\n' + [...t.common, ...t.rare].map(nameWithGroups).join('\n')).toLowerCase();
 const TOTALS = {};
 for (const s of IDX.scenes) for (const [c, k] of Object.entries(s.cats)) TOTALS[c] = (TOTALS[c] || 0) + k;
 const IMG = {};
@@ -122,7 +124,7 @@ function renderSide() {
     if (!S.cat && q) {
       const hits = Object.keys(LOOT).filter(c => tableText[c].has(q) && TOTALS[c]).sort((a, b) => TOTALS[b] - TOTALS[a]).slice(0, 10);
       tables = hits.length ? '<div class="sec">Containers that can drop it</div>' + hits.map(c => {
-        const t = LOOT[c], m = id => itemName(id).toLowerCase().has(q);
+        const t = LOOT[c], m = id => nameWithGroups(id).toLowerCase().has(q);
         const r = t.rare.some(m), cm = t.common.some(m);
         const how = c.toLowerCase().has(q) ? 'container type' : cm && r ? 'common & rare drop' : cm ? 'common drop' : 'rare drop';
         return `<div class="row" data-cat="${esc(c)}"><span class="ico blank"></span><span class="nm">${esc(c)}<small>${how}</small></span><span class="ct">${TOTALS[c]}</span></div>`;

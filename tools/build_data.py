@@ -145,7 +145,15 @@ try:
     for r in json.loads(txt)['Recipes']:
         if r.get('Name') and r['Name'] not in recipes[r['Type']]: recipes[r['Type']].append(r['Name'])
 except Exception as e: print('recipes skipped',e)
+# item groups ("Metal Recycle" counts nails and tin cans): a member is found by the name of any group it belongs to
+groups={}
+for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig')):
+    for m in (it.get('Meta') or []):
+        if isinstance(m,dict) and str(m.get('$type','')).endswith('ItemGroupData'):
+            for g in (m.get('itemGroup') or []):
+                if isinstance(g,dict) and isinstance(g.get('item'),dict): groups.setdefault(g['item']['ID'],[]).append(it['Title'])
 idx=dict(stationTypes=stypes,recipes={k:sorted(v) for k,v in recipes.items()},meta=meta,scenes=index,maps=maps,landmarks=lms,loot=loot,items={i:items[i] for i in need if i in items})
+idx['groups']={str(k):v for k,v in groups.items() if k in idx['items']}
 with open(os.path.join(dd,'index.js'),'w') as fh:
     fh.write('window.OBS_INDEX='+json.dumps(idx,separators=(',',':'))+';')
 print(len(index),'scenes;',len(lms),'landmarks;',len(maps),'maps;',len(idx['items']),'items')
