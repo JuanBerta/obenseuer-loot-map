@@ -11,7 +11,7 @@ const SECTIONS = [
   ['tenants', 'Tenants'], ['furniture', 'Furniture'], ['skills', 'Your skills'], ['list', 'Shopping list'], ['notes', 'Data notes'],
 ];
 let DB = null, X = null;                       // raw data, derived indexes
-const V = { sec: 'items', key: null, q: '', f: '', e: '', e2: '', min: '', w: '', view: 'list', col: '', dir: 1, sort: 'name', lim: 300, init: false };
+const V = { sec: 'items', key: null, q: '', f: '', e: '', e2: '', min: '', w: '', sk: '', lv: '', view: 'list', col: '', dir: 1, sort: 'name', lim: 300, init: false };
 // What using an item does (data/db.js item[9], base values). [key, label, text when positive, text when negative, shown first in the filter list]
 const STATS = [
   ['nut', 'Nutrition', 'Fills you up', 'Makes you hungrier'], ['thi', 'Thirst', 'Quenches thirst', 'Makes you thirstier'],
@@ -340,13 +340,13 @@ const fmt = n => String(+(+n).toFixed(1));
 const goodStat = (k, v) => k === 'dep' || k === 'ble' || k === 'tir' ? v < 0 : (k === 'nut' || k === 'thi' || k === 'hp' || k === 'hyg') ? v > 0 : null;
 const wide = () => !matchMedia('(max-width:820px)').matches;
 const tableOn = () => V.sec === 'items' && V.view === 'table' && wide();
-const PARAMS = [['c', 'f'], ['e', 'e'], ['e2', 'e2'], ['min', 'min'], ['w', 'w'], ['s', 'sort'], ['q', 'q'], ['v', 'view'], ['col', 'col']];
-const DEFAULTS = { f: '', e: '', e2: '', min: '', w: '', sort: 'name', q: '', view: 'list', col: '' };
+const PARAMS = [['c', 'f'], ['e', 'e'], ['e2', 'e2'], ['min', 'min'], ['w', 'w'], ['s', 'sort'], ['q', 'q'], ['v', 'view'], ['col', 'col'], ['sk', 'sk'], ['lv', 'lv']];
+const DEFAULTS = { f: '', e: '', e2: '', min: '', w: '', sk: '', lv: '', sort: 'name', q: '', view: 'list', col: '' };
 const FIELDS = ['f', 'e', 'e2', 'min', 'w', 'sort', 'q', 'view', 'col', 'dir'];
-const FRESH = { f: '', e: '', e2: '', min: '', w: '', sort: 'name', q: '', view: 'list', col: '', dir: 1 };
+const FRESH = { f: '', e: '', e2: '', min: '', w: '', sk: '', lv: '', sort: 'name', q: '', view: 'list', col: '', dir: 1 };
 let SAVED = {}; try { SAVED = JSON.parse(sessionStorage.getItem('obs-dbstate') || '{}') || {}; } catch (e) {}
 function stash() { SAVED[V.sec] = Object.fromEntries(FIELDS.map(f => [f, V[f]])); try { sessionStorage.setItem('obs-dbstate', JSON.stringify(SAVED)); } catch (e) {} }
-const filtered = () => !!(V.f || V.e || V.e2 || V.min || V.w || V.q);
+const filtered = () => !!(V.f || V.e || V.e2 || V.min || V.w || V.q || V.sk || V.lv);
 function qsOf() { const p = new URLSearchParams(); for (const [k, f] of PARAMS) if (V[f] !== DEFAULTS[f] && V[f] != null) p.set(k, V[f]); if (V.col && V.dir < 0) p.set('dir', 'd'); return p.toString(); }
 function applyQs(qs) { const p = new URLSearchParams(qs); for (const [k, f] of PARAMS) V[f] = p.get(k) ?? DEFAULTS[f]; V.dir = p.get('dir') === 'd' ? -1 : 1; V.lim = 300; }
 function setReport() {
@@ -416,6 +416,8 @@ const shopBtn = rid => `<span class="shopwrap" data-rid="${rid}">${shopCtl(rid)}
 const econText = rid => { if (realProfit(rid).sellable) return realText(rid); const e = X.RC[rid]; return `Ingredients ≈ ${fmt(e.cost)} OC · worth ≈ ${fmt(e.worth)} OC · <b class="${e.profit >= 0 ? 'good' : 'bad'}">${e.profit >= 0 ? '+' : '−'}${fmt(Math.abs(e.profit))} OC</b>`; };
 const fxLine = id => { const st = DB.items[id] && DB.items[id][9]; if (!st) return ''; const t = STATS.filter(([k]) => st[k]).slice(0, 4).map(([k, l]) => `${l} ${sgn(st[k])}`); return t.length ? `<br><small class="muted">${t.join(' · ')}</small>` : ''; };
 
+// Recipe filter by skill level: up to level N, or the levels you set on the Your skills page
+const lvOk = r => { if (!V.lv) return true; const need = r[4] || 0; return V.lv === 'me' ? need <= lvlOf(r[3]) : need <= +V.lv; };
 // ---------- lists ----------
 function rows() {
   const q = V.q.trim().toLowerCase(), m = s => !q || String(s).toLowerCase().includes(q);
@@ -447,7 +449,7 @@ function rows() {
     case 'items': return itemRows(Object.keys(I).map(Number));
     case 'tenement': return itemRows(X.tenIds);
     case 'upgrades': return TU.cats.map((c, i) => [i, c[1], c[0] + ' · ' + (c[3].length - 1) + ' tiers', '']).filter(r => m(r[1]) || m(r[2]));
-    case 'recipes': return DB.recipes.filter(r => (m(r[1]) || r[8].some(x => m(iname(x[0])))) && (!V.f || r[2] === V.f) && (V.sort !== 'rprofit' && V.sort !== 'rhour' || realProfit(r[0]).sellable))
+    case 'recipes': return DB.recipes.filter(r => (m(r[1]) || r[8].some(x => m(iname(x[0])))) && (!V.f || r[2] === V.f) && (!V.sk || r[3] === V.sk) && lvOk(r) && (V.sort !== 'rprofit' && V.sort !== 'rhour' || realProfit(r[0]).sellable))
       .sort(V.sort === 'rprofit' ? (a, b) => realProfit(b[0]).profit - realProfit(a[0]).profit || a[1].localeCompare(b[1])
         : V.sort === 'rhour' ? (a, b) => (realProfit(b[0]).hour ?? -1e12) - (realProfit(a[0]).hour ?? -1e12) || a[1].localeCompare(b[1])
         : V.sort === 'profit' ? (a, b) => recipeProfit(b[0]) - recipeProfit(a[0]) || a[1].localeCompare(b[1])
@@ -466,7 +468,8 @@ function rows() {
   return [];
 }
 function filters() {
-  const opt = (list, all) => `<select id="dbF" aria-label="Filter: ${esc(all)}"><option value="">${all}</option>${list.map(c => `<option ${V.f === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
+  const recSkillSel = () => { const sks = [...new Set(DB.recipes.map(r => r[3]).filter(s => s && s !== 'None'))].sort(); return `<select id="dbSk" aria-label="Filter by skill"><option value="">All skills</option>${sks.map(s => `<option ${V.sk === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select><select id="dbLv" aria-label="Filter by the skill level a recipe needs"><option value="">Any level needed</option>${[...Array(11).keys()].map(n => `<option value="${n}" ${V.lv === String(n) ? 'selected' : ''}>${n ? 'Up to level ' + n : 'No level needed'}</option>`).join('')}<option value="me" ${V.lv === 'me' ? 'selected' : ''}>At my skill levels</option></select>`; };
+const opt = (list, all) => `<select id="dbF" aria-label="Filter: ${esc(all)}"><option value="">${all}</option>${list.map(c => `<option ${V.f === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
   const so = (k, t) => `<option value="${k}" ${V.sort === k ? 'selected' : ''}>${t}</option>`;
   const contSel = () => { const l = contList(); if (!l.length) return ''; const c = saleCont(), nm = c => `${iname(c[0])} (${c[1]} L, ×${c[2]})`;
   return ` <select id="dbCont" aria-label="Sell liquids in" title="Liquids sell for more or less depending on the container. A shop pays for the whole filled container."><option value="best"${contPick === 'best' ? ' selected' : ''}>Liquids in: best container</option>${l.map(x => `<option value="${x[0]}"${contPick === String(x[0]) ? ' selected' : ''}>Liquids in: ${esc(nm(x))}</option>`).join('')}<option value="none"${contPick === 'none' ? ' selected' : ''}>Liquids in: plain liters</option></select>`; };
@@ -483,7 +486,7 @@ const sort = `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</
   }
   if (V.sec === 'upgrades') return '';
   if (V.sec === 'tenement') return opt(X.itemCats, 'All categories') + sort;
-  if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('rprofit', 'Best profit at shops')}${so('rhour', 'Best profit per hour')}${so('profit', 'Best craft profit (base values)')}${so('cost', 'Cheapest ingredients')}</select>` + contSel();
+  if (V.sec === 'recipes') return opt(X.rTypes, 'All stations') + recSkillSel() + `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</option>${so('rprofit', 'Best profit at shops')}${so('rhour', 'Best profit per hour')}${so('profit', 'Best craft profit (base values)')}${so('cost', 'Cheapest ingredients')}</select>` + contSel();
   if (V.sec === 'tenants') return `<select id="dbF" aria-label="Filter tenants"><option value="">All tenants</option>${[['Small', 'Accept a small apartment'], ['Medium', 'Accept a medium apartment'], ['Large', 'Accept a large apartment'], ['OC', 'Pay OC'], ['RM', 'Pay RM']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   if (V.sec === 'furniture') return opt(X.fCats, 'All categories') + sort;
   if (V.sec === 'vendors') return `<select id="dbF" aria-label="Filter vendors"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
@@ -509,6 +512,8 @@ function renderSide() {
   const q = $('#dbQ'); q.oninput = () => { V.q = q.value; V.lim = 300; renderList(); };
   const f = $('#dbF'); if (f) f.onchange = () => { V.f = f.value; V.lim = 300; renderList(); };
   const s = $('#dbSort'); if (s) s.onchange = () => { V.sort = s.value; renderList(); };
+  const sk = $('#dbSk'); if (sk) sk.onchange = () => { V.sk = sk.value; V.lim = 300; renderList(); };
+  const lv = $('#dbLv'); if (lv) lv.onchange = () => { V.lv = lv.value; V.lim = 300; renderList(); };
   const sc = $('#dbCont'); if (sc) sc.onchange = () => { contPick = sc.value; try { localStorage.setItem('obs-cont', contPick); } catch (e) {} clearRP(); renderList(); renderDetail(); };
   const e = $('#dbE'); if (e) e.onchange = () => {
     V.e = e.value; V.lim = 300; if (!V.e) { V.e2 = ''; V.min = ''; }
