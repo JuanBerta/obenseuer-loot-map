@@ -503,3 +503,7 @@ table.tbl.up td,table.tbl.up th{text-align:left}table.tbl.up tr.grp th{backgroun
 /* layers panel: sit above the legend and stay inside the map */
 .pop{z-index:40;max-height:calc(100vh - 290px);min-height:200px}
 .legend{z-index:5}
+
+.done{opacity:.55;text-decoration:line-through}
+.shopopt .dbmore{margin:0}
+@media print{header.top,#dbSide,#side,#detail,footer,.dbback,.shopopt,.qty,.shopbtn,.dbmore,button,select,.tg,.cookie{display:none!important}#db,#dbDetail{display:block!important;width:auto!important;max-width:none!important;position:static!important}body{background:#fff!important;color:#000!important}.card{box-shadow:none!important;border:0!important}a{color:#000!important;text-decoration:none!important}}

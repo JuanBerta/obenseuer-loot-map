@@ -354,7 +354,7 @@ let SAVED = {}; try { SAVED = JSON.parse(sessionStorage.getItem('obs-dbstate') |
 function stash() { SAVED[V.sec] = Object.fromEntries(FIELDS.map(f => [f, V[f]])); try { sessionStorage.setItem('obs-dbstate', JSON.stringify(SAVED)); } catch (e) {} }
 const filtered = () => !!(V.f || V.e || V.e2 || V.min || V.w || V.q || V.sk || V.lv);
 function qsOf() { const p = new URLSearchParams(); for (const [k, f] of PARAMS) if (V[f] !== DEFAULTS[f] && V[f] != null) p.set(k, V[f]); if (V.col && V.dir < 0) p.set('dir', 'd'); return p.toString(); }
-function applyQs(qs) { const p = new URLSearchParams(qs); for (const [k, f] of PARAMS) V[f] = p.get(k) ?? DEFAULTS[f]; V.dir = p.get('dir') === 'd' ? -1 : 1; V.lim = 300; }
+function applyQs(qs) { const p = new URLSearchParams(qs); if (p.get('l')) { try { importShare(p.get('l'), p.get('n')); history.replaceState(null, '', location.pathname + location.search + '#/db/list'); p.delete('l'); p.delete('n'); } catch (e) {} } for (const [k, f] of PARAMS) V[f] = p.get(k) ?? DEFAULTS[f]; V.dir = p.get('dir') === 'd' ? -1 : 1; V.lim = 300; }
 function setReport() {
   const a = $('#report'); if (!a) return;
   a.href = 'https://github.com/JuanBerta/obenseuer-loot-map/issues/new?title=' + encodeURIComponent('Data problem: ' + document.title) + '&body=' + encodeURIComponent('Page: ' + location.href + '\n\nWhat looks wrong?\n');
@@ -367,8 +367,29 @@ function syncUrl() {
 }
 const SHOP = 'obs-shop';
 let shopMem = null;
-const shopGet = () => { if (!shopMem) { try { shopMem = JSON.parse(localStorage.getItem(SHOP) || '{}') || {}; } catch (e) { shopMem = {}; } } return shopMem; };
-const shopSave = () => { try { localStorage.setItem(SHOP, JSON.stringify(shopMem)); } catch (e) {} };
+// Several named shopping lists, kept in this browser. 'obs-shop' still holds the active one.
+let listsMem = null;
+const listsLoad = () => {
+  if (listsMem) return listsMem;
+  try { listsMem = JSON.parse(localStorage.getItem('obs-shop-lists') || 'null'); } catch (e) { listsMem = null; }
+  if (!listsMem || typeof listsMem !== 'object' || !listsMem.lists || typeof listsMem.lists !== 'object') { let old = {}; try { old = JSON.parse(localStorage.getItem(SHOP) || '{}') || {}; } catch (e) {} listsMem = { active: 'My list', lists: { 'My list': old } }; }
+  if (!listsMem.lists[listsMem.active]) { const k = Object.keys(listsMem.lists); if (k.length) listsMem.active = k[0]; else { listsMem.active = 'My list'; listsMem.lists['My list'] = {}; } }
+  return listsMem;
+};
+const shopGet = () => { if (!shopMem) { const L = listsLoad(); shopMem = L.lists[L.active]; } return shopMem; };
+const shopSave = () => { try { const L = listsLoad(); L.lists[L.active] = shopGet(); localStorage.setItem('obs-shop-lists', JSON.stringify(L)); localStorage.setItem(SHOP, JSON.stringify(shopGet())); } catch (e) {} };
+const listSwitch = name => { const L = listsLoad(); if (!L.lists[name]) return; L.active = name; shopMem = null; shopSave(); shopBadge(); };
+const listNew = (name, map) => { const L = listsLoad(); name = String(name || '').trim().slice(0, 40); if (!name) return; if (L.lists[name]) { if (!map) { listSwitch(name); return; } name += ' (2)'; } L.lists[name] = map || {}; listSwitch(name); };
+// Items you ticked off as bought, per list
+let doneMem = null;
+const doneAll = () => { if (!doneMem) { try { doneMem = JSON.parse(localStorage.getItem('obs-shop-done') || '{}') || {}; } catch (e) { doneMem = {}; } } return doneMem; };
+const isDone = id => !!doneAll()[listsLoad().active + ':' + id];
+const setDone = (id, on) => { const d = doneAll(), k = listsLoad().active + ':' + id; if (on) d[k] = 1; else delete d[k]; try { localStorage.setItem('obs-shop-done', JSON.stringify(d)); } catch (e) {} };
+const doneClear = () => { const d = doneAll(), p = listsLoad().active + ':'; Object.keys(d).forEach(k => { if (k.startsWith(p)) delete d[k]; }); try { localStorage.setItem('obs-shop-done', JSON.stringify(d)); } catch (e) {} };
+// A shared list comes in as a new list of its own, so nothing you have is overwritten
+function importShare(s, n) { const m = {}; String(s).split(',').forEach(x => { const [r, q] = x.split(':'); if (X.R[r] && +q > 0) m[r] = Math.min(9999, Math.floor(+q)); }); if (!Object.keys(m).length) return; listNew(n || 'Shared list', m); }
+const shareLink = () => location.href.split('#')[0] + '#/db/list?l=' + encodeURIComponent(Object.entries(shopGet()).map(([r, q]) => r + ':' + q).join(',')) + '&n=' + encodeURIComponent(listsLoad().active);
+const listBar = () => `<div class="shopopt"><select data-listpick aria-label="Shopping list">${Object.keys(listsLoad().lists).map(k => `<option ${k === listsLoad().active ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select> <button type="button" class="dbmore" data-listnew>New list</button> <button type="button" class="dbmore" data-listren>Rename</button> <button type="button" class="dbmore" data-listdel>Delete</button></div>`;
 const shopCount = () => Object.keys(shopGet()).length;
 const shopBadge = () => { const b = $('#shopN'); if (b) b.textContent = shopCount(); };
 function shopSet(rid, n) { const L = shopGet(); n = Math.max(0, Math.min(9999, Math.floor(+n) || 0)); if (n) L[rid] = n; else delete L[rid]; shopSave(); shopBadge(); }
@@ -793,7 +814,7 @@ let modCode = '';
 function listCard() {
   const L = shopGet(), o = shopOpt(), up = n => Math.ceil(n - 1e-9);
   const rids = Object.keys(L).filter(id => X.R[id]).sort((a, b) => X.R[a][1].localeCompare(X.R[b][1]));
-  if (!rids.length) return `<div class="card"><h2>Shopping list</h2><p class="muted">Nothing here yet. Open a recipe, or the “How to craft” box on an item, and press “+ Shopping list”. The list adds up every ingredient, including what it takes to craft the ingredients, and tells you where to find it. It is saved in this browser only.</p></div>`;
+  if (!rids.length) return `<div class="card"><h2>Shopping list</h2>${listBar()}<p class="muted">Nothing here yet. Open a recipe, or the “How to craft” box on an item, and press “+ Shopping list”. The list adds up every ingredient, including what it takes to craft the ingredients, and tells you where to find it. It is saved in this browser only.</p></div>`;
   const need = {}, make = {}; let cost = 0, worth = 0;
   for (const rid of rids) { const n = L[rid], r = X.R[rid]; r[7].forEach(x => { need[x[0]] = (need[x[0]] || 0) + x[1] * n / X.div(r, x[0]); }); r[8].forEach(x => { make[x[0]] = (make[x[0]] || 0) + x[1] * n; }); cost += X.RC[rid].cost * n; worth += X.RC[rid].worth * n; }
   for (const id of Object.keys(need)) { if (make[id]) need[id] = Math.max(0, need[id] - make[id]); if (!need[id]) delete need[id]; }   // a recipe on the list may already make what another needs
@@ -802,15 +823,15 @@ function listCard() {
   const crafted = E.order.length;
   modCode = 'OBSLIST:' + JSON.stringify({ v: 1, recipes: rids.map(r => [X.R[r][1], L[r]]), steps: E.order.map(r => [X.R[r][1], up(E.steps[r]), E.outs[r]]), raw: Object.entries(E.raw).map(([id, n]) => [+id, up(n)]) });
   return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ${o.mode !== 'off' || crafted ? 'raw materials' : 'ingredients'} ≈ ${fmt(o.mode !== 'off' || crafted ? rawCost : cost)} OC · worth ≈ ${fmt(worth)} OC</div>
-    <label class="shopopt">Ingredients <select data-shopmode aria-label="How far to break ingredients down"><option value="all" ${o.mode === 'all' ? 'selected' : ''}>Break down everything craftable</option><option value="missing" ${o.mode === 'missing' ? 'selected' : ''}>Only what can't be found or bought</option><option value="off" ${o.mode === 'off' ? 'selected' : ''}>Don't break down</option></select></label>
+    ${listBar()}<label class="shopopt">Ingredients <select data-shopmode aria-label="How far to break ingredients down"><option value="all" ${o.mode === 'all' ? 'selected' : ''}>Break down everything craftable</option><option value="missing" ${o.mode === 'missing' ? 'selected' : ''}>Only what can't be found or bought</option><option value="off" ${o.mode === 'off' ? 'selected' : ''}>Don't break down</option></select></label>
     <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span class="rn">${rl(rid)}</span>${qtyCtl(rid, L[rid])}</div>`).join('')}
     ${crafted ? `<h3>Craft these first · ${crafted}</h3>${ul(E.order.map(rid => { const out = E.outs[rid], per = X.R[rid][8].find(x => x[0] === out)[1], b = up(E.steps[rid]);
       return `<span>${rl(rid)} <small class="muted">× ${b} → ${num(per * b)} ${esc(iname(out))}</small></span>${recPick(out, rid)}<button type="button" class="shopbtn mini" data-pref="${out}:buy" title="Find or buy it instead of crafting it">Find or buy instead</button>`; }))}` : ''}
     <h3>${o.mode !== 'off' || crafted ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = bestRecipe(+id) != null && !(DB.items[id] && DB.items[id][6].length);
-      return `<span>${il(id)} <small class="muted">× ${num(up(n))}${unit(id)}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}${o.pref[id] === 'find' ? `<button type="button" class="shopbtn mini" data-pref="${id}:buy" title="Count it as bought again">Buy it instead</button>` : `<button type="button" class="shopbtn mini" data-pref="${id}:find" title="You will find it, not buy it: it stays out of the cost and the shopping route">Find it instead</button>`}`; }))}
+      return `<span class="${isDone(id) ? 'done' : ''}"><input type="checkbox" data-done="${id}" ${isDone(id) ? 'checked' : ''} aria-label="Got it"> ${il(id)} <small class="muted">× ${num(up(n))}${unit(id)}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}${o.pref[id] === 'find' ? `<button type="button" class="shopbtn mini" data-pref="${id}:buy" title="Count it as bought again">Buy it instead</button>` : `<button type="button" class="shopbtn mini" data-pref="${id}:find" title="You will find it, not buy it: it stays out of the cost and the shopping route">Find it instead</button>`}`; }))}
     <h3>You will make</h3>${ul(byName(Object.entries(make)).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}${unit(id)}</small>`))}
     ${tradeRun(E.raw, make, o)}
-    <button type="button" class="dbmore" data-copymod>Copy list for the mod</button> <button type="button" class="dbmore" data-shop="clear">Clear the list</button>
+    <button type="button" class="dbmore" data-copylink>Copy share link</button> <button type="button" class="dbmore" data-print>Print</button> <button type="button" class="dbmore" data-copymod>Copy list for the mod</button> <button type="button" class="dbmore" data-shop="clear">Clear the list</button>
     <p class="muted">In the game, open the Loot Map panel and press “Paste list from the website”: the mod shows what you still need and where to find it.</p></div>`;
 }
 function notesCard() {
@@ -862,13 +883,20 @@ function leave(slug, q, focus) {
 }
 document.addEventListener('click', e => {
   if (e.target.closest('[data-skillreset]')) { skillLv = {}; try { localStorage.removeItem('obs-skills'); } catch (_) {} clearRP(); renderDetail(); return; }
+  const cl = e.target.closest('[data-copylink]');
+  if (cl) { const link = shareLink(), done = () => { cl.textContent = 'Link copied'; setTimeout(() => { cl.textContent = 'Copy share link'; }, 1800); };
+    try { navigator.clipboard.writeText(link).then(done, () => fallbackCopy(link, done)); } catch (_) { fallbackCopy(link, done); } return; }
+  if (e.target.closest('[data-print]')) { window.print(); return; }
+  if (e.target.closest('[data-listnew]')) { const n = prompt('Name of the new list'); if (n && n.trim()) { listNew(n); renderDetail(); } return; }
+  if (e.target.closest('[data-listren]')) { const L = listsLoad(), n = prompt('New name for this list', L.active), nn = (n || '').trim().slice(0, 40); if (nn && nn !== L.active && !L.lists[nn]) { L.lists[nn] = shopGet(); delete L.lists[L.active]; L.active = nn; shopMem = null; shopSave(); renderDetail(); } return; }
+  if (e.target.closest('[data-listdel]')) { const L = listsLoad(); if (confirm('Delete the list "' + L.active + '"?')) { doneClear(); delete L.lists[L.active]; if (!Object.keys(L.lists).length) L.lists['My list'] = {}; L.active = Object.keys(L.lists)[0]; shopMem = null; shopSave(); shopBadge(); renderDetail(); } return; }
   const cm = e.target.closest('[data-copymod]');
   if (cm) { const done = () => { cm.textContent = 'Copied ✓'; setTimeout(() => { cm.textContent = 'Copy list for the mod'; }, 1800); };
     try { navigator.clipboard.writeText(modCode).then(done, () => fallbackCopy(modCode, done)); } catch (_) { fallbackCopy(modCode, done); } return; }
   const sb = e.target.closest('[data-shop]');
   if (sb) {
     e.preventDefault(); const v = sb.dataset.shop;
-    if (v === 'clear') { shopMem = {}; shopSave(); shopBadge(); } else shopChange(v, +sb.dataset.d || 1);
+    if (v === 'clear') { doneClear(); shopMem = {}; shopSave(); shopBadge(); } else shopChange(v, +sb.dataset.d || 1);
     if (V.sec === 'list') renderDetail(); else document.querySelectorAll('.shopwrap').forEach(w => { if (w.dataset.rid === v) w.innerHTML = shopCtl(v); });
     return;
   }
@@ -890,7 +918,7 @@ document.addEventListener('change', e => { const q = e.target.closest('[data-sho
   const stn = e.target.closest('[data-station]'); if (stn) { setStation(stn.dataset.station, stn.value); return; }
   const si = e.target.closest('[data-skillin]'); if (si) { setSkill(si.dataset.skillin, Math.max(0, Math.min(10, Math.round(+si.value || 0)))); return; }
   const sf = e.target.closest('[data-saveinput]'); if (sf) { if (sf.files.length) loadSaves([...sf.files]); return; }
-  const sd = e.target.closest('[data-shopday]'); if (sd) { shopOpt().day = +sd.value; optSave(); renderDetail(); return; } const sh = e.target.closest('[data-shophour]'); if (sh) { shopOpt().hour = +sh.value; optSave(); renderDetail(); return; } const sb = e.target.closest('[data-shopbuy]'); if (sb) { shopOpt().shop = sb.value; optSave(); renderDetail(); return; } const rp = e.target.closest('[data-recpick]'); if (rp) { shopOpt().rec[rp.dataset.recpick] = rp.value; optSave(); renderDetail(); return; } const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
+  const lp = e.target.closest('[data-listpick]'); if (lp) { listSwitch(lp.value); renderDetail(); return; } const dn = e.target.closest('[data-done]'); if (dn) { setDone(dn.dataset.done, dn.checked); renderDetail(); return; } const sd = e.target.closest('[data-shopday]'); if (sd) { shopOpt().day = +sd.value; optSave(); renderDetail(); return; } const sh = e.target.closest('[data-shophour]'); if (sh) { shopOpt().hour = +sh.value; optSave(); renderDetail(); return; } const sb = e.target.closest('[data-shopbuy]'); if (sb) { shopOpt().shop = sb.value; optSave(); renderDetail(); return; } const rp = e.target.closest('[data-recpick]'); if (rp) { shopOpt().rec[rp.dataset.recpick] = rp.value; optSave(); renderDetail(); return; } const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
 window.addEventListener('hashchange', () => { route(); setReport(); });
 // footer: game version, theme switch
 fetch('data/meta.json?v=1').then(r => r.json()).then(m => {
