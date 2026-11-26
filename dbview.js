@@ -108,9 +108,17 @@ const pxt = (v, p, buying) => isRm(v, buying) ? `${rmf(p)} RM (${fmt(p)} OC)` : 
 const sellersOf = id => sellersMemo[id] || (sellersMemo[id] = DB.items[id] ? DB.vendors.filter(v => sells(v, +id)).map(v => ({ v, p: payAt(v, id) })).sort((a, b) => a.p - b.p || a.v.n.localeCompare(b.v.n)) : []);
 const buyersOf = id => buyersMemo[id] || (buyersMemo[id] = DB.items[id] ? DB.vendors.filter(v => buys(v, +id)).map(v => ({ v, p: getAt(v, id) })).sort((a, b) => b.p - a.p || a.v.n.localeCompare(b.v.n)) : []);
 // The cheapest way to pay for one of an ingredient: a group counts as its cheapest member; nothing sells it → its base value, marked as an estimate.
-function buyCost(id, worst) {   // worst: the dearest shop instead of the cheapest (for the profit range)
+// How reliably a shop has an item: 3 = a fixed list (always there), 2 = in its stock list 'usually', 1 = 'sometimes'. A rarer item is worth less to a trade run, so its price counts for more.
+const STOCK_W = { 3: 1, 2: 0.8, 1: 0.5 };
+const stockTier = (v, id) => { if (v.i && v.i.includes(+id)) return 3; const t = v.t && DB.loot[v.t]; if (!t) return 2; return t[1].includes(+id) ? 2 : 1; };
+const stockTxt = t => t === 3 ? 'always stocked' : t === 2 ? 'usually stocked' : 'sometimes stocked';
+function buyCost(id, worst, mode) {   // worst: the dearest shop instead of the cheapest (for the profit range)
   const it = DB.items[id]; if (!it) return { p: 0, shop: false };
   let best = null;
+  if (mode && mode !== 'cheap' && !worst) {   // 'balanced': price divided by how reliably it is stocked; 'reliable': the most reliable shop first, then the price
+    for (const m of (it[6].length ? it[6] : [+id])) for (const s of sellersOf(m)) { const tr = stockTier(s.v, m), sc = mode === 'reliable' ? (4 - tr) * 1e6 + s.p : s.p / STOCK_W[tr]; if (!best || sc < best.sc) best = { p: s.p, shop: true, v: s.v, id: m, tier: tr, sc }; }
+    return best || { p: X.unit(id), shop: false, id: +id };
+  }
   for (const m of (it[6].length ? it[6] : [+id])) { const sl = sellersOf(m), s0 = worst ? sl[sl.length - 1] : sl[0]; if (s0 && (!best || (worst ? s0.p > best.p : s0.p < best.p))) best = { p: s0.p, shop: true, v: s0.v, id: m }; }
   return best || { p: X.unit(id), shop: false, id: +id };
 }
@@ -246,17 +254,17 @@ function tripOrder(vs) {
 function tradeRun(raw, make, o) {
   const buy = new Map(), sell = new Map(), find = [], nosell = []; let bt = 0, st = 0, bRm = 0, sRm = 0; const alts = [];
   const add = (m, v, l) => { if (!m.has(v)) m.set(v, []); m.get(v).push(l); };
-  for (const [id, n0] of Object.entries(raw)) { const n = Math.ceil(n0 - 1e-9), c = buyCost(id); if (!c.shop || (o && o.pref[id] === 'find')) { find.push([+id, n]); continue; } add(buy, c.v, { id: c.id, n, p: c.p }); bt += c.p * n; if (isRm(c.v, true)) bRm += c.p * n; }
+  for (const [id, n0] of Object.entries(raw)) { const n = Math.ceil(n0 - 1e-9), c = buyCost(id, false, o && o.shop); if (!c.shop || (o && o.pref[id] === 'find')) { find.push([+id, n]); continue; } add(buy, c.v, { id: c.id, n, p: c.p, tier: c.tier || stockTier(c.v, c.id) }); bt += c.p * n; if (isRm(c.v, true)) bRm += c.p * n; }
   for (const [id, n] of Object.entries(make)) { const b = buyersOf(+id)[0]; if (!b) { nosell.push(+id); continue; } add(sell, b.v, { id: +id, n, p: b.p }); st += b.p * n; if (isRm(b.v)) sRm += b.p * n; const a = altBuyer(+id); if (a) alts.push([+id, a]); }
   if (!buy.size && !sell.size) return '';
-  const stop = (v, ls, k, buying) => `<span>${vl(v)}<br>${ls.map(l => `<small class="muted">${il(l.id)} × ${num(l.n)} · ${pxt(v, l.p, buying)} each = ${pxt(v, l.p * l.n, buying)}</small>`).join('<br>')}</span>${mapBtn(v.sc, iname(ls[0].id), k, v.n)}`;
-  let h = `<h3>Trade run</h3><p>Buy ≈ ${mixTxt(bt, bRm)} · sell ≈ ${mixTxt(st, sRm)} · <b class="${st - bt >= 0 ? 'good' : 'bad'}">${profitTxt(st - bt)}</b>${bRm || sRm ? ` <small class="muted">(in OC value: ${netMix((st - sRm) - (bt - bRm), sRm - bRm)})</small>` : ''}</p>`;
+  const stop = (v, ls, k, buying) => `<span>${vl(v)}<br>${ls.map(l => `<small class="muted">${il(l.id)} × ${num(l.n)} · ${pxt(v, l.p, buying)} each = ${pxt(v, l.p * l.n, buying)}${buying && l.tier ? ' - ' + stockTxt(l.tier) : ''}</small>`).join('<br>')}</span>${mapBtn(v.sc, iname(ls[0].id), k, v.n)}`;
+  let h = `<h3>Trade run</h3><label class="shopopt">Choose shops by <select data-shopbuy aria-label="How to choose the shop for each ingredient">${[['balanced', 'Price and availability'], ['cheap', 'Lowest price only'], ['reliable', 'Most reliable stock']].map(([k, t]) => `<option value="${k}" ${((o && o.shop) || 'balanced') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label><p>Buy ≈ ${mixTxt(bt, bRm)} · sell ≈ ${mixTxt(st, sRm)} · <b class="${st - bt >= 0 ? 'good' : 'bad'}">${profitTxt(st - bt)}</b>${bRm || sRm ? ` <small class="muted">(in OC value: ${netMix((st - sRm) - (bt - bRm), sRm - bRm)})</small>` : ''}</p>`;
   if (buy.size) h += `<p class="muted">1. Buy, in this order:</p>${ul(tripOrder([...buy.keys()]).map(v => stop(v, buy.get(v), 'Show the shop', true)))}`;
   if (sell.size) h += `<p class="muted">2. Sell, in this order:</p>${ul(tripOrder([...sell.keys()]).map(v => stop(v, sell.get(v), 'Show the shop')))}`;
   if (find.length) h += `<p class="muted">To find, not buy (left out of the cost and the route): ${find.map(([id, n]) => `${il(id)} × ${num(n)}`).join(', ')}</p>`;
   if (alts.length) h += `<p class="muted">Same price in the other currency: ${alts.map(([id, a]) => `${il(id)} at ${esc(a.v.n)} (${esc(sceneName(a.v.sc))}) for ${pxt(a.v, a.p)}`).join(', ')}</p>`;
   if (nosell.length) h += `<p class="muted">No shop buys: ${nosell.map(il).join(', ')}</p>`;
-  return h + `<p class="muted">Cheapest shop for each ingredient, best price for each product. Item quality, stolen goods and daily stock are ignored.</p>`;
+  return h + `<p class="muted">Shops are picked as set above: a shop with a fixed list always has the item, one with a stock list only usually or sometimes does. Best price for each product. Item quality, stolen goods and the exact daily stock are ignored.</p>`;
 }
 
 // ---------- icons (in-game sprites from tools/icons.py, place icons from the map's landmarks) ----------
@@ -364,7 +372,7 @@ function shopChange(rid, d) { const L = shopGet(), n = Math.max(0, (L[rid] || 0)
 let optMem = null;
 const shopOpt = () => {
   if (!optMem) { try { optMem = JSON.parse(localStorage.getItem('obs-shop-opt') || 'null'); } catch (e) {} if (!optMem || typeof optMem !== 'object') optMem = {}; }
-  if (!['all', 'missing', 'off'].includes(optMem.mode)) optMem.mode = 'all'; if (!optMem.pref || typeof optMem.pref !== 'object') optMem.pref = {}; if (!optMem.rec || typeof optMem.rec !== 'object') optMem.rec = {};   // pref: item id -> 'craft', 'buy' or 'find' (you will find it, not buy it), overriding the default
+  if (!['all', 'missing', 'off'].includes(optMem.mode)) optMem.mode = 'all'; if (!['balanced', 'cheap', 'reliable'].includes(optMem.shop)) optMem.shop = 'balanced'; if (!optMem.pref || typeof optMem.pref !== 'object') optMem.pref = {}; if (!optMem.rec || typeof optMem.rec !== 'object') optMem.rec = {};   // pref: item id -> 'craft', 'buy' or 'find' (you will find it, not buy it), overriding the default
   return optMem;
 };
 const optSave = () => { try { localStorage.setItem('obs-shop-opt', JSON.stringify(optMem)); } catch (e) {} };
@@ -680,7 +688,7 @@ function furnCard(id) {
   if (f[9] && f[9].length) h += `<p>Shown in game as: ${f[9].map(x => '"' + esc(x) + '"').join(', ')}</p>`;
   if (f[8] && f[8].length) h += `<p>Modifiers: ${f[8].map(esc).join(', ')} <small class="muted">(what its crafting station offers; recipes that say the station must be one of these need it)</small></p>`;
   if (f[5] && f[5].length) h += powerBlock(f[5]);
-  h += `<h3>Sold by · ${sv.length}</h3>${ul(sv.map(vl))}<h3>Bought by · ${bv.length}</h3>${ul(bv.map(vl))}`;
+  h += `<h3>Sold by · ${sv.length}</h3>${sv.length ? ul(sv.map(vl)) : '<p class="muted">No shop sells this piece in the game data. You get it some other way (a reward, found in the world or crafted); the data does not say how.</p>'}<h3>Bought by · ${bv.length}</h3>${ul(bv.map(vl))}`;
   return h + '</div>';
 }
 
@@ -868,7 +876,7 @@ document.addEventListener('change', e => { const q = e.target.closest('[data-sho
   const stn = e.target.closest('[data-station]'); if (stn) { setStation(stn.dataset.station, stn.value); return; }
   const si = e.target.closest('[data-skillin]'); if (si) { setSkill(si.dataset.skillin, Math.max(0, Math.min(10, Math.round(+si.value || 0)))); return; }
   const sf = e.target.closest('[data-saveinput]'); if (sf) { if (sf.files.length) loadSaves([...sf.files]); return; }
-  const rp = e.target.closest('[data-recpick]'); if (rp) { shopOpt().rec[rp.dataset.recpick] = rp.value; optSave(); renderDetail(); return; } const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
+  const sb = e.target.closest('[data-shopbuy]'); if (sb) { shopOpt().shop = sb.value; optSave(); renderDetail(); return; } const rp = e.target.closest('[data-recpick]'); if (rp) { shopOpt().rec[rp.dataset.recpick] = rp.value; optSave(); renderDetail(); return; } const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
 window.addEventListener('hashchange', () => { route(); setReport(); });
 // footer: game version, theme switch
 fetch('data/meta.json?v=1').then(r => r.json()).then(m => {
