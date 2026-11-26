@@ -24,6 +24,7 @@ namespace ObenseuerLootMap
             BindMemoryConfig();
             cfgHideEmpty = Config.Bind("Filters", "HideEmptiedContainers", false, "Hide containers you have already emptied (they are shown hollow otherwise).");
             cfgShopHud = Config.Bind("Display", "ShoppingListOnScreen", true, "Show the shopping list (from the website) as a checklist on screen.");
+            cfgCountBank = Config.Bind("Display", "CountBankInventory", true, "Count the items stored in the Bank Inventory mod as owned on the shopping list.");
             cfgSaleContainer = Config.Bind("Profit", "SaleContainer", 0, "Container that liquids are sold in for the profit finder: 0 = the best one, -1 = none (plain liters), or an item ID such as 17780.");
             cfgMoreTools = Config.Bind("Display", "ShowMoreTools", true, "Show the value / effect / shopping list / route tools in the panel.");
         }
@@ -201,6 +202,7 @@ namespace ObenseuerLootMap
             public List<KeyValuePair<int, int>> raw = new List<KeyValuePair<int, int>>();
         }
         ShopList shopList; bool trackList; string shopListMsg;
+        ConfigEntry<bool> cfgCountBank;
         readonly Dictionary<int, int> have = new Dictionary<int, int>();
         static string ShopListPath => Path.Combine(Paths.ConfigPath, "lootmap-shoplist.json");
 
@@ -245,9 +247,28 @@ namespace ObenseuerLootMap
             try
             {
                 foreach (var r in shopList.raw)
-                    have[r.Key] = Inventory.instance != null ? Mathf.FloorToInt((float)Inventory.instance.CountItemsDialogue(r.Key, false, true, -1.0, Db.IsLiquid(r.Key))) : 0;
+                    have[r.Key] = (Inventory.instance != null ? Mathf.FloorToInt((float)Inventory.instance.CountItemsDialogue(r.Key, false, true, -1.0, Db.IsLiquid(r.Key))) : 0) + (Db.IsLiquid(r.Key) ? 0 : BankHave(r.Key));
             }
             catch { }
+        }
+        // Items stored by the Bank Inventory mod (when it is installed): read through its own counter, so its settings (stolen goods, on/off) apply.
+        static System.Reflection.MethodInfo bankCount; static bool bankLooked;
+        int BankHave(int id)
+        {
+            if (!cfgCountBank.Value) return 0;
+            if (!bankLooked)
+            {
+                bankLooked = true;
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    Type t = null; try { t = asm.GetType("BankInventoryMod.TenementFromBank", false); } catch { }
+                    if (t == null) continue;
+                    bankCount = t.GetMethod("BankCount", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                    break;
+                }
+            }
+            if (bankCount == null) return 0;
+            try { return (int)bankCount.Invoke(null, new object[] { id }); } catch { return 0; }
         }
         int Have(int id) => have.TryGetValue(id, out var n) ? n : 0;
         List<KeyValuePair<int, int>> Missing() => shopList == null ? new List<KeyValuePair<int, int>>() : shopList.raw.Where(r => Have(r.Key) < r.Value).ToList();
@@ -270,6 +291,32 @@ namespace ObenseuerLootMap
             if (searchIds == null) trackList = false;
         }
 
+        // Estimated cost of what is still missing: the cheapest shop that sells each item, at its real multiplier. Items no shop sells are counted apart.
+        string costKey; int costOc, costUnsold;
+        void EstimateCost()
+        {
+            var miss = Missing();
+            string key = string.Join(",", miss.Select(m => m.Key + "x" + (m.Value - Have(m.Key))));
+            if (key == costKey) return;
+            costKey = key; costOc = 0; costUnsold = 0;
+            foreach (var m in miss)
+            {
+                int best = int.MaxValue;
+                foreach (var kv in Db.scenes) foreach (var v in kv.Value.vendors)
+                {
+                    if (!Db.Sells(v, m.Key)) continue;
+                    int pr = BuyPrice(v, m.Key); if (pr > 0 && pr < best) best = pr;
+                }
+                if (best == int.MaxValue) costUnsold++; else costOc += best * Mathf.Max(0, m.Value - Have(m.Key));
+            }
+        }
+        string CostText()
+        {
+            EstimateCost();
+            if (Missing().Count == 0) return null;
+            return (costOc > 0 ? "~" + costOc + " OC" : "") + (costUnsold > 0 ? (costOc > 0 ? " + " : "") + costUnsold + " " + Loc.T("not sold in shops") : "");
+        }
+
         GUIStyle hudStyle;
         void DrawShopHud()
         {
@@ -285,11 +332,19 @@ namespace ObenseuerLootMap
                 sb.Append(ok ? $"<color=#7fd88a>✔ {Db.AmtName(r.Key)}  {Have(r.Key)}/{r.Value}</color>\n" : $"{Db.AmtName(r.Key)}  <b>{Have(r.Key)}/{r.Value}</b>\n");
             }
             if (shopList.raw.Count > 12) sb.Append($"<color=#a8a08a>+{shopList.raw.Count - 12} {Loc.T("more")} ({done}/{shopList.raw.Count} ✔)</color>\n");
+            var ct = CostText(); if (ct != null) sb.Append($"<color=#9fc5ff>{Loc.T("Still to buy")}: {ct}</color>\n");
             foreach (var s in shopList.steps.Take(4)) sb.Append($"<color=#d9c7a2>⚒ {s.Key} ×{s.Value}</color>\n");
             var content = new GUIContent(sb.ToString().TrimEnd());
             var sz = hudStyle.CalcSize(content);
             // top right, under the clock / money, so it never covers the notifications on the left
-            GUI.Box(new Rect(Screen.width - sz.x - 26f, 105f * Screen.height / 1080f, sz.x + 6, sz.y + 2), content, hudStyle);
+            var box = new Rect(Screen.width - sz.x - 26f, 105f * Screen.height / 1080f, sz.x + 6, sz.y + 2);
+            GUI.Box(box, content, hudStyle);
+            if (Cursor.visible)   // a menu is open and the mouse is free: offer a way to drop the list (two clicks, so a stray click does nothing)
+            {
+                bool armed = Time.unscaledTime - clearArmedAt < 3f;
+                if (GUI.Button(new Rect(box.xMax - (armed ? 150f : 70f), box.yMax + 2f, armed ? 150f : 70f, 20f), armed ? Loc.T("Click again to clear") : Loc.T("Clear list")))
+                { if (armed) { clearArmedAt = -10f; ClearShopList(); } else clearArmedAt = Time.unscaledTime; }
+            }
         }
 
         void DrawShopListPanel()
@@ -300,6 +355,7 @@ namespace ObenseuerLootMap
                 var miss = Missing();
                 GUILayout.Label($"{shopList.recipes.Count} {Loc.T("recipes")}: {string.Join(", ", shopList.recipes.Take(3).Select(r => r.Key + " ×" + r.Value))}{(shopList.recipes.Count > 3 ? " …" : "")}", smallStyle);
                 GUILayout.Label(miss.Count == 0 ? "<color=#7fd88a>✔ " + Loc.T("You have everything on the list") + "</color>" : $"<b>{miss.Count}</b> {Loc.T("items missing")}", labelStyle);
+                var ct2 = CostText(); if (ct2 != null) GUILayout.Label($"{Loc.T("Still to buy")}: <b>{ct2}</b>", smallStyle);
                 GUILayout.BeginHorizontal();
                 if (miss.Count > 0 && GUILayout.Button(trackList ? Loc.T("Highlighting missing items") : Loc.T("Find the missing items"), btnStyle)) StartTrackingList();
                 bool clearArmed = Time.unscaledTime - clearArmedAt < 3f;
@@ -429,8 +485,10 @@ namespace ObenseuerLootMap
             }
             return type != null && stationQ.TryGetValue(type, out var v) ? v : 1f;
         }
+        internal float qualityPick;   // 0 = your own skills; otherwise the profit lists assume this quality (0.5 / 1 / 1.5 / 2)
         float CraftQuality(JArray r, float fail)
         {
+            if (qualityPick > 0f) return qualityPick;
             float fixedQ = r.Count > 9 ? (float)r[9] : 0f; if (fixedQ > 0f) return fixedQ;
             string sk = r.Count > 6 ? (string)r[6] : "None"; if (sk == "None" || !Enum.TryParse(sk, out PlayerStats.PlayerSkillType type)) return 1f;
             float lvl = 5f; try { lvl = PlayerStats.instance.GetSkillWithEffects(type); } catch { }

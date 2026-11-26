@@ -180,7 +180,17 @@ namespace ObenseuerLootMap
                 GUILayout.FlexibleSpace();
                 GUILayout.EndHorizontal();
             }
-            GUILayout.Label("Real shop prices, after the fail chance and with the quality your current skills would give. ~ = an ingredient is not sold in any shop.", smallStyle);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Quality", labelStyle, GUILayout.Width(100));
+            foreach (var qp in new float[] { 0f, 0.5f, 1f, 1.5f, 2f })
+            {
+                string ql = qp == 0f ? "Yours" : qp.ToString("0.#");
+                if (GUILayout.Button(qualityPick == qp ? "[" + ql + "]" : ql, qualityPick == qp ? bigTabOn : bigTabOff, GUILayout.Width(qp == 0f ? 70 : 48)) && qualityPick != qp)
+                { qualityPick = qp; try { bigRows = BuildTrade(); } catch (Exception) { } }
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUILayout.Label(qualityPick > 0f ? "Prices assume everything you craft comes out at quality " + qualityPick.ToString("0.#") + " (items without quality are not affected)." : "Real shop prices, after the fail chance and with the quality your current skills would give. ~ = an ingredient is not sold in any shop.", smallStyle);
             var rows = (bigRows ?? new List<TradeRow>());
             var list = (bigSort == 0 ? rows.OrderByDescending(r => r.profit) : rows.OrderByDescending(r => r.perHour)).Take(100).ToList();
             TradeRow pick = null, pickCraft = null;

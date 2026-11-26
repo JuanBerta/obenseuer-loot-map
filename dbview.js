@@ -184,22 +184,32 @@ const clearRP = () => { for (const k in RPmemo) delete RPmemo[k]; for (const k i
 // Profit per unit of an item when you craft it: at real shop prices, your skill and quality when a shop buys it, base values otherwise (so the sign matches the recipe's own numbers).
 const craftProfitOf = id => { if (id in CPmemo) return CPmemo[id]; let best = null; for (const rid of X.makes[id] || []) { const p = realProfit(rid), o = X.R[rid][8].find(x => x[0] === +id), n = Math.max(o ? o[1] : 1, 1), v = p.sellable ? p.profit / n : X.craftProfit0[id]; if (best == null || v > best) best = v; } return CPmemo[id] = best; };
 const recipeProfit = rid => { const p = realProfit(rid); return p.sellable ? p.profit : X.RC[rid].profit; };
-function realProfit(rid) {
-  if (RPmemo[rid]) return RPmemo[rid];
+function realProfit(rid, qo) {
+  if (qo == null && RPmemo[rid]) return RPmemo[rid];
   const r = X.R[rid], ing = r[7].map(x => Object.assign({ id: x[0], n: x[1], div: X.div(r, x[0]) }, buyCost(x[0], x[1])));
-  const q = qualityOf(r), outs = r[8].map(x => { const b = buyersOf(x[0])[0], qv = hasQuality(x[0]) ? qualityValue(q) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv * saleF(x[0]))) : 0, v: b ? b.v : null, q: qv !== 1 || hasQuality(x[0]) ? q : null }; });
+  const q = qo != null ? qo : qualityOf(r), outs = r[8].map(x => { const b = buyersOf(x[0])[0], qv = hasQuality(x[0]) ? qualityValue(q) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv * saleF(x[0]))) : 0, v: b ? b.v : null, q: qv !== 1 || hasQuality(x[0]) ? q : null }; });
   const fail = failNow(r), failOuts = (r[9] || []).map(x => { const b = buyersOf(x[0])[0], qv = hasQuality(x[0]) ? qualityValue(q * 0.5) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv * saleF(x[0]))) : 0, v: b ? b.v : null }; });
   const cost = ing.reduce((a, x) => a + x.p * x.n / x.div, 0), rev = outs.reduce((a, x) => a + x.p * x.n, 0) * (1 - fail) + failOuts.reduce((a, x) => a + x.p * x.n, 0) * fail, profit = rev - cost;
-  return RPmemo[rid] = { q, fail, failOuts, ing, outs, cost, rev, profit, hour: r[6] > 0 ? profit * 3600 / r[6] : null, sellable: outs.some(o => o.v), estimated: ing.some(x => !x.shop) };
+  const res = { q, fail, failOuts, ing, outs, cost, rev, profit, hour: r[6] > 0 ? profit * 3600 / r[6] : null, sellable: outs.some(o => o.v), estimated: ing.some(x => !x.shop) };
+  if (qo == null) RPmemo[rid] = res;
+  return res;
 }
 const profitTxt = n => (n >= 0 ? '+' : '−') + fmt(Math.abs(n)) + ' OC';
 const realText = rid => { const p = realProfit(rid); if (!p.sellable) return '<span class="muted">No shop buys what this makes.</span>';
   const lq = realProfit(rid).outs.some(o => o.v && isLiquid(o.id)) && saleCont(); return `${lq ? `<span class="muted">Liquid sold in a ${esc(iname(lq[0]))} (${lq[1]} L, ×${lq[2]}). </span>` : ''}At shops: pay ≈ ${fmt(p.cost)} OC${p.estimated ? '*' : ''} · get ≈ ${fmt(p.rev)} OC · <b class="${p.profit >= 0 ? 'good' : 'bad'}">${profitTxt(p.profit)}</b>${p.hour != null ? ` · ${profitTxt(p.hour)}/h` : ''}`; };
+// What the same craft earns at other qualities (price scales with quality; only for outputs that can have a quality).
+const QTIERS = [0.5, 1, 1.5, 2];
+function qualityRows(rid) {
+  const r = X.R[rid]; if (!r[8].some(x => hasQuality(x[0]))) return '';
+  const cur = realProfit(rid).q, tiers = [...new Set([...QTIERS, +cur.toFixed(2)])].sort((a, b) => a - b);
+  const rows = tiers.map(t => { const p = realProfit(rid, t), mine = Math.abs(t - cur) < 0.006; return `<span>Quality ${t}${mine ? ' <small class="muted">(yours)</small>' : ''}</span><span>${p.sellable ? `get ${fmt(p.rev)} OC · <b class="${p.profit >= 0 ? 'good' : 'bad'}">${profitTxt(p.profit)}</b>${p.hour != null ? ` · ${profitTxt(p.hour)}/h` : ''}` : '<small class="muted">no shop buys it</small>'}</span>`; });
+  return `<h3>Profit by quality</h3><div class="facts">${rows.join('')}</div><p class="muted">Same recipe, same fail chance, other quality. Higher skill and a better workstation raise it.</p>`;
+}
 function tradeBlock(rid) {
   const p = realProfit(rid), r = X.R[rid];
   const buy = p.ing.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}${x.div > 1 ? ` use${x.n === 1 ? '' : 's'} of ${x.div}` : ''}</small></span><small>${x.shop ? `${fmt(x.p)} OC ${x.div > 1 ? `per item (≈ ${fmt(x.p / x.div)} OC per use)` : 'each'} at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : `not sold · ≈ ${fmt(x.p)} OC`}</small>`);
   const sell = p.outs.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.v ? `${fmt(x.p)} OC each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : 'no shop buys it'}</small>`);
-  return `<h3>Trade at shops</h3><p>${realText(rid)}</p><h3>Buy the ingredients</h3>${ul(buy)}<h3>Sell what it makes</h3>${ul(sell)}
+  return `<h3>Trade at shops</h3><p>${realText(rid)}</p>${qualityRows(rid)}<h3>Buy the ingredients</h3>${ul(buy)}<h3>Sell what it makes</h3>${ul(sell)}
     <p class="muted">Real shop prices: base value × the shop's multiplier. ${p.estimated ? '* Ingredients no shop sells are counted at base value. ' : ''}${r[3] && r[3] !== 'None' && r[4] > lvlOf(r[3]) ? `<b class="bad">Your ${esc(r[3])} (${lvlOf(r[3])}) is below this recipe's minimum (${r[4]}): it almost always fails.</b> ` : ''}Counts the ${Math.round(p.fail * 100)}% fail chance at your level${p.failOuts.some(o => o.v) ? ' (and what a failed craft sells for)' : ''} and the quality of what you make (${p.outs.some(o => o.q != null) ? 'quality ≈ ' + (+p.q.toFixed(2)) : 'these items have no quality'}, at ${skillSelect(r[3])}, crafted at ${stationSelect(r) || 'any workstation'}). Ignores the quality of bought ingredients and what the shop stocks that day.</p>`;
 }
 // A trade run: what to buy where, then what to sell where, with the stops of each part in a sensible walking order (same area together, nearest next).
@@ -526,7 +536,8 @@ function itemCard(id) {
   if (unplaced.length) h += `<p class="muted">Also listed in ${[...new Set(unplaced.map(([n]) => n.trim()))].map(esc).join(', ')}, which ${unplaced.length > 1 ? 'are' : 'is'} not placed in any scene on the map (spawned at runtime, or unused).</p>`;
   const sv = sellersOf(+id), bv = buyersOf(+id);
   h += `<h3>Where to buy · ${sv.length}</h3>${sv.length ? `<p class="muted">Cheapest first. The shop's price is the base value × its multiplier.</p>` : ''}${ul(sv.map((x, i) => vl(x.v) + ` <small class="${i ? 'muted' : 'good'}">· ${fmt(x.p)} OC</small>`))}${sv.length ? mapBtn(sv[0].v.sc, t, 'Show the cheapest shop', sv[0].v.n) : ''}`;
-  h += `<h3>Where to sell · ${bv.length}</h3>${bv.length ? `<p class="muted">Best price first.</p>` : ''}${ul(bv.map((x, i) => vl(x.v) + ` <small class="${i ? 'muted' : 'good'}">· ${fmt(x.p)} OC</small>` + (x.v.bs ? ' <small class="muted">· buys stolen</small>' : '')))}${bv.length ? mapBtn(bv[0].v.sc, t, 'Show the best buyer', bv[0].v.n) : ''}`;
+  if (hasQuality(+id) && bv.length) { const sf = saleF(+id); h += `<h3>Price by quality</h3><div class="facts">${[0.25, 0.5, 0.75, 1, 1.5, 2].map(t => `<span>Quality ${t}</span><span>${fmt(Math.max(1, Math.round(bv[0].p * qualityValue(t) * sf)))} OC <small class="muted">at ${esc(bv[0].v.n)}</small></span>`).join('')}</div><p class="muted">What the best shop pays for one, by quality. Quality comes from your skill and workstation when you craft it.</p>`; }
+    h += `<h3>Where to sell · ${bv.length}</h3>${bv.length ? `<p class="muted">Best price first.</p>` : ''}${ul(bv.map((x, i) => vl(x.v) + ` <small class="${i ? 'muted' : 'good'}">· ${fmt(x.p)} OC</small>` + (x.v.bs ? ' <small class="muted">· buys stolen</small>' : '')))}${bv.length ? mapBtn(bv[0].v.sc, t, 'Show the best buyer', bv[0].v.n) : ''}`;
   const via = new Set(); (X.groupsOf[id] || []).forEach(g => (X.uses[g] || []).forEach(r => via.add(r)));
   if (X.fails[id]) h += `<h3>Comes out of a failed</h3>${ul(recipesOf(X.fails[id]))}`;
   h += `<h3>Used in · ${(X.uses[id] || []).size || 0}</h3>${ul(recipesOf(X.uses[id]))}`;
