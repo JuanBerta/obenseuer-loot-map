@@ -13,11 +13,12 @@ namespace ObenseuerLootMap
     {
         class CNode
         {
-            public int id, depth, have, crafts; public float need; public string how, recipe, station, vendor; public float price;
+            public int id, depth, have, crafts; public float need; public string how, recipe, station, vendor; public float price; public List<string> opts; public int optIdx;
             public List<CNode> kids = new List<CNode>();
         }
 
         int craftId = -1, craftBackTab, craftLastId = -1; string craftLastKey; string craftKey, craftQtyText = "1", craftPlanSig; int craftQty = 1;
+        readonly Dictionary<int, string> craftChoice = new Dictionary<int, string>(); int craftChoiceVer; const string BuyOpt = "#buy";
         CNode craftRoot; readonly Dictionary<int, float> craftRaw = new Dictionary<int, float>(); readonly List<KeyValuePair<string, int>> craftSteps = new List<KeyValuePair<string, int>>();
         float craftCost; int craftPickFind = -1; bool craftPickList, craftPickMissing, craftPickCopy, craftPickStation, craftBack; int craftStep;
         Dictionary<int, List<string>> outIndex; Vector2 craftScroll;
@@ -70,10 +71,20 @@ namespace ObenseuerLootMap
             if (forceKey == null && n.have >= Mathf.CeilToInt(need - 0.001f)) { n.how = "have"; return n; }
             var c = CheapOf(id);
             var keys = RecipesFor(id);
-            if (forceKey == null && c.v != null) { n.how = "buy"; n.vendor = c.v.n; n.price = c.p; return n; }
+            // Below the top item you can pick, per item, how to get it: buy it or any of its recipes (default: buy if a shop sells it, else the first recipe).
+            string choice = null;
+            if (forceKey == null)
+            {
+                var opts = new List<string>(); if (c.v != null) opts.Add(BuyOpt); opts.AddRange(keys);
+                if (opts.Count > 1) { n.opts = opts; }
+                if (craftChoice.TryGetValue(id, out choice) && !opts.Contains(choice)) choice = null;
+                if (choice == null) choice = opts.Count > 0 ? opts[0] : null;
+                if (n.opts != null) n.optIdx = Mathf.Max(0, n.opts.IndexOf(choice));
+            }
+            if (forceKey == null && choice == BuyOpt) { n.how = "buy"; n.vendor = c.v.n; n.price = c.p; return n; }
             if ((forceKey != null || keys.Count > 0) && depth < 6 && !path.Contains(id))
             {
-                string key = forceKey ?? keys[0];
+                string key = forceKey ?? (choice != null && choice != BuyOpt ? choice : keys[0]);
                 JArray r; if (!Db.trade.TryGetValue(key, out r)) { n.how = "find"; return n; }
                 float outPer = 1f;
                 foreach (JArray x in (JArray)r[5]) if ((int)x[0] == id) outPer = Mathf.Max(1f, (float)x[1]);
@@ -108,7 +119,7 @@ namespace ObenseuerLootMap
 
         void BuildPlan()
         {
-            string sig = craftId + "|" + craftKey + "|" + craftQty;
+            string sig = craftId + "|" + craftKey + "|" + craftQty + "|" + craftChoiceVer;
             if (sig == craftPlanSig && craftRoot != null) return;
             craftPlanSig = sig;
             craftRaw.Clear(); craftSteps.Clear(); craftCost = 0f;
@@ -137,6 +148,15 @@ namespace ObenseuerLootMap
                 : n.how == "have" ? "already in your inventory"
                 : "loot or pickup, not sold anywhere";
             GUILayout.Label(detail, smallStyle);
+            if (n.opts != null)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Method", smallStyle, GUILayout.Width(52));
+                if (GUILayout.Button("<", btnStyle, GUILayout.Width(26))) { craftChoice[n.id] = n.opts[(n.optIdx + n.opts.Count - 1) % n.opts.Count]; craftChoiceVer++; }
+                GUILayout.Label((n.optIdx + 1) + " / " + n.opts.Count + "   " + (n.opts[n.optIdx] == BuyOpt ? "buy from a shop" : (Db.trade.ContainsKey(n.opts[n.optIdx]) ? (string)Db.trade[n.opts[n.optIdx]][0] : n.opts[n.optIdx])), smallStyle);
+                if (GUILayout.Button(">", btnStyle, GUILayout.Width(26))) { craftChoice[n.id] = n.opts[(n.optIdx + 1) % n.opts.Count]; craftChoiceVer++; }
+                GUILayout.EndHorizontal();
+            }
             GUILayout.EndVertical();
             GUILayout.FlexibleSpace();
             if ((n.how == "find" || n.how == "buy") && GUILayout.Button(Loc.T("Find"), btnStyle, GUILayout.Width(56))) craftPickFind = n.id;

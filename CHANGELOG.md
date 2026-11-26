@@ -10,6 +10,8 @@
 - New: searching an item group by name now works on the map (for example "Metal Recycle" finds containers holding nails or tin cans). Needs the updated lootmap-data.json that ships with this version.
 - New: searching a group also marks the shops where its items are sold, and the Obenseuer Recycling shop (Bazaar streets) is marked for the items that can be inside its Trash Bales (nails, tin cans, scrap metal, and so on). The shop sells bales that are filled at random when you buy one; the game data now says so (new "pk" field, read from the game files).
 - Website: a group page (for example Metal Recycle) lists where each member is bought, and any shop whose bales can contain it.
+- New: searching a group also marks the shops where its items are sold, and the Obenseuer Recycling shop (Bazaar streets) is marked for the items that can be inside its Trash Bales (nails, tin cans, scrap metal, and so on). The shop sells bales that are filled at random when you buy one; the game data now says so (new "pk" field, read from the game files).
+- Website: a group page (for example Metal Recycle) lists where each member is bought, and any shop whose bales can contain it.
 - Website: item pages show the shop price by quality, and recipes show the profit by quality.
 
 ## 0.8.0
