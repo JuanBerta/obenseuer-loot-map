@@ -100,6 +100,30 @@ public class LootDb
 		return 0f;
 	}
 
+	// Item groups ("Metal Recycle" counts nails and tin cans): a member is found by the name of any group it belongs to.
+	private Dictionary<int, List<string>> groupsOf;
+
+	public List<string> GroupNames(int id)
+	{
+		if (groupsOf == null)
+		{
+			groupsOf = new Dictionary<int, List<string>>();
+			foreach (KeyValuePair<string, List<object>> kv in items)
+			{
+				if (kv.Value.Count <= 6 || !(kv.Value[6] is JArray members)) continue;
+				string gname = kv.Value[0] as string;
+				if (string.IsNullOrEmpty(gname)) continue;
+				foreach (JToken m in members)
+				{
+					int mid = (int)m;
+					if (!groupsOf.TryGetValue(mid, out var l)) groupsOf[mid] = l = new List<string>();
+					l.Add(gname);
+				}
+			}
+		}
+		return groupsOf.TryGetValue(id, out var r) ? r : null;
+	}
+
 	public static LootDb Load(string path)
 	{
 		LootDb lootDb = JsonConvert.DeserializeObject<LootDb>(File.ReadAllText(path));

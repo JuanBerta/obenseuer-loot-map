@@ -15,7 +15,11 @@ def stats(it):
                nic=a.get('Nicotine',0)+(amt if t=='Smoke' else 0))
         return {k:round(x,3) for k,x in v.items() if x} or None
     return None
-items={it['ID']:[it['Title'],it.get('BaseValue',0),it.get('Categories') or [],sorted({str(m.get('$type','')).split('.')[-1] for m in (it.get('Meta') or []) if isinstance(m,dict)}),stats(it),next((int(m.get('maxAmmo',0)) for m in (it.get('Meta') or []) if isinstance(m,dict) and str(m.get('$type','')).endswith('ItemAmmodata') and m.get('maxAmmo',0)>1 and not (isinstance(m.get('ammoItems'),dict) and m['ammoItems'].get('$content') or isinstance(m.get('ammoItems'),list) and m['ammoItems'] or m.get('ammoItemcategories'))),0)] for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig'))}
+def grpids(it):
+    # members of an item group ("Metal Recycle" counts nails and tin cans): the map search uses them to find a group by name
+    out=[g['item']['ID'] for m in (it.get('Meta') or []) if isinstance(m,dict) and str(m.get('$type','')).endswith('ItemGroupData') for g in (m.get('itemGroup') or []) if isinstance(g,dict) and isinstance(g.get('item'),dict)]
+    return out or 0
+items={it['ID']:[it['Title'],it.get('BaseValue',0),it.get('Categories') or [],sorted({str(m.get('$type','')).split('.')[-1] for m in (it.get('Meta') or []) if isinstance(m,dict)}),stats(it),next((int(m.get('maxAmmo',0)) for m in (it.get('Meta') or []) if isinstance(m,dict) and str(m.get('$type','')).endswith('ItemAmmodata') and m.get('maxAmmo',0)>1 and not (isinstance(m.get('ammoItems'),dict) and m['ammoItems'].get('$content') or isinstance(m.get('ammoItems'),list) and m['ammoItems'] or m.get('ammoItemcategories'))),0),grpids(it)] for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig'))}
 loot={c['Name']:[c.get('ItemCommon') or [],c.get('ItemRare') or []] for c in json.load(open(os.path.join(SA,'StorageSpawnCategory.json'),encoding='utf-8-sig'))['$content']}
 raw=open(os.path.join(SA,'Recipes.json'),'rb').read()
 txt=raw.decode('utf-16') if raw[:2] in (b'\xff\xfe',b'\xfe\xff') else raw.decode('utf-8-sig')

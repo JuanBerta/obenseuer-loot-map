@@ -5,6 +5,7 @@
 - New: items stored in the Bank Inventory mod count as owned on the shopping list (setting CountBankInventory).
 - New: a Clear list button under the on-screen shopping list when the mouse is free (two clicks).
 - New: the Home window profit finder can assume a craft quality (yours, 0.5, 1, 1.5 or 2).
+- New: searching an item group by name now works on the map (for example "Metal Recycle" finds containers holding nails or tin cans). Needs the updated lootmap-data.json that ships with this version.
 - Website: item pages show the shop price by quality, and recipes show the profit by quality.
 
 ## 0.8.0

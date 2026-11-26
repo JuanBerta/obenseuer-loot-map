@@ -2811,7 +2811,22 @@ public partial class LootMapPlugin : BaseUnityPlugin
 
 	private bool NameMatch(int id)
 	{
-		return TextMatch(Db.ItemName(id));
+		if (TextMatch(Db.ItemName(id)))
+		{
+			return true;
+		}
+		List<string> groups = Db.GroupNames(id);
+		if (groups != null)
+		{
+			foreach (string g in groups)
+			{
+				if (TextMatch(g))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private bool TableMatch(string table)
