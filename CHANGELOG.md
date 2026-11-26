@@ -1,5 +1,12 @@
 # Changelog - Loot Map (in-game mod)
 
+## 0.8.1
+- New: the shopping list shows an estimate of what is still to buy (cheapest shop that sells each missing item).
+- New: items stored in the Bank Inventory mod count as owned on the shopping list (setting CountBankInventory).
+- New: a Clear list button under the on-screen shopping list when the mouse is free (two clicks).
+- New: the Home window profit finder can assume a craft quality (yours, 0.5, 1, 1.5 or 2).
+- Website: item pages show the shop price by quality, and recipes show the profit by quality.
+
 ## 0.8.0
 - Fixed: the shopping-list checklist stayed on screen in the main menu; it now only shows in game.
 - Changed: the shopping-list checklist moved to the top right (under the clock) so it no longer covers notifications.
