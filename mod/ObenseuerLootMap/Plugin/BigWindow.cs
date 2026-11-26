@@ -203,7 +203,7 @@ namespace ObenseuerLootMap
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(r.name + (r.estimated ? "  ~" : ""), bigName, GUILayout.ExpandWidth(false));
                 GUILayout.FlexibleSpace();
-                Badge(Money(r.profit) + " OC", r.profit >= 0 ? BigGood : BigBad);
+                Badge(Money(r.profit) + " OC / " + Money(r.profit * 0.1f) + " RM", r.profit >= 0 ? BigGood : BigBad);
                 if (r.perHour > float.MinValue) Badge(Money(r.perHour) + " /h", BigInfo);
                 GUILayout.EndHorizontal();
                 GUILayout.Label(r.route, smallStyle);

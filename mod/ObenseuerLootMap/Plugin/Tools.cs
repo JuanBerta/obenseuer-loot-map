@@ -451,7 +451,7 @@ namespace ObenseuerLootMap
         internal int BuyPrice(VendorData v, int id) => v.bm > 0 ? Mathf.RoundToInt(Db.ValueOf(id) * v.bm) : -1;     // what you pay
         internal int SellPrice(VendorData v, int id) => v.sm > 0 ? Mathf.RoundToInt(Db.ValueOf(id) * v.sm) : -1;
         // Some shops deal in Real Money (1 OC = 0.1 RM): you pay them in RM (rm / br) or they pay you in RM (sr)
-        internal string PriceTxt(VendorData v, int price, bool buying) => (buying ? (v.rm == 1 || v.br == 1) : v.sr == 1) ? (price * 0.1f).ToString("0.##") + " RM" : price + " OC";    // what you get
+        internal string PriceTxt(VendorData v, int price, bool buying) => (buying ? (v.rm == 1 || v.br == 1) : v.sr == 1) ? (price * 0.1f).ToString("0.##") + " RM (" + price + " OC)" : price + " OC (" + (price * 0.1f).ToString("0.##") + " RM)";    // what you get
         // The single item a search is about (price comparison needs exactly one), or -1.
         internal int PriceItem()
         {

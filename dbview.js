@@ -99,11 +99,12 @@ const sellersMemo = {}, buyersMemo = {};
 const RMX = 0.1;
 const isRm = (v, buying) => buying ? !!(v.rm || v.br) : !!v.sr;
 // A total split by currency: tot is in OC value, rm is the part of it paid in Real Money
-const mixTxt = (tot, rm) => { rm = rm || 0; const oc = tot - rm, a = []; if (oc > 0.0005 || rm <= 0.0005) a.push(fmt(oc) + ' OC'); if (rm > 0.0005) a.push(+(rm * RMX).toFixed(2) + ' RM'); return a.join(' + '); };
+const rmf = oc => +(oc * RMX).toFixed(2);
+const mixTxt = (tot, rm) => { rm = rm || 0; const oc = tot - rm; if (rm <= 0.0005) return `${fmt(tot)} OC (${rmf(tot)} RM)`; if (oc <= 0.0005) return `${rmf(rm)} RM (${fmt(rm)} OC)`; return `${fmt(oc)} OC + ${rmf(rm)} RM (≈ ${fmt(tot)} OC / ${rmf(tot)} RM)`; };
 const netMix = (oc, rm) => [Math.abs(oc) > 0.0005 && (oc > 0 ? '+' : '-') + fmt(Math.abs(oc)) + ' OC', Math.abs(rm) > 0.0005 && (rm > 0 ? '+' : '-') + +(Math.abs(rm) * RMX).toFixed(2) + ' RM'].filter(Boolean).join(' and ') || '0';
 // When an OC shop and an RM shop pay the same for an item, show both: the best buyer in the other currency at the same price
 const altBuyer = id => { const bl = buyersOf(id), b0 = bl[0]; return b0 ? bl.find(x => isRm(x.v) !== isRm(b0.v) && x.p >= b0.p) : null; };
-const pxt = (v, p, buying) => isRm(v, buying) ? `${+(p * RMX).toFixed(2)} RM` : `${fmt(p)} OC`;
+const pxt = (v, p, buying) => isRm(v, buying) ? `${rmf(p)} RM (${fmt(p)} OC)` : `${fmt(p)} OC (${rmf(p)} RM)`;
 const sellersOf = id => sellersMemo[id] || (sellersMemo[id] = DB.items[id] ? DB.vendors.filter(v => sells(v, +id)).map(v => ({ v, p: payAt(v, id) })).sort((a, b) => a.p - b.p || a.v.n.localeCompare(b.v.n)) : []);
 const buyersOf = id => buyersMemo[id] || (buyersMemo[id] = DB.items[id] ? DB.vendors.filter(v => buys(v, +id)).map(v => ({ v, p: getAt(v, id) })).sort((a, b) => b.p - a.p || a.v.n.localeCompare(b.v.n)) : []);
 // The cheapest way to pay for one of an ingredient: a group counts as its cheapest member; nothing sells it → its base value, marked as an estimate.
@@ -206,7 +207,7 @@ function realProfit(rid, qo, mode) {   // mode 'best' / 'worst': the best or wor
   if (qo == null && !mode) RPmemo[rid] = res;
   return res;
 }
-const profitTxt = n => (n >= 0 ? '+' : '−') + fmt(Math.abs(n)) + ' OC';
+const profitTxt = n => { const sg = n >= 0 ? '+' : '-', a = Math.abs(n); return `${sg}${fmt(a)} OC / ${sg}${rmf(a)} RM`; };
 const realText = rid => { const p = realProfit(rid); if (!p.sellable) return '<span class="muted">No shop buys what this makes.</span>';
   const lq = realProfit(rid).outs.some(o => o.v && isLiquid(o.id)) && saleCont(); return `${lq ? `<span class="muted">Liquid sold in a ${esc(iname(lq[0]))} (${lq[1]} L, ×${lq[2]}). </span>` : ''}At shops: pay ≈ ${mixTxt(p.cost, p.costRM)}${p.estimated ? '*' : ''} · get ≈ ${mixTxt(p.rev, p.revRM)} · <b class="${p.profit >= 0 ? 'good' : 'bad'}">${profitTxt(p.profit)}</b>${p.costRM || p.revRM ? ` <small class="muted">(in OC value: ${netMix((p.rev - p.revRM) - (p.cost - p.costRM), p.revRM - p.costRM)})</small>` : ''}${p.hour != null ? ` · ${profitTxt(p.hour)}/h` : ''}`; };
 // What the same craft earns at other qualities (price scales with quality; only for outputs that can have a quality).
