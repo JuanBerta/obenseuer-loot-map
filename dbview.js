@@ -98,6 +98,9 @@ const sellersMemo = {}, buyersMemo = {};
 // Some shops deal in Real Money: you pay them in RM (v.rm / v.br) or they pay you in RM (v.sr). 1 OC = 0.1 RM (Money.OCtoRM), so prices stay comparable in OC.
 const RMX = 0.1;
 const isRm = (v, buying) => buying ? !!(v.rm || v.br) : !!v.sr;
+// A total split by currency: tot is in OC value, rm is the part of it paid in Real Money
+const mixTxt = (tot, rm) => { rm = rm || 0; const oc = tot - rm, a = []; if (oc > 0.0005 || rm <= 0.0005) a.push(fmt(oc) + ' OC'); if (rm > 0.0005) a.push(+(rm * RMX).toFixed(2) + ' RM'); return a.join(' + '); };
+const netMix = (oc, rm) => [Math.abs(oc) > 0.0005 && (oc > 0 ? '+' : '-') + fmt(Math.abs(oc)) + ' OC', Math.abs(rm) > 0.0005 && (rm > 0 ? '+' : '-') + +(Math.abs(rm) * RMX).toFixed(2) + ' RM'].filter(Boolean).join(' and ') || '0';
 const pxt = (v, p, buying) => isRm(v, buying) ? `${+(p * RMX).toFixed(2)} RM` : `${fmt(p)} OC`;
 const sellersOf = id => sellersMemo[id] || (sellersMemo[id] = DB.items[id] ? DB.vendors.filter(v => sells(v, +id)).map(v => ({ v, p: payAt(v, id) })).sort((a, b) => a.p - b.p || a.v.n.localeCompare(b.v.n)) : []);
 const buyersOf = id => buyersMemo[id] || (buyersMemo[id] = DB.items[id] ? DB.vendors.filter(v => buys(v, +id)).map(v => ({ v, p: getAt(v, id) })).sort((a, b) => b.p - a.p || a.v.n.localeCompare(b.v.n)) : []);
@@ -195,13 +198,15 @@ function realProfit(rid, qo, mode) {   // mode 'best' / 'worst': the best or wor
   const q = qo != null ? qo : qualityOf(r), outs = r[8].map(x => { const b = bestBuyer(x[0]), qv = hasQuality(x[0]) ? qualityValue(q) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv * saleF(x[0]))) : 0, v: b ? b.v : null, q: qv !== 1 || hasQuality(x[0]) ? q : null }; });
   const fail = failNow(r), failOuts = (r[9] || []).map(x => { const b = bestBuyer(x[0]), qv = hasQuality(x[0]) ? qualityValue(q * 0.5) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv * saleF(x[0]))) : 0, v: b ? b.v : null }; });
   const cost = ing.reduce((a, x) => a + x.p * x.n / x.div, 0), rev = outs.reduce((a, x) => a + x.p * x.n, 0) * (1 - fail) + failOuts.reduce((a, x) => a + x.p * x.n, 0) * fail, profit = rev - cost;
-  const res = { q, fail, failOuts, ing, outs, cost, rev, profit, hour: r[6] > 0 ? profit * 3600 / r[6] : null, sellable: outs.some(o => o.v), estimated: ing.some(x => !x.shop) };
+  const costRM = ing.reduce((a, x) => a + (x.shop && isRm(x.v, true) ? x.p * x.n / x.div : 0), 0);
+  const revRM = outs.reduce((a, x) => a + (x.v && isRm(x.v) ? x.p * x.n : 0), 0) * (1 - fail) + failOuts.reduce((a, x) => a + (x.v && isRm(x.v) ? x.p * x.n : 0), 0) * fail;
+  const res = { costRM, revRM, q, fail, failOuts, ing, outs, cost, rev, profit, hour: r[6] > 0 ? profit * 3600 / r[6] : null, sellable: outs.some(o => o.v), estimated: ing.some(x => !x.shop) };
   if (qo == null && !mode) RPmemo[rid] = res;
   return res;
 }
 const profitTxt = n => (n >= 0 ? '+' : '−') + fmt(Math.abs(n)) + ' OC';
 const realText = rid => { const p = realProfit(rid); if (!p.sellable) return '<span class="muted">No shop buys what this makes.</span>';
-  const lq = realProfit(rid).outs.some(o => o.v && isLiquid(o.id)) && saleCont(); return `${lq ? `<span class="muted">Liquid sold in a ${esc(iname(lq[0]))} (${lq[1]} L, ×${lq[2]}). </span>` : ''}At shops: pay ≈ ${fmt(p.cost)} OC${p.estimated ? '*' : ''} · get ≈ ${fmt(p.rev)} OC · <b class="${p.profit >= 0 ? 'good' : 'bad'}">${profitTxt(p.profit)}</b>${p.hour != null ? ` · ${profitTxt(p.hour)}/h` : ''}`; };
+  const lq = realProfit(rid).outs.some(o => o.v && isLiquid(o.id)) && saleCont(); return `${lq ? `<span class="muted">Liquid sold in a ${esc(iname(lq[0]))} (${lq[1]} L, ×${lq[2]}). </span>` : ''}At shops: pay ≈ ${mixTxt(p.cost, p.costRM)}${p.estimated ? '*' : ''} · get ≈ ${mixTxt(p.rev, p.revRM)} · <b class="${p.profit >= 0 ? 'good' : 'bad'}">${profitTxt(p.profit)}</b>${p.costRM || p.revRM ? ` <small class="muted">(in OC value: ${netMix((p.rev - p.revRM) - (p.cost - p.costRM), p.revRM - p.costRM)})</small>` : ''}${p.hour != null ? ` · ${profitTxt(p.hour)}/h` : ''}`; };
 // What the same craft earns at other qualities (price scales with quality; only for outputs that can have a quality).
 const QTIERS = [0.5, 1, 1.5, 2];
 function qualityRows(rid) {
@@ -236,13 +241,13 @@ function tripOrder(vs) {
   return out;
 }
 function tradeRun(raw, make, o) {
-  const buy = new Map(), sell = new Map(), find = [], nosell = []; let bt = 0, st = 0;
+  const buy = new Map(), sell = new Map(), find = [], nosell = []; let bt = 0, st = 0, bRm = 0, sRm = 0;
   const add = (m, v, l) => { if (!m.has(v)) m.set(v, []); m.get(v).push(l); };
-  for (const [id, n0] of Object.entries(raw)) { const n = Math.ceil(n0 - 1e-9), c = buyCost(id); if (!c.shop || (o && o.pref[id] === 'find')) { find.push([+id, n]); continue; } add(buy, c.v, { id: c.id, n, p: c.p }); bt += c.p * n; }
-  for (const [id, n] of Object.entries(make)) { const b = buyersOf(+id)[0]; if (!b) { nosell.push(+id); continue; } add(sell, b.v, { id: +id, n, p: b.p }); st += b.p * n; }
+  for (const [id, n0] of Object.entries(raw)) { const n = Math.ceil(n0 - 1e-9), c = buyCost(id); if (!c.shop || (o && o.pref[id] === 'find')) { find.push([+id, n]); continue; } add(buy, c.v, { id: c.id, n, p: c.p }); bt += c.p * n; if (isRm(c.v, true)) bRm += c.p * n; }
+  for (const [id, n] of Object.entries(make)) { const b = buyersOf(+id)[0]; if (!b) { nosell.push(+id); continue; } add(sell, b.v, { id: +id, n, p: b.p }); st += b.p * n; if (isRm(b.v)) sRm += b.p * n; }
   if (!buy.size && !sell.size) return '';
   const stop = (v, ls, k, buying) => `<span>${vl(v)}<br>${ls.map(l => `<small class="muted">${il(l.id)} × ${num(l.n)} · ${pxt(v, l.p, buying)} each = ${pxt(v, l.p * l.n, buying)}</small>`).join('<br>')}</span>${mapBtn(v.sc, iname(ls[0].id), k, v.n)}`;
-  let h = `<h3>Trade run</h3><p>Buy ≈ ${fmt(bt)} OC · sell ≈ ${fmt(st)} OC · <b class="${st - bt >= 0 ? 'good' : 'bad'}">${profitTxt(st - bt)}</b></p>`;
+  let h = `<h3>Trade run</h3><p>Buy ≈ ${mixTxt(bt, bRm)} · sell ≈ ${mixTxt(st, sRm)} · <b class="${st - bt >= 0 ? 'good' : 'bad'}">${profitTxt(st - bt)}</b>${bRm || sRm ? ` <small class="muted">(in OC value: ${netMix((st - sRm) - (bt - bRm), sRm - bRm)})</small>` : ''}</p>`;
   if (buy.size) h += `<p class="muted">1. Buy, in this order:</p>${ul(tripOrder([...buy.keys()]).map(v => stop(v, buy.get(v), 'Show the shop', true)))}`;
   if (sell.size) h += `<p class="muted">2. Sell, in this order:</p>${ul(tripOrder([...sell.keys()]).map(v => stop(v, sell.get(v), 'Show the shop')))}`;
   if (find.length) h += `<p class="muted">To find, not buy (left out of the cost and the route): ${find.map(([id, n]) => `${il(id)} × ${num(n)}`).join(', ')}</p>`;
