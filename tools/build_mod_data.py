@@ -191,6 +191,7 @@ for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig')):
     for m in it.get('Meta') or []:
         if isinstance(m,dict) and str(m.get('$type','')).endswith('ItemLiquidData') and m.get('liquidMaxAmount',0)>=1:
             containers.append([it['ID'],m['liquidMaxAmount'],m.get('liquidValueFactor',1),it.get('BaseValue',0)]); need.add(it['ID'])
+for _k in fa['furniture']: fid(_k)   # also the pieces no shop sells (hydroponic farms, growing racks, decorations): the website lists every piece
 data=dict(version=7,containers=containers,furniture=furniture,typeSkills=type_skills,recipeInputs=recipe_inputs,trade=trade,scenes=S,loot={k:v for k,v in loot.items() if k in used},
           items={str(k):v for k,v in items.items()},recipes=recipes)
 os.makedirs(os.path.dirname(os.path.abspath(out)),exist_ok=True)

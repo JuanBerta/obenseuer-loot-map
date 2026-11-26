@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=16';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=17';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
