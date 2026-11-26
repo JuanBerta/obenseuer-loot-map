@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=13';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=14';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -364,7 +364,7 @@ function shopChange(rid, d) { const L = shopGet(), n = Math.max(0, (L[rid] || 0)
 let optMem = null;
 const shopOpt = () => {
   if (!optMem) { try { optMem = JSON.parse(localStorage.getItem('obs-shop-opt') || 'null'); } catch (e) {} if (!optMem || typeof optMem !== 'object') optMem = {}; }
-  if (!['all', 'missing', 'off'].includes(optMem.mode)) optMem.mode = 'all'; if (!optMem.pref || typeof optMem.pref !== 'object') optMem.pref = {};   // pref: item id -> 'craft', 'buy' or 'find' (you will find it, not buy it), overriding the default
+  if (!['all', 'missing', 'off'].includes(optMem.mode)) optMem.mode = 'all'; if (!optMem.pref || typeof optMem.pref !== 'object') optMem.pref = {}; if (!optMem.rec || typeof optMem.rec !== 'object') optMem.rec = {};   // pref: item id -> 'craft', 'buy' or 'find' (you will find it, not buy it), overriding the default
   return optMem;
 };
 const optSave = () => { try { localStorage.setItem('obs-shop-opt', JSON.stringify(optMem)); } catch (e) {} };
@@ -380,13 +380,18 @@ function bestRecipe(id) {
   }
   return bestMemo[id] = best;
 }
+// Every recipe that makes an item (not counting ones that need the item itself), cheapest first, and the one the shopping list uses: your pick, else the cheapest.
+const recipeOpts = id => [...(X.makes[id] || [])].filter(rid => !X.R[rid][7].some(x => x[0] === +id))
+  .sort((a, b) => X.RC[a].cost / Math.max(X.R[a][8].find(x => x[0] === +id)[1], 1) - X.RC[b].cost / Math.max(X.R[b][8].find(x => x[0] === +id)[1], 1));
+const pickRecipe = (id, opt) => { const c = opt.rec && opt.rec[id]; const ok = c != null && recipeOpts(id).some(r => String(r) === String(c)); return ok ? +c : bestRecipe(id); };
+const recPick = (out, cur) => { const ro = recipeOpts(out); if (ro.length < 2) return ''; return `<label class="shopopt">Recipe <select data-recpick="${out}" aria-label="Recipe that makes ${esc(iname(out))}">${ro.map(r => `<option value="${r}" ${String(r) === String(cur) ? 'selected' : ''}>${esc(X.R[r][1])} (${esc(X.R[r][2])}): ${esc(X.R[r][7].slice(0, 3).map(x => iname(x[0])).join(', '))}${X.R[r][7].length > 3 ? '...' : ''} - ${fmt(X.RC[r].cost / Math.max(X.R[r][8].find(x => x[0] === +out)[1], 1))} OC each</option>`).join('')}</select></label>`; };
 // Break the ingredients down: 'all' crafts everything craftable, 'missing' only what nothing in the world drops or sells, 'off' none. The buttons override this per item.
 const wantCraft = (id, opt) => { const p = opt.pref[id]; return p === 'craft' || (opt.mode !== 'off' && p !== 'buy' && p !== 'find' && (opt.mode === 'all' || (!X.placed.has(id) && !X.sold.has(id)))); };
 function expandNeeds(base, opt) {
   const raw = {}, steps = {}, outs = {}, order = [];
   const visit = (id, n, stack) => {
     id = +id; const it = DB.items[id];
-    const rid = wantCraft(id, opt) && !(it && it[6].length) && stack.length < 8 && !stack.includes(id) ? bestRecipe(id) : null;
+    const rid = wantCraft(id, opt) && !(it && it[6].length) && stack.length < 8 && !stack.includes(id) ? pickRecipe(id, opt) : null;
     if (rid == null) { raw[id] = (raw[id] || 0) + n; return; }
     const r = X.R[rid], per = r[8].find(x => x[0] === id)[1], b = n / per;
     r[7].forEach(x => visit(x[0], x[1] * b / X.div(r, x[0]), stack.concat(id)));
@@ -670,6 +675,8 @@ function furnCard(id) {
     const rs = DB.recipes.filter(r => types.includes(r[2])).sort((a, b) => a[1].localeCompare(b[1]));
     h += `<p>Workstation: ${types.map(esc).join(', ')}${sk.length ? ' · trains ' + sk.map(esc).join(', ') : ''}</p><h3>Recipes · ${rs.length}</h3>${ul(rs.map(r => rl(r[0])))}`;
   }
+  if (f[6]) h += `<p>${esc(f[6])}</p>`;
+  if (f[7] && f[7].length) h += `<h3>Dismantling it gives</h3>${ul(f[7].map(x => `<span>${il(x[0])} <small class="muted">x ${x[1]}</small></span>`))}`;
   if (f[5] && f[5].length) h += powerBlock(f[5]);
   h += `<h3>Sold by · ${sv.length}</h3>${ul(sv.map(vl))}<h3>Bought by · ${bv.length}</h3>${ul(bv.map(vl))}`;
   return h + '</div>';
@@ -774,7 +781,7 @@ function listCard() {
     <label class="shopopt">Ingredients <select data-shopmode aria-label="How far to break ingredients down"><option value="all" ${o.mode === 'all' ? 'selected' : ''}>Break down everything craftable</option><option value="missing" ${o.mode === 'missing' ? 'selected' : ''}>Only what can't be found or bought</option><option value="off" ${o.mode === 'off' ? 'selected' : ''}>Don't break down</option></select></label>
     <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span class="rn">${rl(rid)}</span>${qtyCtl(rid, L[rid])}</div>`).join('')}
     ${crafted ? `<h3>Craft these first · ${crafted}</h3>${ul(E.order.map(rid => { const out = E.outs[rid], per = X.R[rid][8].find(x => x[0] === out)[1], b = up(E.steps[rid]);
-      return `<span>${rl(rid)} <small class="muted">× ${b} → ${num(per * b)} ${esc(iname(out))}</small></span><button type="button" class="shopbtn mini" data-pref="${out}:buy" title="Find or buy it instead of crafting it">Find or buy instead</button>`; }))}` : ''}
+      return `<span>${rl(rid)} <small class="muted">× ${b} → ${num(per * b)} ${esc(iname(out))}</small></span>${recPick(out, rid)}<button type="button" class="shopbtn mini" data-pref="${out}:buy" title="Find or buy it instead of crafting it">Find or buy instead</button>`; }))}` : ''}
     <h3>${o.mode !== 'off' || crafted ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = bestRecipe(+id) != null && !(DB.items[id] && DB.items[id][6].length);
       return `<span>${il(id)} <small class="muted">× ${num(up(n))}${unit(id)}</small><br><small class="muted">${w.parts.join(' · ')}</small></span>${w.btn}${back ? `<button type="button" class="shopbtn mini" data-pref="${id}:craft">Craft it instead</button>` : ''}${o.pref[id] === 'find' ? `<button type="button" class="shopbtn mini" data-pref="${id}:buy" title="Count it as bought again">Buy it instead</button>` : `<button type="button" class="shopbtn mini" data-pref="${id}:find" title="You will find it, not buy it: it stays out of the cost and the shopping route">Find it instead</button>`}`; }))}
     <h3>You will make</h3>${ul(byName(Object.entries(make)).map(([id, n]) => `<span>${il(id)}</span><small>× ${num(n)}${unit(id)}</small>`))}
@@ -859,7 +866,7 @@ document.addEventListener('change', e => { const q = e.target.closest('[data-sho
   const stn = e.target.closest('[data-station]'); if (stn) { setStation(stn.dataset.station, stn.value); return; }
   const si = e.target.closest('[data-skillin]'); if (si) { setSkill(si.dataset.skillin, Math.max(0, Math.min(10, Math.round(+si.value || 0)))); return; }
   const sf = e.target.closest('[data-saveinput]'); if (sf) { if (sf.files.length) loadSaves([...sf.files]); return; }
-  const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
+  const rp = e.target.closest('[data-recpick]'); if (rp) { shopOpt().rec[rp.dataset.recpick] = rp.value; optSave(); renderDetail(); return; } const m = e.target.closest('[data-shopmode]'); if (m) { shopOpt().mode = m.value; optSave(); renderDetail(); } });
 window.addEventListener('hashchange', () => { route(); setReport(); });
 // footer: game version, theme switch
 fetch('data/meta.json?v=1').then(r => r.json()).then(m => {

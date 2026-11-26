@@ -12,8 +12,9 @@ for fn in files:
         cls=n[2]
         if cls in ('Furniture','FurnitureSurface'):
             try:
-                _,d,_=ser.read_mb(s,p,'Assembly-CSharp',cls,upto='priceRM')
-                furn[f'{fn}:{p}']=dict(id=d.get('id'),title=d.get('title') or nm,cat=d.get('category'),oc=d.get('priceOC'),rm=d.get('priceRM'),asset=nm)
+                try: _,d,_=ser.read_mb(s,p,'Assembly-CSharp',cls)
+                except Exception: _,d,_=ser.read_mb(s,p,'Assembly-CSharp',cls,upto='priceRM')
+                furn[f'{fn}:{p}']=dict(id=d.get('id'),title=d.get('title') or nm,cat=d.get('category'),oc=d.get('priceOC'),rm=d.get('priceRM'),asset=nm,details=(d.get('details') or '').strip(),dis=[[x['item']['ID'],x.get('amount',1)] for x in (d.get('dismantleItems') or []) if isinstance(x,dict) and isinstance(x.get('item'),dict) and x['item'].get('ID')])
             except Exception as e: errs+=1
         elif cls=='FurnitureShopItemsList':
             try:

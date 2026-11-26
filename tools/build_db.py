@@ -123,6 +123,18 @@ for v in vendors:
         if re.match(r'^(_?[Ii]tem_)', rule) and not rule.startswith('_item_'):
             notes.append(f'{v["n"]}: buy rule “{rule}” is not spelled “_item_…”, so it probably never matches in game')
 furniture = M.get('furniture', {})
+_fa = {}
+try:
+    _p = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'build', 'furniture_assets.json')
+    for _v in json.load(open(_p)).get('furniture', {}).values():
+        _t = (_v.get('title') or '').strip()
+        if _t and _t not in _fa: _fa[_t] = _v
+except Exception as e: print('furniture details skipped', e)
+for _f in furniture.values():   # [6] description from the game, [7] what dismantling it gives: [[itemId, amount]]
+    _v = _fa.get(_f[0])
+    if not _v: continue
+    while len(_f) < 6: _f.append([])
+    _f.append(_v.get('details') or ''); _f.append(_v.get('dis') or [])
 # ---- tenants
 chars = read_json('Characters.json') or []
 people = {c['Name']: [c.get('ID'), c.get('GenderString'), c.get('Age'), c.get('Relationship'), c.get('Job')] for c in chars if c.get('ID', -1) >= 0}
