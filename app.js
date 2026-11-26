@@ -96,7 +96,7 @@ function row(sc, count, extraCls) {
 let FDB = null, fdbBusy = false;
 function furnDb() {
   if (FDB || fdbBusy) return FDB;
-  fdbBusy = true; const sc = document.createElement('script'); sc.src = 'data/db.js?v=14';
+  fdbBusy = true; const sc = document.createElement('script'); sc.src = 'data/db.js?v=15';
   sc.onload = () => { FDB = window.OBS_DB; aliasQ = null; if (searching()) { renderSide(); draw(); if (S.data && S.sel == null && !S.selF) focusFirstMatch(); } }; sc.onerror = () => { fdbBusy = false; }; document.head.appendChild(sc);
   return null;
 }

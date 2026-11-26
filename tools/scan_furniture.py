@@ -33,15 +33,15 @@ print(len(furn),'furniture',len(lists),'lists',errs,'errors')
 
 # ---- which crafting station (recipe types) each furniture prefab contains -------------------------
 # Furniture.prefab -> prefab root GameObject; find 'manufacturing' components in that prefab's hierarchy.
-types_by_root={}; power_by_root={}
-def recipe_types():
+types_by_root={}; power_by_root={}; mods_by_root={}
+def recipe_types(tn='RecipeType'):
     import dotnet, struct
-    a=ser.asm('Assembly-CSharp'); ti=a.find_type('RecipeType'); consts={}
+    a=ser.asm('Assembly-CSharp'); ti=a.find_type(tn); consts={}
     for i in range(1,a.rows[0xb]+1):
         typ,par,val=a.row(0xb,i)
         if par&3==0: consts[par>>2]=a.blob(val)
     return {struct.unpack('<i',consts[j][:4])[0]:a.str(nm) for j,fl,nm,sg in a.fields(ti) if j in consts}
-RT=recipe_types()
+RT=recipe_types(); RCOND=recipe_types('RecipeCondition')
 prefab_of={}
 for key,f in furn.items():
     fn,pid=key.split(':'); s=usf.load(fn)
@@ -83,6 +83,7 @@ for fn in need:
             if not g2: break
             g=g2
         types_by_root.setdefault((fn,g),set()).update(RT.get(x,str(x)) for x in (d.get('Recipes') or []))
+        mods_by_root.setdefault((fn,g),set()).update(RCOND.get(x,str(x)) for x in (d.get('Modifiers') or []) if x)
         pw=d.get('_Power')
         if isinstance(pw,dict):
             fu=pw.get('_Fuel') if isinstance(pw.get('_Fuel'),dict) else {}
@@ -95,6 +96,8 @@ n=0
 for key,pf in prefab_of.items():
     t=types_by_root.get(pf)
     if t: furn[key]['types']=sorted(t); n+=1
+    ml=mods_by_root.get(pf)
+    if ml: furn[key]['mods']=sorted(ml)
     pl=power_by_root.get(pf)
     if pl: furn[key]['power']=pl
 json.dump(dict(furniture=furn,lists=lists),open(os.path.join(sys.argv[2],'furniture_assets.json'),'w'))

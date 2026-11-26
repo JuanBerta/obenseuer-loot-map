@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=14';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=15';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -677,6 +677,7 @@ function furnCard(id) {
   }
   if (f[6]) h += `<p>${esc(f[6])}</p>`;
   if (f[7] && f[7].length) h += `<h3>Dismantling it gives</h3>${ul(f[7].map(x => `<span>${il(x[0])} <small class="muted">x ${x[1]}</small></span>`))}`;
+  if (f[8] && f[8].length) h += `<p>Modifiers: ${f[8].map(esc).join(', ')} <small class="muted">(what its crafting station offers; recipes that say the station must be one of these need it)</small></p>`;
   if (f[5] && f[5].length) h += powerBlock(f[5]);
   h += `<h3>Sold by · ${sv.length}</h3>${ul(sv.map(vl))}<h3>Bought by · ${bv.length}</h3>${ul(bv.map(vl))}`;
   return h + '</div>';
