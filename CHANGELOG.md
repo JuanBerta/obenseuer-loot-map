@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## 0.8.1
+- New: in the Craft plan, every item below the top one has a Method picker (< >) to choose how to get it: buy it from a shop or any of its recipes. Before, it always took the first option. The shopping list follows your picks.
 - Fix: shops that deal in Real Money are now handled. The data records, per shop, whether it pays you in RM or charges you in RM (for example the Bazaar Butchershop pays RM for chicken, pig, salmon, perch and pike). The website shows those prices in RM (1 RM = 10 OC), counts RM shops in the cheapest/best-price search, and the mod shows RM in the shop info and profit finder.
 - Fix: growing and breeding recipes (fish, chickens, rats, cats, plants) were valued at nothing because they make the live plant or animal. They now count what it yields when harvested (for example a Salmon recipe gives 1 salmon and 1 to 3 salmon eggs), read from the game's prefabs (new tools/extract_grow.py). Plants that keep producing (berry bushes, tomatoes, hops, grapes) are not included yet.
 - New: the shopping list shows an estimate of what is still to buy (cheapest shop that sells each missing item).
@@ -8,8 +9,6 @@
 - New: a Clear list button under the on-screen shopping list when the mouse is free (two clicks).
 - New: the Home window profit finder can assume a craft quality (yours, 0.5, 1, 1.5 or 2).
 - New: searching an item group by name now works on the map (for example "Metal Recycle" finds containers holding nails or tin cans). Needs the updated lootmap-data.json that ships with this version.
-- New: searching a group also marks the shops where its items are sold, and the Obenseuer Recycling shop (Bazaar streets) is marked for the items that can be inside its Trash Bales (nails, tin cans, scrap metal, and so on). The shop sells bales that are filled at random when you buy one; the game data now says so (new "pk" field, read from the game files).
-- Website: a group page (for example Metal Recycle) lists where each member is bought, and any shop whose bales can contain it.
 - New: searching a group also marks the shops where its items are sold, and the Obenseuer Recycling shop (Bazaar streets) is marked for the items that can be inside its Trash Bales (nails, tin cans, scrap metal, and so on). The shop sells bales that are filled at random when you buy one; the game data now says so (new "pk" field, read from the game files).
 - Website: a group page (for example Metal Recycle) lists where each member is bought, and any shop whose bales can contain it.
 - Website: item pages show the shop price by quality, and recipes show the profit by quality.
