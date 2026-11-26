@@ -30,7 +30,7 @@ const stat = (id, k) => { const s = DB.items[id] && DB.items[id][9]; return s &&
 function load() {
   if (DB) return Promise.resolve();
   return new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = 'data/db.js?v=10';
+    const s = document.createElement('script'); s.src = 'data/db.js?v=13';
     s.onload = () => { DB = window.OBS_DB; index(); res(); }; s.onerror = rej; document.head.appendChild(s);
   });
 }
@@ -95,7 +95,11 @@ const furnBuys = (v, id) => v.fb === 'any' || (v.fb === 'same' && furnSells(v, i
 const payAt = (v, id) => Math.max(1, Math.round(DB.items[id][1] * (v.bm != null ? v.bm : 1.1)));   // what you pay the shop
 const getAt = (v, id) => Math.max(1, Math.round(DB.items[id][1] * (v.sm != null ? v.sm : 0.9)));   // what the shop pays you
 const sellersMemo = {}, buyersMemo = {};
-const sellersOf = id => sellersMemo[id] || (sellersMemo[id] = DB.items[id] ? DB.vendors.filter(v => !v.rm && sells(v, +id)).map(v => ({ v, p: payAt(v, id) })).sort((a, b) => a.p - b.p || a.v.n.localeCompare(b.v.n)) : []);
+// Some shops deal in Real Money: you pay them in RM (v.rm / v.br) or they pay you in RM (v.sr). 1 OC = 0.1 RM (Money.OCtoRM), so prices stay comparable in OC.
+const RMX = 0.1;
+const isRm = (v, buying) => buying ? !!(v.rm || v.br) : !!v.sr;
+const pxt = (v, p, buying) => isRm(v, buying) ? `${+(p * RMX).toFixed(2)} RM` : `${fmt(p)} OC`;
+const sellersOf = id => sellersMemo[id] || (sellersMemo[id] = DB.items[id] ? DB.vendors.filter(v => sells(v, +id)).map(v => ({ v, p: payAt(v, id) })).sort((a, b) => a.p - b.p || a.v.n.localeCompare(b.v.n)) : []);
 const buyersOf = id => buyersMemo[id] || (buyersMemo[id] = DB.items[id] ? DB.vendors.filter(v => buys(v, +id)).map(v => ({ v, p: getAt(v, id) })).sort((a, b) => b.p - a.p || a.v.n.localeCompare(b.v.n)) : []);
 // The cheapest way to pay for one of an ingredient: a group counts as its cheapest member; nothing sells it → its base value, marked as an estimate.
 function buyCost(id, worst) {   // worst: the dearest shop instead of the cheapest (for the profit range)
@@ -215,10 +219,10 @@ function rangeRows(rid) {
 }
 function tradeBlock(rid) {
   const p = realProfit(rid), r = X.R[rid];
-  const buy = p.ing.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}${x.div > 1 ? ` use${x.n === 1 ? '' : 's'} of ${x.div}` : ''}</small></span><small>${x.shop ? `${fmt(x.p)} OC ${x.div > 1 ? `per item (≈ ${fmt(x.p / x.div)} OC per use)` : 'each'} at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : `not sold · ≈ ${fmt(x.p)} OC`}</small>`);
-  const sell = p.outs.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.v ? `${fmt(x.p)} OC each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : 'no shop buys it'}</small>`);
+  const buy = p.ing.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}${x.div > 1 ? ` use${x.n === 1 ? '' : 's'} of ${x.div}` : ''}</small></span><small>${x.shop ? `${pxt(x.v, x.p, true)} ${x.div > 1 ? `per item (≈ ${fmt(x.p / x.div)} OC per use)` : 'each'} at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : `not sold · ≈ ${fmt(x.p)} OC`}</small>`);
+  const sell = p.outs.map(x => `<span>${il(x.id)} <small class="muted">× ${num(x.n)}</small></span><small>${x.v ? `${pxt(x.v, x.p)} each at ${esc(x.v.n)} · ${esc(sceneName(x.v.sc))}` : 'no shop buys it'}</small>`);
   return `<h3>Trade at shops</h3><p>${realText(rid)}</p>${qualityRows(rid)}${rangeRows(rid)}<h3>Buy the ingredients</h3>${ul(buy)}<h3>Sell what it makes</h3>${ul(sell)}
-    <p class="muted">Real shop prices: base value × the shop's multiplier. ${p.estimated ? '* Ingredients no shop sells are counted at base value. ' : ''}${r[3] && r[3] !== 'None' && r[4] > lvlOf(r[3]) ? `<b class="bad">Your ${esc(r[3])} (${lvlOf(r[3])}) is below this recipe's minimum (${r[4]}): it almost always fails.</b> ` : ''}Counts the ${Math.round(p.fail * 100)}% fail chance at your level${p.failOuts.some(o => o.v) ? ' (and what a failed craft sells for)' : ''} and the quality of what you make (${p.outs.some(o => o.q != null) ? 'quality ≈ ' + (+p.q.toFixed(2)) : 'these items have no quality'}, at ${skillSelect(r[3])}, crafted at ${stationSelect(r) || 'any workstation'}). Ignores the quality of bought ingredients and what the shop stocks that day.</p>`;
+    <p class="muted">Shops that deal in Real Money show RM (1 RM = 10 OC); the profit counts them at their OC value. Real shop prices: base value × the shop's multiplier. ${p.estimated ? '* Ingredients no shop sells are counted at base value. ' : ''}${r[3] && r[3] !== 'None' && r[4] > lvlOf(r[3]) ? `<b class="bad">Your ${esc(r[3])} (${lvlOf(r[3])}) is below this recipe's minimum (${r[4]}): it almost always fails.</b> ` : ''}Counts the ${Math.round(p.fail * 100)}% fail chance at your level${p.failOuts.some(o => o.v) ? ' (and what a failed craft sells for)' : ''} and the quality of what you make (${p.outs.some(o => o.q != null) ? 'quality ≈ ' + (+p.q.toFixed(2)) : 'these items have no quality'}, at ${skillSelect(r[3])}, crafted at ${stationSelect(r) || 'any workstation'}). Ignores the quality of bought ingredients and what the shop stocks that day.</p>`;
 }
 // A trade run: what to buy where, then what to sell where, with the stops of each part in a sensible walking order (same area together, nearest next).
 function tripOrder(vs) {
@@ -237,9 +241,9 @@ function tradeRun(raw, make, o) {
   for (const [id, n0] of Object.entries(raw)) { const n = Math.ceil(n0 - 1e-9), c = buyCost(id); if (!c.shop || (o && o.pref[id] === 'find')) { find.push([+id, n]); continue; } add(buy, c.v, { id: c.id, n, p: c.p }); bt += c.p * n; }
   for (const [id, n] of Object.entries(make)) { const b = buyersOf(+id)[0]; if (!b) { nosell.push(+id); continue; } add(sell, b.v, { id: +id, n, p: b.p }); st += b.p * n; }
   if (!buy.size && !sell.size) return '';
-  const stop = (v, ls, k) => `<span>${vl(v)}<br>${ls.map(l => `<small class="muted">${il(l.id)} × ${num(l.n)} · ${fmt(l.p)} OC each = ${fmt(l.p * l.n)} OC</small>`).join('<br>')}</span>${mapBtn(v.sc, iname(ls[0].id), k, v.n)}`;
+  const stop = (v, ls, k, buying) => `<span>${vl(v)}<br>${ls.map(l => `<small class="muted">${il(l.id)} × ${num(l.n)} · ${pxt(v, l.p, buying)} each = ${pxt(v, l.p * l.n, buying)}</small>`).join('<br>')}</span>${mapBtn(v.sc, iname(ls[0].id), k, v.n)}`;
   let h = `<h3>Trade run</h3><p>Buy ≈ ${fmt(bt)} OC · sell ≈ ${fmt(st)} OC · <b class="${st - bt >= 0 ? 'good' : 'bad'}">${profitTxt(st - bt)}</b></p>`;
-  if (buy.size) h += `<p class="muted">1. Buy, in this order:</p>${ul(tripOrder([...buy.keys()]).map(v => stop(v, buy.get(v), 'Show the shop')))}`;
+  if (buy.size) h += `<p class="muted">1. Buy, in this order:</p>${ul(tripOrder([...buy.keys()]).map(v => stop(v, buy.get(v), 'Show the shop', true)))}`;
   if (sell.size) h += `<p class="muted">2. Sell, in this order:</p>${ul(tripOrder([...sell.keys()]).map(v => stop(v, sell.get(v), 'Show the shop')))}`;
   if (find.length) h += `<p class="muted">To find, not buy (left out of the cost and the route): ${find.map(([id, n]) => `${il(id)} × ${num(n)}`).join(', ')}</p>`;
   if (nosell.length) h += `<p class="muted">No shop buys: ${nosell.map(il).join(', ')}</p>`;
@@ -511,7 +515,7 @@ function renderList() {
 function itemCard(id) {
   const it = DB.items[id]; if (!it) return missing();
   const [t, val, cats, desc, stack, eff, grp, wall] = it;
-  let h = `<div class="card"><div class="dbhead">${iIco(id, 1)}<div><h2>${esc(t)}</h2><div class="sub">ID ${id} · ${val} OC · stacks to ${stack}${X.craftCost[id] != null ? ' · costs ≈ ' + fmt(X.craftCost[id]) + ' OC to make' : ''}${sellersOf(+id)[0] ? ' · buy from ' + fmt(sellersOf(+id)[0].p) + ' OC' : ''}${buyersOf(+id)[0] ? ' · sell up to ' + fmt(buyersOf(+id)[0].p) + ' OC' : ''}</div></div></div>`;
+  let h = `<div class="card"><div class="dbhead">${iIco(id, 1)}<div><h2>${esc(t)}</h2><div class="sub">ID ${id} · ${val} OC · stacks to ${stack}${X.craftCost[id] != null ? ' · costs ≈ ' + fmt(X.craftCost[id]) + ' OC to make' : ''}${sellersOf(+id)[0] ? ' · buy from ' + pxt(sellersOf(+id)[0].v, sellersOf(+id)[0].p, true) : ''}${buyersOf(+id)[0] ? ' · sell up to ' + pxt(buyersOf(+id)[0].v, buyersOf(+id)[0].p) : ''}</div></div></div>`;
   if (desc) h += `<p>${esc(desc)}</p>`;
   h += `<div class="tags">${cats.map(c => `<a class="tag" href="#/db/items" data-cat="${esc(c)}">${esc(c)}</a>`).join('')}${eff.map(e => `<span class="tag teal">${e[0]} ${e[1]}</span>`).join('')}${wall ? `<span class="tag">${esc(wall)}</span>` : ''}</div>`;
   const st = it[9];
@@ -543,14 +547,14 @@ function itemCard(id) {
   } else h += '<p class="muted">Not in any placed container.</p>';
   if (unplaced.length) h += `<p class="muted">Also listed in ${[...new Set(unplaced.map(([n]) => n.trim()))].map(esc).join(', ')}, which ${unplaced.length > 1 ? 'are' : 'is'} not placed in any scene on the map (spawned at runtime, or unused).</p>`;
   const sv = sellersOf(+id), bv = buyersOf(+id);
-  h += `<h3>Where to buy · ${sv.length}</h3>${sv.length ? `<p class="muted">Cheapest first. The shop's price is the base value × its multiplier.</p>` : ''}${ul(sv.map((x, i) => vl(x.v) + ` <small class="${i ? 'muted' : 'good'}">· ${fmt(x.p)} OC</small>`))}${sv.length ? mapBtn(sv[0].v.sc, t, 'Show the cheapest shop', sv[0].v.n) : ''}`;
+  h += `<h3>Where to buy · ${sv.length}</h3>${sv.length ? `<p class="muted">Cheapest first. The shop's price is the base value × its multiplier.</p>` : ''}${ul(sv.map((x, i) => vl(x.v) + ` <small class="${i ? 'muted' : 'good'}">· ${pxt(x.v, x.p, true)}</small>`))}${sv.length ? mapBtn(sv[0].v.sc, t, 'Show the cheapest shop', sv[0].v.n) : ''}`;
   // An item group (Metal Recycle counts nails and tin cans): where each member is sold. Shops that sell packages (a Trash Bale) fill them at random from a loot table when you buy one.
   const members = DB.items[id][6] || [], baleIds = members.length ? members : [+id];
-  if (members.length) h += `<h3>Where to buy the items in this group</h3><p class="muted">Any one of them counts.</p>${ul(members.map(m => { const s0 = sellersOf(m)[0]; return `<span>${il(m)}</span><small>${s0 ? `${fmt(s0.p)} OC at ${esc(s0.v.n)} - ${esc(sceneName(s0.v.sc))}` : 'no shop sells it'}</small>`; }))}`;
+  if (members.length) h += `<h3>Where to buy the items in this group</h3><p class="muted">Any one of them counts.</p>${ul(members.map(m => { const s0 = sellersOf(m)[0]; return `<span>${il(m)}</span><small>${s0 ? `${pxt(s0.v, s0.p, true)} at ${esc(s0.v.n)} - ${esc(sceneName(s0.v.sc))}` : 'no shop sells it'}</small>`; }))}`;
   const bales = DB.vendors.filter(v => v.pk && baleIds.some(i => v.pk.some(tb => X.tableItems[tb] && X.tableItems[tb].has(i))));
   if (bales.length) h += `<h3>Inside packages bought from a shop - ${bales.length}</h3><p class="muted">These shops sell packages (like a Trash Bale) that are filled at random when you buy one. ${members.length ? 'Some of the items in this group' : 'This item'} can be inside.</p>${ul(bales.map(v => vl(v)))}${mapBtn(bales[0].sc, t, 'Show the shop', bales[0].n)}`;
   if (hasQuality(+id) && bv.length) { const sf = saleF(+id); h += `<h3>Price by quality</h3><div class="facts">${[0.25, 0.5, 0.75, 1, 1.5, 2].map(t => `<span>Quality ${t}</span><span>${fmt(Math.max(1, Math.round(bv[0].p * qualityValue(t) * sf)))} OC <small class="muted">at ${esc(bv[0].v.n)}</small></span>`).join('')}</div><p class="muted">What the best shop pays for one, by quality. Quality comes from your skill and workstation when you craft it.</p>`; }
-    h += `<h3>Where to sell · ${bv.length}</h3>${bv.length ? `<p class="muted">Best price first.</p>` : ''}${ul(bv.map((x, i) => vl(x.v) + ` <small class="${i ? 'muted' : 'good'}">· ${fmt(x.p)} OC</small>` + (x.v.bs ? ' <small class="muted">· buys stolen</small>' : '')))}${bv.length ? mapBtn(bv[0].v.sc, t, 'Show the best buyer', bv[0].v.n) : ''}`;
+    h += `<h3>Where to sell · ${bv.length}</h3>${bv.length ? `<p class="muted">Best price first.</p>` : ''}${ul(bv.map((x, i) => vl(x.v) + ` <small class="${i ? 'muted' : 'good'}">· ${pxt(x.v, x.p)}</small>` + (x.v.bs ? ' <small class="muted">· buys stolen</small>' : '')))}${bv.length ? mapBtn(bv[0].v.sc, t, 'Show the best buyer', bv[0].v.n) : ''}`;
   const via = new Set(); (X.groupsOf[id] || []).forEach(g => (X.uses[g] || []).forEach(r => via.add(r)));
   if (X.fails[id]) h += `<h3>Comes out of a failed</h3>${ul(recipesOf(X.fails[id]))}`;
   h += `<h3>Used in · ${(X.uses[id] || []).size || 0}</h3>${ul(recipesOf(X.uses[id]))}`;

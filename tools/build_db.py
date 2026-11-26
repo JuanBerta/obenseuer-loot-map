@@ -69,6 +69,16 @@ for r in read_json('Recipes.json')['Recipes']:
     for x in rec[7] + rec[8] + rec[9]:
         if x[0] not in items: notes.append(f'Recipe #{rec[0]} “{rec[1]}” uses unknown item ID {x[0]}')
     recipes.append(rec)
+# growing / breeding recipes make a live plant or animal item worth nothing: what they really give is what it yields when harvested (grow.grownItems of its prefab, extract_grow.py)
+GROW = {int(k): v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'grow_yield.json'))).items()}
+for rec in recipes:
+    for pos in (8, 9):
+        out_ = {}
+        for oid, n in rec[pos]:
+            if oid in GROW:
+                for yid, lo, hi in GROW[oid]: out_[yid] = out_.get(yid, 0) + n * (lo + hi) / 2
+            else: out_[oid] = out_.get(oid, 0) + n
+        rec[pos] = [[k, round(v, 3)] for k, v in out_.items()]
 # ---- loot tables (all, not only the ones placed in scenes)
 loot = {}
 for c in read_json('StorageSpawnCategory.json')['$content']:
@@ -92,7 +102,7 @@ for scene, sc in M['scenes'].items():
     slug = slug_of.get(scene)
     for v in sc.get('vendors', []):
         if not slug: skipped[scene] += 1; continue
-        e = {k: v[k] for k in ('n', 'o', 't', 'i', 'pk', 'b', 'ba', 'bf', 'bs', 'fs', 'fb', 'sm', 'bm', 'fp', 'h', 'rm', 'mk') if k in v}
+        e = {k: v[k] for k in ('n', 'o', 't', 'i', 'pk', 'b', 'ba', 'bf', 'bs', 'fs', 'fb', 'sm', 'bm', 'fp', 'h', 'rm', 'mk', 'sr', 'br') if k in v}
         e['sc'] = slug; e['x'] = v['x']; e['z'] = v['z']
         same = next((w for w in vendors if w['sc'] == slug and w['n'] == e['n'] and (w['x'] - e['x']) ** 2 + (w['z'] - e['z']) ** 2 < 36), None)
         if same:   # one shop split over several counters / furniture shop components

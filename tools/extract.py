@@ -294,6 +294,7 @@ def features(sf):
                 if d.get('allowedCategories'): e['buyAllow']=d['allowedCategories']
                 if d.get('forbiddenCategories'): e['buyForbid']=d['forbiddenCategories']
                 if d.get('buysStolen'): e['buysStolen']=True
+                e['sellMode']=d.get('sellPriceMode'); e['buyMode']=d.get('purchasePriceMode')
                 try:
                     ot=d.get('openingTimes') or {}
                     days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']

@@ -32,6 +32,8 @@ public class VendorData
 	public int mk;
 
 	public int rm;
+		public int sr;   // the shop pays you in Real Money
+		public int br;   // you pay the shop in Real Money
 
 	public List<int> fs;
 

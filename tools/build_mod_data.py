@@ -34,6 +34,16 @@ for r in json.loads(txt)['Recipes']:
         while tk in trade: tk=str(int(tk)+1000000)   # the game reuses an ID for two recipes
         trade[tk]=[r.get('Name') or '', r.get('Type') or '', r.get('ProcessTime',0), r.get('FailChance',0), kv(r.get('input')), kv(r.get('output')), r.get('RelevantSkill') or 'None', r.get('SkillFactor',1), (r.get('metaSettings') or {}).get('qualityFactor',1), (r.get('metaSettings') or {}).get('fixedQuality',0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0, 1 if (r.get('metaSettings') or {}).get('useAmmoAsInput') else 0, r.get('MinimumSkill',0), kv(r.get('outputFail'))]
     if r.get('RelevantSkill') and r['RelevantSkill']!='None': skill_count[r['Type']][r['RelevantSkill']]+=1
+# growing / breeding recipes make a live plant or animal item worth nothing: swap it for what it yields when harvested (average amount; tools/extract_grow.py)
+GROW={int(k):v for k,v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'grow_yield.json'))).items()}
+for t in trade.values():
+    for pos in (5,12):
+        o={}
+        for oid,n in t[pos]:
+            if oid in GROW:
+                for yid,lo,hi in GROW[oid]: o[yid]=o.get(yid,0)+n*(lo+hi)/2
+            else: o[oid]=o.get(oid,0)+n
+        t[pos]=[[k,round(v,3)] for k,v in o.items()]
 # recipe type -> skills it trains (main skill, plus others used by several recipes)
 type_skills={t:[k for k,n in c.most_common() if n>=2 or k==c.most_common(1)[0][0]] for t,c in skill_count.items()}
 # ---- furniture (from tools/scan_furniture.py)
@@ -143,6 +153,8 @@ for i,name in enumerate(scenes):
             if f.get('sellMult') is not None: e['sm']=f['sellMult']
             if f.get('buyMult') is not None: e['bm']=f['buyMult']
             if f.get('fixedPrices'): e['fp']=1
+            if f.get('sellMode')==0: e['sr']=1   # the shop pays you in Real Money (Trade.sellPriceMode = OnlyRM)
+            if f.get('buyMode')==0: e['br']=1    # you pay the shop in Real Money (Trade.purchasePriceMode = OnlyRM)
             if f.get('buyAllow'): e['ba']=f['buyAllow']
             if f.get('buyForbid'): e['bf']=f['buyForbid']
             if f.get('buysStolen'): e['bs']=1

@@ -448,8 +448,10 @@ namespace ObenseuerLootMap
             return Loc.T("Closed");
         }
         internal bool IsClosedNow(VendorData v) { var t = HoursText(v, out var open); return t != null && !open; }
-        internal int BuyPrice(VendorData v, int id) => v.rm == 0 && v.bm > 0 ? Mathf.RoundToInt(Db.ValueOf(id) * v.bm) : -1;     // what you pay
-        internal int SellPrice(VendorData v, int id) => v.sm > 0 ? Mathf.RoundToInt(Db.ValueOf(id) * v.sm) : -1;    // what you get
+        internal int BuyPrice(VendorData v, int id) => v.bm > 0 ? Mathf.RoundToInt(Db.ValueOf(id) * v.bm) : -1;     // what you pay
+        internal int SellPrice(VendorData v, int id) => v.sm > 0 ? Mathf.RoundToInt(Db.ValueOf(id) * v.sm) : -1;
+        // Some shops deal in Real Money (1 OC = 0.1 RM): you pay them in RM (rm / br) or they pay you in RM (sr)
+        internal string PriceTxt(VendorData v, int price, bool buying) => (buying ? (v.rm == 1 || v.br == 1) : v.sr == 1) ? (price * 0.1f).ToString("0.##") + " RM" : price + " OC";    // what you get
         // The single item a search is about (price comparison needs exactly one), or -1.
         internal int PriceItem()
         {
@@ -540,7 +542,7 @@ namespace ObenseuerLootMap
             {
                 if (cheapest.TryGetValue(id, out var c)) return c;
                 c = (-1f, null);
-                foreach (var v in vendors) if (v.rm == 0 && Db.Sells(v, id)) { var p = PayAt(v, id); if (c.v == null || p < c.p) c = (p, v); }
+                foreach (var v in vendors) if (Db.Sells(v, id)) { var p = PayAt(v, id); if (c.v == null || p < c.p) c = (p, v); }
                 return cheapest[id] = c;
             }
             (float p, VendorData v) Best(int id)

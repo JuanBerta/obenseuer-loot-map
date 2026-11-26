@@ -2205,11 +2205,11 @@ public partial class LootMapPlugin : BaseUnityPlugin
 		{
 			if ((mode & 1) != 0 && BuyPrice(v, pid) > 0)
 			{
-				stringBuilder.Append(" · <color=#7fb2ff>" + BuyPrice(v, pid) + " OC</color>");
+				stringBuilder.Append(" · <color=#7fb2ff>" + PriceTxt(v, BuyPrice(v, pid), true) + "</color>");
 			}
 			if ((mode & 2) != 0 && SellPrice(v, pid) > 0)
 			{
-				stringBuilder.Append(" · <color=#ffa070>" + SellPrice(v, pid) + " OC</color>");
+				stringBuilder.Append(" · <color=#ffa070>" + PriceTxt(v, SellPrice(v, pid), false) + "</color>");
 			}
 		}
 		if (IsClosedNow(v))
@@ -2401,11 +2401,11 @@ public partial class LootMapPlugin : BaseUnityPlugin
 				List<int> list2 = matchedIds.Where((int id) => Db.Buys(v, id)).Take(6).ToList();
 				if (list.Count > 0)
 				{
-					stringBuilder.Append("<color=#1f5fd0><b>" + Loc.T("Sells") + "</b>: " + string.Join(", ", list.Select((int i) => Db.ItemName(i) + ((BuyPrice(v, i) > 0) ? (" (" + BuyPrice(v, i) + " OC)") : ""))) + "</color>\n");
+					stringBuilder.Append("<color=#1f5fd0><b>" + Loc.T("Sells") + "</b>: " + string.Join(", ", list.Select((int i) => Db.ItemName(i) + ((BuyPrice(v, i) > 0) ? (" (" + PriceTxt(v, BuyPrice(v, i), true) + ")") : ""))) + "</color>\n");
 				}
 				if (list2.Count > 0)
 				{
-					stringBuilder.Append("<color=#c2501a><b>" + Loc.T("Buys") + "</b>: " + string.Join(", ", list2.Select((int i) => Db.ItemName(i) + ((SellPrice(v, i) > 0) ? (" (" + SellPrice(v, i) + " OC)") : ""))) + "</color>\n");
+					stringBuilder.Append("<color=#c2501a><b>" + Loc.T("Buys") + "</b>: " + string.Join(", ", list2.Select((int i) => Db.ItemName(i) + ((SellPrice(v, i) > 0) ? (" (" + PriceTxt(v, SellPrice(v, i), false) + ")") : ""))) + "</color>\n");
 				}
 			}
 			List<KeyValuePair<int, int>> list3 = InStockNow(v);

@@ -1,6 +1,8 @@
 # Changelog - Loot Map (in-game mod)
 
 ## 0.8.1
+- Fix: shops that deal in Real Money are now handled. The data records, per shop, whether it pays you in RM or charges you in RM (for example the Bazaar Butchershop pays RM for chicken, pig, salmon, perch and pike). The website shows those prices in RM (1 RM = 10 OC), counts RM shops in the cheapest/best-price search, and the mod shows RM in the shop info and profit finder.
+- Fix: growing and breeding recipes (fish, chickens, rats, cats, plants) were valued at nothing because they make the live plant or animal. They now count what it yields when harvested (for example a Salmon recipe gives 1 salmon and 1 to 3 salmon eggs), read from the game's prefabs (new tools/extract_grow.py). Plants that keep producing (berry bushes, tomatoes, hops, grapes) are not included yet.
 - New: the shopping list shows an estimate of what is still to buy (cheapest shop that sells each missing item).
 - New: items stored in the Bank Inventory mod count as owned on the shopping list (setting CountBankInventory).
 - New: a Clear list button under the on-screen shopping list when the mouse is free (two clicks).
