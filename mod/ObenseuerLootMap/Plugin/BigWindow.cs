@@ -241,7 +241,7 @@ namespace ObenseuerLootMap
             if (hourFirst) { if (r.perHour > float.MinValue) Badge(Money(r.perHour) + " /h", BigGood); Badge(Money(r.profit) + " per craft", BigInfo); }
             else { Badge(Money(r.profit) + " OC / " + Money(r.profit * 0.1f) + " RM", BigGood); if (r.perHour > float.MinValue) Badge(Money(r.perHour) + " /h", BigInfo); }
             GUILayout.EndHorizontal();
-            GUILayout.Label(r.station + " \u00b7 " + (r.skill != "None" ? r.skill + (r.minLv > 0 ? " lv " + r.minLv : "") + " \u00b7 " : "") + TimeTxt(r.time) + " \u00b7 " + Mathf.RoundToInt(r.failNow * 100f) + "% fail" + (extra != null ? " \u00b7 " + extra : ""), smallStyle);
+            GUILayout.Label((r.stationName ?? r.station) + " \u00b7 " + (r.skill != "None" ? r.skill + (r.minLv > 0 ? " lv " + r.minLv : "") + " \u00b7 " : "") + TimeTxt(r.time) + " \u00b7 " + Mathf.RoundToInt(r.failNow * 100f) + "% fail" + (extra != null ? " \u00b7 " + extra : ""), smallStyle);
             GUILayout.EndVertical();
             GUILayout.BeginVertical(GUILayout.Width(74));
             if (GUILayout.Button("Craft", bigPrimary)) bestPickCraft = r;

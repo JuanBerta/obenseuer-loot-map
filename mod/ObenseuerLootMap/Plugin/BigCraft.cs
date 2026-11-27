@@ -209,13 +209,14 @@ namespace ObenseuerLootMap
             if (skill != "None") { PlayerStats.PlayerSkillType t; if (Enum.TryParse(skill, out t)) { try { lv = PlayerStats.instance.GetSkillWithEffects(t); } catch { } } }
             bool lowSkill = lv >= 0 && mn > lv;
             GUILayout.BeginHorizontal();
-            Badge((string)r[1] + "  ·  quality " + EqOf((string)r[1]).ToString("0.##"), BigInfo);
+            { var stc = StationFor(r); Badge((string)r[1] + "  ·  " + (stc != null ? stc.name + "  ·  quality " + stc.q.ToString("0.##") : "quality 1"), BigInfo); }
             Badge(Mathf.Round((float)r[2] / 60f * 10f) / 10f + " min each", BigMuted);
             if (skill != "None") Badge(skill + (lv >= 0 ? " " + lv.ToString("0.#") : "") + (mn > 0 ? " / " + mn.ToString("0.#") : ""), lowSkill ? BigBad : BigGood);
             Badge("fail " + Mathf.Round(failNow * 100f) + "%", failNow > 0.25f ? BigBad : failNow > 0.05f ? BigGold : BigGood);
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
             if (lowSkill) GUILayout.Label("<color=#e07a5f>Your skill is below this recipe's minimum, so it fails more and may give poor quality.</color>", bigWrap);
+            DrawStations(craftKey, r);
 
             // How many.
             GUILayout.Space(6);

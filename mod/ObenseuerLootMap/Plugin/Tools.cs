@@ -14,7 +14,7 @@ namespace ObenseuerLootMap
     // 0.6.0: door lock states, emptied-container memory, value / effect search, shopping list, route planner, shop hours and prices.
     public partial class LootMapPlugin
     {
-        ConfigEntry<bool> cfgHideEmpty, cfgShopHud, cfgMoreTools; ConfigEntry<int> cfgSaleContainer, cfgShopChoice;
+        ConfigEntry<bool> cfgHideEmpty, cfgShopHud, cfgMoreTools; ConfigEntry<int> cfgSaleContainer, cfgShopChoice; ConfigEntry<string> cfgStationPicks;
 
         void BindToolsConfig()
         {
@@ -26,6 +26,7 @@ namespace ObenseuerLootMap
             cfgShopHud = Config.Bind("Display", "ShoppingListOnScreen", true, "Show the shopping list (from the website) as a checklist on screen.");
             cfgCountBank = Config.Bind("Display", "CountBankInventory", true, "Count the items stored in the Bank Inventory mod as owned on the shopping list.");
             cfgShopChoice = Config.Bind("Profit", "ShopChoice", 0, "How the shop is chosen for what you buy (profit finder and crafting plan): 0 = price and availability, 1 = lowest price only, 2 = most reliable stock first.");
+            cfgStationPicks = Config.Bind("Profit", "StationPicks", "", "The workstation picked for each recipe (written by the mod when you press Use in the Craft plan).");
             cfgSaleContainer = Config.Bind("Profit", "SaleContainer", 0, "Container that liquids are sold in for the profit finder: 0 = the best one, -1 = none (plain liters), or an item ID such as 17780.");
             cfgMoreTools = Config.Bind("Display", "ShowMoreTools", true, "Show the value / effect / shopping list / route tools in the panel.");
         }
@@ -463,7 +464,7 @@ namespace ObenseuerLootMap
 
 
         // ---------------- profit finder: recipes ranked by what they earn at real shop prices ----------------
-        class TradeRow { public string key, name, skill, station; public int minLv; public float fail; public float cost, rev, profit, perHour; public bool estimated; public float time, failNow; public float liters, litersRev; public string route; public HashSet<int> ids = new HashSet<int>(); }
+        class TradeRow { public string key, name, skill, station; public int minLv; public float fail; public float cost, rev, profit, perHour; public bool estimated; public string stationName; public float time, failNow; public float liters, litersRev; public string route; public HashSet<int> ids = new HashSet<int>(); }
         List<TradeRow> tradeAll; bool tradeOpen; int tradeSort; List<VendorData> tradeVendors;
         readonly Dictionary<int, (float p, VendorData v)> tradeCheap = new Dictionary<int, (float p, VendorData v)>(), tradeBest = new Dictionary<int, (float p, VendorData v)>();
         static string Money(float x) => (x >= 0 ? "+" : "−") + Mathf.Abs(x).ToString("0.#");
@@ -513,22 +514,103 @@ namespace ObenseuerLootMap
         float GetAt(VendorData v, int id) => Mathf.Max(1f, Mathf.Round(Db.ValueOf(id) * (v.sm > 0 ? v.sm : 0.9f)));
         // Quality of what you craft (the game's formula, averaged, with your live skill) and what it does to the sale price.
         static float QualityValue(float q) => q > 1f ? q * q : 0.5f * q * q + 0.25f * q + 0.25f;
-        Dictionary<string, float> stationQ;
-        // The best equipment quality among the workstations that make this kind of recipe (a lathe 5, a table stove 0.5); it multiplies craft quality and cuts the fail chance.
-        float EqOf(string type)
+        // ---------------- workstations: which ones can make a recipe, and what each gives you ----------------
+        // A recipe is offered at a station of its type that has every modifier the recipe requires (trade[13]) and none it excludes (trade[14]). A station's modifiers are furniture[8].
+        class StationInfo { public string id, name; public float q, oc, rm; public bool loose; public List<string> mods = new List<string>(); }
+        class StationNums { public float success; public TradeRow row; }
+        readonly Dictionary<string, List<StationInfo>> stationMemo = new Dictionary<string, List<StationInfo>>();
+        readonly Dictionary<string, StationNums> stationNums = new Dictionary<string, StationNums>();
+        readonly Dictionary<string, string> stationWhereMemo = new Dictionary<string, string>();
+        Dictionary<string, string> stationPicks; Dictionary<JArray, string> tradeKeys; string stationNumsSig;
+        StationInfo ovStation; JArray ovFor;   // while a station is being priced for comparison: the recipe and the station to assume
+        static List<string> ModList(JArray r, int i) { var l = new List<string>(); if (r.Count > i && r[i] is JArray a) foreach (var x in a) l.Add((string)x); return l; }
+        List<StationInfo> StationsOf(JArray r)
         {
-            if (stationQ == null)
+            string type = (string)r[1]; var req = ModList(r, 13); var ex = ModList(r, 14);
+            string k = type + "|" + string.Join(",", req) + "|" + string.Join(",", ex);
+            if (stationMemo.TryGetValue(k, out var memo)) return memo;
+            var all = new List<StationInfo>();
+            foreach (var kv in Db.furniture)
             {
-                stationQ = new Dictionary<string, float>();
-                foreach (var f in Db.furniture.Values)
-                {
-                    if (f.Count < 6 || !(f[4] is JArray ts) || !(f[5] is JArray ps)) continue;
-                    float q = 0f; foreach (JToken pe in ps) if (pe is JArray pa && pa.Count > 9) q = Mathf.Max(q, (float)pa[9]);
-                    if (q <= 0f) continue;
-                    foreach (JToken t in ts) { string k = (string)t; if (!stationQ.TryGetValue(k, out var old) || q > old) stationQ[k] = q; }
-                }
+                var f = kv.Value;
+                if (f.Count < 6 || !(f[4] is JArray ts) || !(f[5] is JArray ps)) continue;
+                if (!ts.Any(t => (string)t == type)) continue;
+                float q = 0f; foreach (JToken pe in ps) if (pe is JArray pa && pa.Count > 9) q = Mathf.Max(q, (float)pa[9]);
+                if (q <= 0f) q = 1f;
+                var si = new StationInfo { id = kv.Key, name = f[0].ToString(), q = q, oc = Convert.ToSingle(f[2]), rm = Convert.ToSingle(f[3]) };
+                if (f.Count > 8 && f[8] is JArray ms) foreach (var x in ms) si.mods.Add((string)x);
+                all.Add(si);
             }
-            return type != null && stationQ.TryGetValue(type, out var v) ? v : 1f;
+            var ok = all.Where(s2 => req.All(c => s2.mods.Contains(c)) && !ex.Any(c => s2.mods.Contains(c))).ToList();
+            if (ok.Count == 0 && all.Count > 0) { ok = all; foreach (var s2 in ok) s2.loose = true; }   // no station has these modifiers in the data: list them all
+            return stationMemo[k] = ok.OrderByDescending(s2 => s2.q).ThenBy(s2 => s2.name).ToList();
+        }
+        Dictionary<string, string> Picks()
+        {
+            if (stationPicks != null) return stationPicks;
+            stationPicks = new Dictionary<string, string>();
+            try { foreach (var part in (cfgStationPicks != null ? cfgStationPicks.Value : "").Split(';')) { var kv = part.Split('='); if (kv.Length == 2 && kv[0].Length > 0) stationPicks[kv[0]] = kv[1]; } } catch { }
+            return stationPicks;
+        }
+        string KeyOf(JArray r) { tradeKeys ??= Db.trade.ToDictionary(kv => kv.Value, kv => kv.Key); return tradeKeys.TryGetValue(r, out var k) ? k : null; }
+        StationInfo StationFor(JArray r)
+        {
+            var l = StationsOf(r); if (l.Count == 0) return null;
+            if (ovStation != null && ovFor == r) return ovStation;
+            string k = KeyOf(r);
+            if (k != null && Picks().TryGetValue(k, out var id)) { var p = l.FirstOrDefault(s2 => s2.id == id); if (p != null) return p; }
+            return l[0];   // the best equipment quality until you pick one
+        }
+        // The equipment quality of the station you use for this recipe; it multiplies craft quality and cuts the fail chance.
+        float EqOf(JArray r) { var s2 = StationFor(r); return s2 != null ? s2.q : 1f; }
+        void PickStation(string key, StationInfo st)
+        {
+            Picks()[key] = st.id;
+            try { cfgStationPicks.Value = string.Join(";", Picks().Select(p => p.Key + "=" + p.Value)); } catch { }
+            tradeAll = null; bestSig = null;
+            try { bigRows = BuildTrade(); } catch (Exception) { }
+        }
+        // The real chance of success, and the profit and profit per hour, if you craft this recipe at a given station (cached until your skills or the price options change).
+        StationNums NumsAt(string key, JArray r, StationInfo st)
+        {
+            string sig = BestSigNow(); if (sig != stationNumsSig) { stationNums.Clear(); stationNumsSig = sig; }
+            string ck = key + "|" + st.id; if (stationNums.TryGetValue(ck, out var n)) return n;
+            ovStation = st; ovFor = r;
+            try { n = new StationNums { success = 1f - FailNow(r, (float)r[3]), row = BuildTradeCore(false, key).FirstOrDefault() }; }
+            catch (Exception) { n = new StationNums { success = 1f - FailNow(r, (float)r[3]) }; }
+            finally { ovStation = null; ovFor = null; }
+            return stationNums[ck] = n;
+        }
+        string StationWhere(StationInfo st)
+        {
+            if (stationWhereMemo.TryGetValue(st.id, out var w)) return w;
+            int fid; int.TryParse(st.id, out fid);
+            var vs = (tradeVendors ??= Db.scenes.Values.SelectMany(sc => sc.vendors).ToList());
+            var sh = vs.Where(v => v.fs != null && v.fs.Contains(fid)).Select(v => v.n).Distinct().Take(2).ToList();
+            string price = st.oc > 0f ? st.oc.ToString("0.#") + " OC" : st.rm > 0f ? st.rm.ToString("0.#") + " RM" : null;
+            return stationWhereMemo[st.id] = (price != null ? price + "  \u00b7  " : "") + (sh.Count > 0 ? "sold by " + string.Join(", ", sh) : "not sold in shops");
+        }
+        // The Craft plan's station list: every station that can make the recipe, with its success chance, profit and profit per hour, and a button to use it.
+        void DrawStations(string key, JArray r)
+        {
+            var sts = StationsOf(r); if (sts.Count == 0 || key == null) return;
+            var cur = StationFor(r); var req = ModList(r, 13); var ex = ModList(r, 14);
+            GUILayout.Space(4);
+            GUILayout.Label("Workstation  \u00b7  " + (string)r[1] + (req.Count > 0 ? ", needs " + string.Join(", ", req) : "") + (ex.Count > 0 ? ", not " + string.Join(", ", ex) : "") + (sts[0].loose ? "  (no station has these modifiers in the data, so all are listed)" : ""), labelStyle);
+            foreach (var st in sts)
+            {
+                var n = NumsAt(key, r, st); bool sel = st == cur;
+                GUILayout.BeginHorizontal(bigCard);
+                GUILayout.BeginVertical();
+                GUILayout.Label("<b>" + st.name + "</b>  quality " + st.q.ToString("0.##") + (st.mods.Count > 0 ? "  \u00b7  " + string.Join(", ", st.mods) : ""), bigWrap);
+                string t = (Mathf.Round(n.success * 1000f) / 10f) + "% success";
+                if (n.row != null) t += "  \u00b7  " + Money(n.row.profit) + " OC" + (n.row.perHour > float.MinValue ? "  \u00b7  " + Money(n.row.perHour) + " /h" : "");
+                GUILayout.Label(t, smallStyle);
+                GUILayout.Label(StationWhere(st), smallStyle);
+                GUILayout.EndVertical();
+                if (GUILayout.Button(sel ? "Using" : "Use", sel ? bigPrimary : bigTabOff, GUILayout.Width(74)) && !sel) PickStation(key, st);
+                GUILayout.EndHorizontal();
+            }
         }
         internal float qualityPick;   // 0 = your own skills; otherwise the profit lists assume this quality (0.5 / 1 / 1.5 / 2)
         float CraftQuality(JArray r, float fail)
@@ -538,7 +620,7 @@ namespace ObenseuerLootMap
             string sk = r.Count > 6 ? (string)r[6] : "None"; if (sk == "None" || !Enum.TryParse(sk, out PlayerStats.PlayerSkillType type)) return 1f;
             float lvl = SkillLv(sk, type);
             float sf = (float)r[7], qf = (float)r[8];
-            return Mathf.Clamp(lvl * 0.2f * sf * (1f - fail) * EqOf((string)r[1]) * qf, 0.05f, 2f);
+            return Mathf.Clamp(lvl * 0.2f * sf * (1f - fail) * EqOf(r) * qf, 0.05f, 2f);
         }
         // The chance a craft fails at your level (the game's formula): the recipe's fail chance drops 3 points per skill level above its minimum; below the minimum it gets much worse.
         float FailNow(JArray r, float f)
@@ -546,7 +628,7 @@ namespace ObenseuerLootMap
             if (f >= 1f) return 1f; if (f <= 0f) return f;
             string sk = r.Count > 6 ? (string)r[6] : "None"; if (sk == "None" || !Enum.TryParse(sk, out PlayerStats.PlayerSkillType type)) return f;
             float lv = SkillLv(sk, type);
-            float mn = r.Count > 11 ? Convert.ToSingle(r[11]) : 0f, sf = Mathf.Max(0.0001f, (float)r[7]), num = Mathf.Max(0f, lv - mn), eq = EqOf((string)r[1]);
+            float mn = r.Count > 11 ? Convert.ToSingle(r[11]) : 0f, sf = Mathf.Max(0.0001f, (float)r[7]), num = Mathf.Max(0f, lv - mn), eq = EqOf(r);
             if (mn > 0f && mn > lv) eq /= 0.5f * (mn - lv) + 1f;
             float n2 = 1f - ((1f - f / (eq > 1f ? eq : 1f)) * (eq < 1f ? eq : 1f) + 0.03f * num * sf);
             if (mn > 0f && mn > lv) n2 *= Mathf.Pow(1f + n2, mn - lv);
@@ -577,7 +659,7 @@ namespace ObenseuerLootMap
             else { int i = l.FindIndex(x => (int)x[0] == cur); cfgSaleContainer.Value = i >= 0 && i + 1 < l.Count ? (int)l[i + 1][0] : -1; }
         }
         List<TradeRow> BuildTrade(bool unlock = false) { try { return BuildTradeCore(unlock); } finally { ovSkill = null; } }
-        List<TradeRow> BuildTradeCore(bool unlock)
+        List<TradeRow> BuildTradeCore(bool unlock, string onlyKey = null)
         {
             var cont = SaleContainer(); float cf = cont != null ? (float)cont[2] : 1f;
             var vendors = tradeVendors ??= Db.scenes.Values.SelectMany(sc => sc.vendors).ToList();
@@ -599,8 +681,9 @@ namespace ObenseuerLootMap
             var rows = new List<TradeRow>();
             foreach (var kv in Db.trade)
             {
+                if (onlyKey != null && kv.Key != onlyKey) continue;
                 var r = kv.Value; if (r.Count < 6) continue;
-                var row = new TradeRow { key = kv.Key, name = (string)r[0] }; row.skill = r.Count > 6 ? (string)r[6] : "None"; row.minLv = r.Count > 11 ? Mathf.RoundToInt(Convert.ToSingle(r[11])) : 0; row.station = (string)r[1] ?? ""; row.fail = Mathf.Clamp01(Convert.ToSingle(r[3]));
+                var row = new TradeRow { key = kv.Key, name = (string)r[0] }; row.skill = r.Count > 6 ? (string)r[6] : "None"; row.minLv = r.Count > 11 ? Mathf.RoundToInt(Convert.ToSingle(r[11])) : 0; row.station = (string)r[1] ?? ""; row.fail = Mathf.Clamp01(Convert.ToSingle(r[3])); { var stc = StationFor(r); row.stationName = stc != null ? stc.name : row.station; }
                 ovSkill = null;
                 if (unlock) { if (row.skill == "None" || row.minLv <= 0) continue; float have = MySkill(row.skill); if (row.minLv <= have || row.minLv > have + 3f) continue; ovSkill = row.skill; ovLv = row.minLv; }
                 float fail = (float)r[3], time = (float)r[2]; bool bad = false; var buyAt = new List<string>(); string sellAt = null;

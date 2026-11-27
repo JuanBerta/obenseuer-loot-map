@@ -134,11 +134,28 @@ const lvlOf = sk => { const v = skillLv[sk]; return typeof v === 'number' && v >
 // The workstation you craft at sets an equipment quality (a lathe 5, a table stove 0.5) that multiplies quality and cuts the fail chance. Pick yours on a recipe; the best one is assumed until you do.
 let stationPick = {}; try { stationPick = JSON.parse(localStorage.getItem('obs-stations') || '{}') || {}; } catch (e) { stationPick = {}; }
 const stMemo = {};
-const stationsOf = type => stMemo[type] || (stMemo[type] = Object.entries(DB.furniture).filter(([, f]) => (f[4] || []).includes(type) && f[5]).map(([id, f]) => ({ id, n: f[0], q: Math.max(...f[5].map(e => e[9] || 1)) })).sort((a, b) => b.q - a.q || a.n.localeCompare(b.n)));
-const eqOf = r => { const l = stationsOf(r[2]); if (!l.length) return 1; return (l.find(x => x.id === String(stationPick[r[2]])) || l[0]).q; };
-const stationSelect = r => { const l = stationsOf(r[2]); if (l.length < 2) return l.length ? `${esc(l[0].n)} (quality ${+l[0].q.toFixed(2)})` : ''; const cur = (l.find(x => x.id === String(stationPick[r[2]])) || l[0]).id;
-  return `<select data-station="${esc(r[2])}" aria-label="Your ${esc(r[2])} workstation" title="The workstation sets an equipment quality that multiplies the quality you craft at">${l.map(x => `<option value="${x.id}" ${x.id === cur ? 'selected' : ''}>${esc(x.n)} · quality ${+x.q.toFixed(2)}</option>`).join('')}</select>`; };
-function setStation(type, id) { stationPick[type] = id; try { localStorage.setItem('obs-stations', JSON.stringify(stationPick)); } catch (e) {} clearRP(); if (V.sec === 'recipes' || V.sec === 'items') renderList(); renderDetail(); }
+// Which workstations can make a recipe: the right station type, every modifier the recipe requires (r[10]) and none it excludes (r[14]). A station's modifiers are furniture[8].
+const stKey = r => r[2] + '|' + (r[10] || []).join(',') + '|' + (r[14] || []).join(',');
+const stationsOf = r => {
+  const k = stKey(r); if (stMemo[k]) return stMemo[k];
+  const all = Object.entries(DB.furniture).filter(([, f]) => (f[4] || []).includes(r[2]) && f[5] && f[5].length)
+    .map(([id, f]) => ({ id, n: f[0], q: Math.max(...f[5].map(x => x[9] || 1)), mods: f[8] || [] }));
+  const req = r[10] || [], ex = r[14] || [];
+  let l = all.filter(x => req.every(c => x.mods.includes(c)) && !ex.some(c => x.mods.includes(c)));
+  const loose = !l.length && all.length > 0; if (loose) l = all;   // no station matches the tags in the data: show them all
+  return stMemo[k] = l.map(x => Object.assign({ loose }, x)).sort((a, b) => b.q - a.q || a.n.localeCompare(b.n));
+};
+let stationRec = {}; try { stationRec = JSON.parse(localStorage.getItem('obs-stations-r') || '{}') || {}; } catch (e) { stationRec = {}; }
+let eqTmp = null;   // while comparing stations: { rid, id } = the station being priced
+const stationFor = r => { const l = stationsOf(r); if (!l.length) return null;
+  if (eqTmp && eqTmp.rid === r[0]) { const t = l.find(x => x.id === eqTmp.id); if (t) return t; }
+  return l.find(x => x.id === String(stationRec[r[0]])) || l.find(x => x.id === String(stationPick[r[2]])) || l[0]; };
+const eqOf = r => { const s = stationFor(r); return s ? s.q : 1; };
+const stInfo = x => `quality ${+x.q.toFixed(2)}${x.mods.length ? ' \u00b7 ' + x.mods.join(', ') : ''}`;
+const stationSelect = r => { const l = stationsOf(r); if (!l.length) return ''; const cur = stationFor(r).id;
+  if (l.length < 2) return `${esc(l[0].n)} <small class="muted">(${esc(stInfo(l[0]))})</small>`;
+  return `<select data-station="${r[0]}" aria-label="Workstation for ${esc(r[1])}" title="The workstation sets an equipment quality that multiplies the quality you craft at and changes the fail chance">${l.map(x => `<option value="${x.id}" ${x.id === cur ? 'selected' : ''}>${esc(x.n)} \u00b7 ${esc(stInfo(x))}</option>`).join('')}</select>`; };
+function setStation(rid, id) { stationRec[rid] = id; try { localStorage.setItem('obs-stations-r', JSON.stringify(stationRec)); } catch (e) {} clearRP(); if (V.sec === 'recipes' || V.sec === 'items') renderList(); renderDetail(); }
 const qualityOf = r => { const x = r[13] || [1, 1, 0]; if (x[2] > 0) return x[2]; if (!r[3] || r[3] === 'None') return 1; return Math.max(0.05, Math.min(2, lvlOf(r[3]) * 0.2 * x[0] * (1 - (r[5] || 0)) * eqOf(r) * x[1])); };
 // The chance a craft fails at your level (the game's formula): the recipe's fail chance drops 3 points per skill level above its minimum, times the recipe's skill factor; below the minimum it gets much worse.
 const failNow = r => {
@@ -209,7 +226,7 @@ const clearRP = () => { for (const k in RPmemo) delete RPmemo[k]; for (const k i
 const craftProfitOf = id => { if (id in CPmemo) return CPmemo[id]; let best = null; for (const rid of X.makes[id] || []) { const p = realProfit(rid), o = X.R[rid][8].find(x => x[0] === +id), n = Math.max(o ? o[1] : 1, 1), v = p.sellable ? p.profit / n : X.craftProfit0[id]; if (best == null || v > best) best = v; } return CPmemo[id] = best; };
 const recipeProfit = rid => { const p = realProfit(rid); return p.sellable ? p.profit : X.RC[rid].profit; };
 function realProfit(rid, qo, mode) {   // mode 'best' / 'worst': the best or worst shops for buying and selling (a profit range)
-  if (qo == null && !mode && RPmemo[rid]) return RPmemo[rid];
+  if (qo == null && !mode && !eqTmp && RPmemo[rid]) return RPmemo[rid];
   const W = mode === 'worst', bestBuyer = id => { const bl = buyersOf(id); return W ? bl[bl.length - 1] : bl[0]; };
   const r = X.R[rid], ing = r[7].map(x => Object.assign({ id: x[0], n: x[1], div: X.div(r, x[0]) }, buyCost(x[0], W)));
   const q = qo != null ? qo : qualityOf(r), outs = r[8].map(x => { const b = bestBuyer(x[0]), qv = hasQuality(x[0]) ? qualityValue(q) : 1; return { id: x[0], n: x[1], p: b ? Math.max(1, Math.round(b.p * qv * saleF(x[0]))) : 0, v: b ? b.v : null, q: qv !== 1 || hasQuality(x[0]) ? q : null }; });
@@ -218,7 +235,7 @@ function realProfit(rid, qo, mode) {   // mode 'best' / 'worst': the best or wor
   const costRM = ing.reduce((a, x) => a + (x.shop && isRm(x.v, true) ? x.p * x.n / x.div : 0), 0);
   const revRM = outs.reduce((a, x) => a + (x.v && isRm(x.v) ? x.p * x.n : 0), 0) * (1 - fail) + failOuts.reduce((a, x) => a + (x.v && isRm(x.v) ? x.p * x.n : 0), 0) * fail;
   const res = { costRM, revRM, q, fail, failOuts, ing, outs, cost, rev, profit, hour: r[6] > 0 ? profit * 3600 / r[6] : null, sellable: outs.some(o => o.v), estimated: ing.some(x => !x.shop) };
-  if (qo == null && !mode) RPmemo[rid] = res;
+  if (qo == null && !mode && !eqTmp) RPmemo[rid] = res;
   return res;
 }
 const profitTxt = n => { const sg = n >= 0 ? '+' : '-', a = Math.abs(n); return `${sg}${fmt(a)} OC / ${sg}${rmf(a)} RM`; };
@@ -647,13 +664,13 @@ function recipeCard(id) {
     <div class="flow"><div class="fl">${inp.map(chipOf).join('')}</div><span class="arrow" aria-hidden="true">→</span><div class="fl res">${out.map(x => chipOf(x, 'ok')).join('')}</div></div>
     ${fout.length ? `<div class="flow"><span class="failtag">On fail ${Math.round(fail * 100)}%</span><div class="fl">${fout.map(x => chipOf(x, 'bad')).join('')}</div></div>` : ''}
     ${out.some(x => fxLine(x[0])) ? `<ul class="items">${out.filter(x => fxLine(x[0])).map(x => `<li><span>${iname(x[0])}${fxLine(x[0])}</span></li>`).join('')}</ul>` : ''}
-    <h3>Details</h3><div class="facts"><span>Skill</span><span>${esc(skill)}${minS ? ' · min ' + minS : ''}</span><span>Fail chance</span><span>${Math.round(fail * 100)}%</span>
+    <h3>Details</h3><div class="facts"><span>Skill</span><span>${esc(skill)}${minS ? ' · min ' + minS : ''}</span><span>Fail chance</span><span>${Math.round(fail * 100)}% base, ${Math.round(failNow(r) * 100)}% for you${stationFor(r) ? ' at the ' + esc(stationFor(r).n) : ''}</span>
     <span>Time</span><span>${hrs(time)}</span><span>Recipe needed</span><span>${req ? 'yes, learn it first' : 'no'}</span><span>Value</span><span>${econText(id)}</span>
     ${cond.length ? `<span>Station must be</span><span>${cond.map(esc).join(', ')}</span>` : ''}${tags.length ? `<span>Learned from</span><span>${tags.map(esc).join(', ')}</span>` : ''}</div>`;
   h += tradeBlock(id);
   if (inp.length) { const sl = bestSceneFor(inp.map(x => x[0]));
     h += `<h3>Where to find the ingredients</h3>${sl ? mapBtn(sl, inp.map(x => iname(x[0])).join(' | '), 'Find the ingredients on the map') : '<p class="muted">None of them is in a placed container.</p>'}<p class="muted">Lights up every container, shop and workstation that has any of ${inp.length > 1 ? 'these ' + inp.length + ' ingredients' : 'this ingredient'}, starting in the place with the most.</p>`; }
-  h += `<h3>Where to make it</h3>`;
+  h += `<h3>Where to make it</h3>` + stationRows(id);
   h += st.length ? `<p>Workstations on the map: ${st.map(esc).join(', ')}</p>` : '';
   h += furn.length ? `<p>Furniture you can buy: ${furn.sort((a, b) => DB.furniture[a][0].localeCompare(DB.furniture[b][0])).map(fl).join(', ')}</p>` : '';
   if (!st.length && !furn.length) h += '<p class="muted">No workstation or furniture with this station type was found.</p>';
@@ -829,7 +846,7 @@ function listCard() {
   modCode = 'OBSLIST:' + JSON.stringify({ v: 1, recipes: rids.map(r => [X.R[r][1], L[r]]), steps: E.order.map(r => [X.R[r][1], up(E.steps[r]), E.outs[r]]), raw: Object.entries(E.raw).map(([id, n]) => [+id, up(n)]) });
   return `<div class="card"><h2>Shopping list</h2><div class="sub">${rids.length} recipe${rids.length > 1 ? 's' : ''} · ${o.mode !== 'off' || crafted ? 'raw materials' : 'ingredients'} ≈ ${fmt(o.mode !== 'off' || crafted ? rawCost : cost)} OC · worth ≈ ${fmt(worth)} OC</div>
     ${listBar()}<label class="shopopt">Ingredients <select data-shopmode aria-label="How far to break ingredients down"><option value="all" ${o.mode === 'all' ? 'selected' : ''}>Break down everything craftable</option><option value="missing" ${o.mode === 'missing' ? 'selected' : ''}>Only what can't be found or bought</option><option value="off" ${o.mode === 'off' ? 'selected' : ''}>Don't break down</option></select></label>
-    <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span class="rn">${rl(rid)}</span>${qtyCtl(rid, L[rid])}</div>`).join('')}
+    <h3>Recipes</h3>${rids.map(rid => `<div class="shoprow"><span class="rn">${rl(rid)}</span>${qtyCtl(rid, L[rid])}</div>${shopStation(rid)}`).join('')}
     ${crafted ? `<h3>Craft these first · ${crafted}</h3>${ul(E.order.map(rid => { const out = E.outs[rid], per = X.R[rid][8].find(x => x[0] === out)[1], b = up(E.steps[rid]);
       return `<span>${rl(rid)} <small class="muted">× ${b} → ${num(per * b)} ${esc(iname(out))}</small></span>${recPick(out, rid)}<button type="button" class="shopbtn mini" data-pref="${out}:buy" title="Find or buy it instead of crafting it">Find or buy instead</button>`; }))}` : ''}
     <h3>${o.mode !== 'off' || crafted ? 'Get these' : 'You will need'}</h3>${ul(byName(Object.entries(E.raw)).map(([id, n]) => { const w = whereIs(id), back = bestRecipe(+id) != null && !(DB.items[id] && DB.items[id][6].length);
@@ -842,6 +859,23 @@ function listCard() {
 function notesCard() {
   return `<div class="card"><h2>Data notes</h2><div class="sub">${DB.notes.length} findings</div>${ul(DB.notes.map(esc))}
     <p class="muted">Regenerated by <code>tools/build_db.py</code> after each game patch.</p></div>`;
+}
+// ---------- Stations of a recipe: what each one gives you (real success chance, profit, profit per hour) ----------
+const atStation = (rid, id) => { const r = X.R[rid]; eqTmp = { rid: r[0], id }; try { return { f: failNow(r), p: realProfit(rid) }; } finally { eqTmp = null; } };
+const succTxt = f => +(100 * (1 - f)).toFixed(1) + '% success';
+const sellersOfFurn = id => DB.vendors.filter(v => v.fs && v.fs.includes(+id)).map(v => v.n);
+function stationRows(rid) {
+  const r = X.R[rid], l = stationsOf(r); if (!l.length) return '';
+  const cur = stationFor(r).id, req = r[10] || [], ex = r[14] || [];
+  const rows = l.map(x => { const a = atStation(rid, x.id), sh = sellersOfFurn(x.id), f = DB.furniture[x.id];
+    const gain = a.p.sellable ? ` \u00b7 <b class="${a.p.profit >= 0 ? 'good' : 'bad'}">${profitTxt(a.p.profit)}</b>${a.p.hour != null ? ` \u00b7 ${profitTxt(a.p.hour)}/h` : ''}` : '';
+    return `<label class="stn"><input type="radio" name="st${rid}" data-station="${rid}" value="${x.id}" ${x.id === cur ? 'checked' : ''}> ${fl(+x.id)} <small class="muted">${esc(stInfo(x))}</small><br><small>${succTxt(a.f)}${gain}</small><br><small class="muted">${f && (f[2] || f[3]) ? price(f) + ' \u00b7 ' : ''}${sh.length ? 'sold by ' + esc(sh.slice(0, 2).join(', ')) : 'not sold in shops'}</small></label>`; });
+  return `<p class="muted">Station type ${esc(r[2])}${req.length ? '; needs the modifier ' + req.map(esc).join(', ') : ''}${ex.length ? '; not ' + ex.map(esc).join(', ') : ''}. ${l[0].loose ? 'No station in the data has these modifiers, so every station of the type is listed. ' : ''}Pick the one you use: the success chance and profit follow it.</p>${rows.join('')}`;
+}
+function shopStation(rid) {
+  const r = X.R[rid], l = stationsOf(r); if (!l.length) return '';
+  const a = atStation(rid, stationFor(r).id);
+  return `<div class="shopst muted">${stationSelect(r)} \u00b7 ${succTxt(a.f)}${a.p.sellable ? ` \u00b7 ${profitTxt(a.p.profit)}${a.p.hour != null ? ` \u00b7 ${profitTxt(a.p.hour)}/h` : ''}` : ''}</div>`;
 }
 // ---------- What to craft: the best recipes for the skills you have ----------
 let bestSk = '', bestEst = false;
@@ -862,7 +896,7 @@ function bestCard() {
     if (p.sellable && p.hour != null && p.hour > 0 && r[6] >= 60 && (bestEst || !p.estimated)) locked.push({ r, p, have, gain: p.hour - (bestNow[sk] ?? 0) }); }
   skillLv = saved; clearRP();
   const unlock = locked.filter(x => x.gain > 0).sort((a, b) => b.p.hour - a.p.hour).slice(0, 8);
-  const row = (x, hr) => { const r = x.r, p = x.p, fl = Math.round(failNow(r) * 100); return `<span>${rIco(r[0])}${link('recipes', r[0], r[1])}${p.estimated ? ' <small class="muted" title="An ingredient is not sold in any shop; its base value is used">~</small>' : ''}<br><small class="muted">${esc(r[2])}${r[3] && r[3] !== 'None' ? ' · ' + esc(r[3]) + (r[4] ? ' lv ' + r[4] : '') : ''} · ${tmTxt(r[6])} · ${fl}% fail</small></span><span><b class="good">${hr ? profitTxt(p.hour) + '/h' : profitTxt(p.profit)}</b><br><small class="muted">${hr ? profitTxt(p.profit) + ' per craft' : (p.hour != null ? profitTxt(p.hour) + '/h' : '')}</small></span>`; };
+  const row = (x, hr) => { const r = x.r, p = x.p, fl = Math.round(failNow(r) * 100); return `<span>${rIco(r[0])}${link('recipes', r[0], r[1])}${p.estimated ? ' <small class="muted" title="An ingredient is not sold in any shop; its base value is used">~</small>' : ''}<br><small class="muted">${esc((stationFor(r) || { n: r[2] }).n)}${r[3] && r[3] !== 'None' ? ' · ' + esc(r[3]) + (r[4] ? ' lv ' + r[4] : '') : ''} · ${tmTxt(r[6])} · ${100 - fl}% success</small></span><span><b class="good">${hr ? profitTxt(p.hour) + '/h' : profitTxt(p.profit)}</b><br><small class="muted">${hr ? profitTxt(p.profit) + ' per craft' : (p.hour != null ? profitTxt(p.hour) + '/h' : '')}</small></span>`; };
   const list = (arr, hr) => arr.length ? `<div class="facts">${arr.map(x => row(x, hr)).join('')}</div>` : '<p class="muted">Nothing profitable at your levels' + (bestSk ? ' for this skill' : '') + '. Raise a skill on the Your skills page, or load a save there.</p>';
   const lockRows = unlock.length ? `<div class="facts">${unlock.map(x => `<span>${rIco(x.r[0])}${link('recipes', x.r[0], x.r[1])}<br><small class="muted">needs ${esc(x.r[3])} ${x.r[4]} (you have ${x.have}) · ${tmTxt(x.r[6])} · ${esc(x.r[2])}</small></span><span><b class="good">${profitTxt(x.p.hour)}/h</b><br><small class="muted">${bestNow[x.r[3]] != null ? '+' + fmt(x.gain) + ' OC/h over your best ' + esc(x.r[3]) + ' recipe' : 'you have no profitable ' + esc(x.r[3]) + ' recipe yet'}</small></span>`).join('')}</div>` : '<p class="muted">Nothing within three levels beats what you can already make.</p>';
   return `<div class="card"><h2>What to craft</h2><div class="sub">Using your skill levels (a skill left alone counts as level 5) and real shop prices</div>

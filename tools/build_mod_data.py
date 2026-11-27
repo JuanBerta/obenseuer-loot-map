@@ -32,7 +32,7 @@ for r in json.loads(txt)['Recipes']:
         kv=lambda l:[[x['Key']['ID'],x['Value']] for x in l or []]
         tk=str(r['ID'])
         while tk in trade: tk=str(int(tk)+1000000)   # the game reuses an ID for two recipes
-        trade[tk]=[r.get('Name') or '', r.get('Type') or '', r.get('ProcessTime',0), r.get('FailChance',0), kv(r.get('input')), kv(r.get('output')), r.get('RelevantSkill') or 'None', r.get('SkillFactor',1), (r.get('metaSettings') or {}).get('qualityFactor',1), (r.get('metaSettings') or {}).get('fixedQuality',0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0, 1 if (r.get('metaSettings') or {}).get('useAmmoAsInput') else 0, r.get('MinimumSkill',0), kv(r.get('outputFail'))]
+        trade[tk]=[r.get('Name') or '', r.get('Type') or '', r.get('ProcessTime',0), r.get('FailChance',0), kv(r.get('input')), kv(r.get('output')), r.get('RelevantSkill') or 'None', r.get('SkillFactor',1), (r.get('metaSettings') or {}).get('qualityFactor',1), (r.get('metaSettings') or {}).get('fixedQuality',0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0, 1 if (r.get('metaSettings') or {}).get('useAmmoAsInput') else 0, r.get('MinimumSkill',0), kv(r.get('outputFail')), r.get('RequiredConditions') or [], [c for c in (r.get('ExcludingConditions') or []) if c!='None']]
     if r.get('RelevantSkill') and r['RelevantSkill']!='None': skill_count[r['Type']][r['RelevantSkill']]+=1
 # growing / breeding recipes make a live plant or animal item worth nothing: swap it for what it yields when harvested (average amount; tools/extract_grow.py)
 GROW={int(k):v for k,v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'grow_yield.json'))).items()}
@@ -192,6 +192,20 @@ for it in json.load(open(os.path.join(SA,'Items.json'),encoding='utf-8-sig')):
         if isinstance(m,dict) and str(m.get('$type','')).endswith('ItemLiquidData') and m.get('liquidMaxAmount',0)>=1:
             containers.append([it['ID'],m['liquidMaxAmount'],m.get('liquidValueFactor',1),it.get('BaseValue',0)]); need.add(it['ID'])
 for _k in fa['furniture']: fid(_k)   # also the pieces no shop sells (hydroponic farms, growing racks, decorations): the website lists every piece
+# station modifiers (Normal, Crude, Special...): a recipe is only offered at a station that has every modifier it requires and none it excludes. furniture[8] = the station's modifiers
+_fa={}
+try:
+    for _v in json.load(open(os.path.join(ext_dir,'furniture_assets.json'))).get('furniture',{}).values():
+        _t=(_v.get('title') or '').strip()
+        if _t and _t not in _fa: _fa[_t]=_v
+except Exception as e: print('furniture modifiers skipped',e)
+for _f in furniture.values():
+    _v=_fa.get(_f[0])
+    if not _v or not _v.get('mods') or not _f[4]: continue
+    while len(_f)<6: _f.append([])
+    if len(_f)<7: _f.append('')
+    if len(_f)<8: _f.append([])
+    _f[:]=_f[:8]+[_v['mods']]
 data=dict(version=7,containers=containers,furniture=furniture,typeSkills=type_skills,recipeInputs=recipe_inputs,trade=trade,scenes=S,loot={k:v for k,v in loot.items() if k in used},
           items={str(k):v for k,v in items.items()},recipes=recipes)
 os.makedirs(os.path.dirname(os.path.abspath(out)),exist_ok=True)

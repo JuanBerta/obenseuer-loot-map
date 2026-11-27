@@ -507,3 +507,7 @@ table.tbl.up td,table.tbl.up th{text-align:left}table.tbl.up tr.grp th{backgroun
 .done{opacity:.55;text-decoration:line-through}
 .shopopt .dbmore{margin:0}
 @media print{header.top,#dbSide,#side,#detail,footer,.dbback,.shopopt,.qty,.shopbtn,.dbmore,button,select,.tg,.cookie{display:none!important}#db,#dbDetail{display:block!important;width:auto!important;max-width:none!important;position:static!important}body{background:#fff!important;color:#000!important}.card{box-shadow:none!important;border:0!important}a{color:#000!important;text-decoration:none!important}}
+.shopst{margin:-4px 0 12px;font-size:.85rem}
+.shopst select{max-width:100%}
+.stn{display:block;margin:8px 0;cursor:pointer}
+.stn input{margin-right:6px}
