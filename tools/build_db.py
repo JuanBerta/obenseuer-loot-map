@@ -67,6 +67,7 @@ for r in read_json('Recipes.json')['Recipes']:
            [r.get('SkillFactor', 1), (r.get('metaSettings') or {}).get('qualityFactor', 1), (r.get('metaSettings') or {}).get('fixedQuality', 0) if (r.get('metaSettings') or {}).get('useFixedQuality') else 0,
             1 if (r.get('metaSettings') or {}).get('useAmmoAsInput') else 0]]   # [13]: skill factor, quality factor, fixed output quality (0 = none), 1 = ammo-type inputs spend one use per unit
     rec.append([c for c in (r.get('ExcludingConditions') or []) if c != 'None'])   # [14]: modifiers the station must not have
+    rec.append(r.get('SkillGainFactor', 1))   # [15]: how fast the recipe trains its skill
     for x in rec[7] + rec[8] + rec[9]:
         if x[0] not in items: notes.append(f'Recipe #{rec[0]} “{rec[1]}” uses unknown item ID {x[0]}')
     recipes.append(rec)

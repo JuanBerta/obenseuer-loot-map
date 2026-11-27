@@ -138,3 +138,7 @@ quest or event) are shown with "hidden until an event".
 Unofficial fan project, not affiliated with or endorsed by Loiste Interactive. Obenseuer and
 its game data belong to Loiste Interactive. The code in this repository is released under the
 MIT License (see `LICENSE`); the extracted data in `data/` is derived from the game.
+
+## After a game update: the Patch changes page
+
+Before rebuilding the data, keep the old copy (`copy data\db.js data\db_prev.js` and `copy data\meta.json data\meta_prev.json`). After the rebuild run `python tools/build_changes.py data/db_prev.js data/db.js data/changes.json`. The site's Patch changes page then lists what was added, removed or changed.

@@ -224,6 +224,25 @@ namespace ObenseuerLootMap
             if (l.raw.Count == 0 && l.recipes.Count == 0) throw new Exception("empty list");
             return l;
         }
+        // Copies what you carry as OBS-INV1:id=count,... for the website's "What can I craft now" page.
+        void CopyInventory()
+        {
+            try
+            {
+                if (Inventory.instance == null) { shopListMsg = "Open this with the game running and your inventory loaded."; return; }
+                var sb = new System.Text.StringBuilder("OBS-INV1:"); int n = 0;
+                foreach (var k in Db.items.Keys)
+                {
+                    if (!int.TryParse(k, out int id)) continue;
+                    int c = 0; try { c = Mathf.FloorToInt((float)Inventory.instance.CountItemsDialogue(id, false, true, -1.0, Db.IsLiquid(id))); } catch { }
+                    if (c <= 0) continue;
+                    if (n++ > 0) sb.Append(','); sb.Append(id).Append('=').Append(c);
+                }
+                GUIUtility.systemCopyBuffer = sb.ToString();
+                shopListMsg = n + " kinds of item copied. Paste them on the website's What can I craft now page.";
+            }
+            catch (Exception e) { shopListMsg = "Could not copy the inventory: " + e.Message; }
+        }
         void PasteShopList()
         {
             try
@@ -366,6 +385,7 @@ namespace ObenseuerLootMap
                 cfgShopHud.Value = GUILayout.Toggle(cfgShopHud.Value, " " + Loc.T("Show the list on screen"));
             }
             if (GUILayout.Button(shopList == null ? Loc.T("Paste list from the website") : Loc.T("Paste a new list"), btnStyle)) PasteShopList();
+            if (GUILayout.Button("Copy inventory for the website", btnStyle)) CopyInventory();
             if (shopListMsg != null) GUILayout.Label(shopListMsg, smallStyle);
         }
 

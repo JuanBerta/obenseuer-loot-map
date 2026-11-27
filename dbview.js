@@ -8,7 +8,7 @@ const IDX = window.OBS_INDEX;
 const SCN = Object.fromEntries(IDX.scenes.map(s => [s.slug, s]));
 const SECTIONS = [
   ['items', 'Items'], ['recipes', 'Recipes'], ['vendors', 'Vendors'], ['tenement', 'Tenement'], ['upgrades', 'Upgrades'],
-  ['tenants', 'Tenants'], ['furniture', 'Furniture'], ['best', 'What to craft'], ['skills', 'Your skills'], ['list', 'Shopping list'], ['notes', 'Data notes'],
+  ['tenants', 'Tenants'], ['furniture', 'Furniture'], ['best', 'What to craft'], ['now', 'What can I craft now'], ['level', 'Levelling guide'], ['tcalc', 'Tenement cost'], ['loot', 'Loot ranking'], ['power', 'Power planner'], ['diff', 'Patch changes'], ['skills', 'Your skills'], ['list', 'Shopping list'], ['notes', 'Data notes'],
 ];
 let DB = null, X = null;                       // raw data, derived indexes
 const V = { sec: 'items', key: null, q: '', f: '', e: '', e2: '', min: '', w: '', sk: '', lv: '', view: 'list', col: '', dir: 1, sort: 'name', lim: 300, init: false };
@@ -542,7 +542,14 @@ const sort = `<select id="dbSort" aria-label="Sort"><option value="name">A–Z</
   if (V.sec === 'vendors') return `<select id="dbF" aria-label="Filter vendors"><option value="">All vendors</option>${[['items', 'Sell items'], ['buys', 'Buy from you'], ['furniture', 'Furniture'], ['vending', 'Vending machines']].map(([k, t]) => `<option value="${k}" ${V.f === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
   return '';
 }
+const BARE = new Set(['notes', 'list', 'skills', 'best', 'now', 'level', 'tcalc', 'loot', 'power', 'diff']);
 const INTRO = {
+  now: 'Paste your inventory from the mod and see which recipes you can make right now, and which are one ingredient away.',
+  level: 'The fastest and cheapest recipes to raise each crafting skill.',
+  tcalc: 'Pick the tenement upgrades you want and see the money, materials and build time they cost.',
+  loot: 'Which places hold the most loot, and what a place holds.',
+  power: 'Add the machines you plan to run and see their electricity draw and how many generators you need.',
+  diff: 'What changed in the last game update: items, recipes, furniture and shops.',
   best: 'What to craft for money with the skills you have: the best recipes by profit and by profit per hour at real shop prices, and which skill levels would unlock better ones.',
   skills: 'Your level in each crafting skill, so recipes can show the quality (and the price) of what you would make.',
   items: 'Every item in the game. ◆ can be found in containers or shops · ⚒ can be crafted. Use “Any effect” to find food, drink and medicine by what they do to depression, nutrition, thirst and more.',
@@ -558,7 +565,7 @@ const INTRO = {
 function renderSide() {
   const el = $('#dbSide');
   const head = `<div class="dbnav">${SECTIONS.map(([k, t]) => `<a href="#/db/${k}" class="${V.sec === k ? 'on' : ''}">${secIcon(k)}${t}${k === 'notes' ? ` <b>${DB.notes.length}</b>` : k === 'list' ? ` <b id="shopN">${shopCount()}</b>` : ''}</a>`).join('')}</div>`;
-  if (V.sec === 'notes' || V.sec === 'list' || V.sec === 'skills' || V.sec === 'best') { el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p>`; return; }
+  if (BARE.has(V.sec)) { el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p>`; return; }
   el.innerHTML = head + `<p class="dbintro">${INTRO[V.sec]}</p><div class="dbbar multi"><input id="dbQ" type="search" placeholder="Search ${esc(SECTIONS.find(s => s[0] === V.sec)[1].toLowerCase())}…" value="${esc(V.q)}" autocomplete="off">${filters()}</div><div id="dbList"></div>`;
   const q = $('#dbQ'); q.oninput = () => { V.q = q.value; V.lim = 300; renderList(); };
   const f = $('#dbF'); if (f) f.onchange = () => { V.f = f.value; V.lim = 300; renderList(); };
@@ -938,13 +945,14 @@ function recentAdd(sec, key) {
 function recentRows() { const l = recentList(); return l.length ? `<div class="recent"><b>Recently viewed</b> ${l.map(x => link(x.s, x.k, x.n)).join(' \u00b7 ')}</div>` : ''; }
 const missing = () => `<div class="card"><h2>Not found</h2><p class="muted">This entry isn't in the current data.</p></div>`;
 function renderDetail() {
-  const el = $('#dbDetail'), k = V.key, bare = V.sec === 'notes' || V.sec === 'list' || V.sec === 'skills' || V.sec === 'best', tbl = tableOn();
+  const el = $('#dbDetail'), k = V.key, bare = BARE.has(V.sec), tbl = tableOn();
   const back = `<a class="dbback${tbl && V.sec === 'items' ? ' show' : ''}" href="#/db/${bare ? 'items' : V.sec}">${tbl && V.sec === 'items' ? '← Back to the table' : '← Back to the list'}</a>`;
   const home = { upgrades: 'categories', items: 'items', recipes: 'recipes', vendors: 'vendors', tenants: 'tenants', furniture: 'pieces of furniture' };
   if (V.sec === 'notes') el.innerHTML = notesCard();
   else if (V.sec === 'list') el.innerHTML = listCard();
   else if (V.sec === 'skills') el.innerHTML = skillsCard();
   else if (V.sec === 'best') el.innerHTML = bestCard();
+  else if (EXTRA[V.sec]) el.innerHTML = EXTRA[V.sec]();
   else if (k == null && tbl) el.innerHTML = tableCard();
   else if (k == null) el.innerHTML = V.sec === 'tenement' ? tenementHome() : V.sec === 'upgrades' ? upgradesHome() : V.sec === 'vendors' ? vendorsHome() : `<div class="card"><h2>${esc(SECTIONS.find(s => s[0] === V.sec)[1])}</h2><p class="muted">${rows().length} ${home[V.sec]}. Pick one on the left.</p></div>`;
   else el.innerHTML = { upgrades: upgradeCard, items: itemCard, tenement: itemCard, recipes: recipeCard, vendors: vendorCard, tenants: tenantCard, furniture: furnCard }[V.sec](k);
@@ -954,6 +962,180 @@ function renderDetail() {
   const more = $('#tblMore'); if (more) more.onclick = () => { V.lim += 600; renderDetail(); };
   el.scrollTop = 0;
 }
+
+// ---------- more tools: what can I craft now, levelling guide, tenement cost, loot ranking, power planner, patch changes ----------
+const EXTRA = {};
+const lsGet = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (_) { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
+const skillNames = () => [...new Set(DB.recipes.map(r => r[3]).filter(x => x && x !== 'None'))].sort();
+
+// --- What can I craft now: your inventory, pasted from the mod's "Copy inventory for the website" button ---
+let invData = lsGet('obs-inv', null), invMsg = '', invOnlyMine = true;
+function parseInv(text) {
+  const m = /OBS-INV1:([0-9=,.\-]*)/.exec(text || ''); if (!m) return null;
+  const items = {}; m[1].split(',').forEach(p => { const [a, b] = p.split('='); if (a && +b > 0) items[+a] = +b; });
+  return { at: new Date().toLocaleString(), items };
+}
+const invHave = (id, inv) => { const g = DB.items[id] && DB.items[id][6]; let n = inv[id] || 0; if (g && g.length) g.forEach(m => { n += inv[m] || 0; }); return n; };
+EXTRA.now = function () {
+  const head = `<div class="card"><h2>What can I craft now</h2><div class="sub">Recipes you can make with what you carry</div>
+    <p>In the game, open the Loot Map window and press <b>Copy inventory for the website</b>, then paste it here. It stays in this browser and is never uploaded.</p>
+    <textarea id="invText" rows="3" style="width:100%" placeholder="Paste the inventory here (it starts with OBS-INV1:)"></textarea>
+    <p><button type="button" class="dbmore" data-invload>Load inventory</button> ${invData ? `<button type="button" class="dbmore" data-invclear>Forget it</button>` : ''} ${invMsg ? `<span class="good">${esc(invMsg)}</span>` : ''}</p>`;
+  if (!invData) return head + '<p class="muted">No inventory loaded yet.</p></div>';
+  const inv = invData.items, rows = [], near = [];
+  for (const r of DB.recipes) {
+    if (!r[7].length || !r[8].length) continue;
+    if (invOnlyMine && r[3] && r[3] !== 'None' && (r[4] || 0) > lvlOf(r[3])) continue;
+    let n = Infinity, miss = [];
+    for (const [id, a] of r[7]) { const need = Math.max(a / X.div(r, id), 0.0001), have = invHave(id, inv); const k = Math.floor(have / need + 1e-9); if (k < 1) miss.push([id, Math.max(0, need - have)]); n = Math.min(n, k); }
+    if (!miss.length) rows.push({ r, n }); else if (miss.length === 1) near.push({ r, miss: miss[0] });
+  }
+  const pf = x => { const p = realProfit(x.r[0]); return p.sellable ? p.profit : X.RC[x.r[0]].profit; };
+  rows.forEach(x => { x.p = pf(x); }); rows.sort((a, b) => b.p - a.p);
+  near.forEach(x => { x.p = pf(x); }); near.sort((a, b) => b.p - a.p);
+  const have = Object.keys(inv).length;
+  return head + `<p class="muted">Loaded ${esc(invData.at)} - ${have} kinds of item. <label><input type="checkbox" id="invMine" ${invOnlyMine ? 'checked' : ''}> Only recipes at my skill levels</label></p>
+    <h3>You can make now - ${rows.length}</h3>${rows.length ? `<div class="facts">${rows.slice(0, 60).map(x => `<span>${rIco(x.r[0])}${link('recipes', x.r[0], x.r[1])}<br><small class="muted">up to ${x.n >= 1e6 ? 'any number' : x.n} craft${x.n === 1 ? '' : 's'} - ${esc(x.r[2])}</small></span><span class="${x.p > 0 ? 'good' : 'bad'}">${x.p >= 0 ? '+' : ''}${fmt(x.p)} OC<br><small class="muted">per craft</small></span>`).join('')}</div>${rows.length > 60 ? `<p class="muted">Showing the 60 with the best profit.</p>` : ''}` : '<p class="muted">Nothing yet.</p>'}
+    <h3>One ingredient short - ${near.length}</h3>${near.length ? `<div class="facts">${near.slice(0, 40).map(x => `<span>${rIco(x.r[0])}${link('recipes', x.r[0], x.r[1])}</span><span><small class="muted">needs ${num(x.miss[1])} more</small> ${il(x.miss[0])}</span>`).join('')}</div>` : '<p class="muted">None.</p>'}</div>`;
+};
+
+// --- Skill levelling guide ---
+let lvSk = lsGet('obs-lvsk', '');
+// Levels gained by one craft (the game: the station adds 0.1 x gain x fail, the craft roll adds time/1800 x gain x 0.1 on success or 0.05 on failure, all times the fail chance, at least 1%).
+const gainPerCraft = r => {
+  const f = failNow(r), sg = (r[15] == null ? 1 : r[15]), v = Math.max(0.05, Math.min(5, (r[6] || 0) / 1800));
+  return sg * Math.max(f, 0.01) * (0.1 + v * ((1 - f) * 0.1 + f * 0.05));
+};
+EXTRA.level = function () {
+  const names = skillNames(); if (!lvSk || !names.includes(lvSk)) lvSk = names[0];
+  const L = lvlOf(lvSk);
+  const head = `<div class="card"><h2>Skill levelling guide</h2><div class="sub">The fastest and cheapest ways to raise a crafting skill</div>
+    <p><select id="lvSk" aria-label="Skill">${names.map(n => `<option ${n === lvSk ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select> You are level <b>${L}</b> (<a href="#/db/skills">change</a>). The game caps skills at 10.</p>`;
+  if (L >= 10) return head + '<p class="good">This skill is at the maximum.</p></div>';
+  const rows = [];
+  for (const r of DB.recipes) {
+    if (r[3] !== lvSk || !r[8].length || (r[4] || 0) > L || (r[5] || 0) >= 1) continue;
+    const f = failNow(r); if (f >= 0.98) continue;
+    const g = gainPerCraft(r), crafts = 1 / g, p = realProfit(r[0]), prof = p.sellable ? p.profit : X.RC[r[0]].profit;
+    rows.push({ r, f, g, crafts, secs: crafts * (r[6] || 0), net: crafts * prof, prof });
+  }
+  const row = (x, k) => `<span>${rIco(x.r[0])}${link('recipes', x.r[0], x.r[1])}${x.r[12] ? ' <small class="muted" title="You need to have learned this recipe from a book">book</small>' : ''}<br><small class="muted">${Math.round(x.f * 100)}% fail - ${x.crafts < 10 ? fmt(x.crafts) : Math.round(x.crafts)} crafts per level - ${esc(x.r[2])}</small></span><span>${k === 'time' ? tmTxt(x.secs) : (x.net >= 0 ? '+' : '') + fmt(x.net) + ' OC'}<br><small class="muted">${k === 'time' ? (x.net >= 0 ? '+' : '') + fmt(x.net) + ' OC' : tmTxt(x.secs)} per level</small></span>`;
+  const fast = [...rows].filter(x => x.secs > 0).sort((a, b) => a.secs - b.secs).slice(0, 10);
+  const cheap = [...rows].sort((a, b) => b.net - a.net).slice(0, 10);
+  return head + `<p class="muted">Each craft trains the skill by an amount that grows with the recipe's fail chance and its craft time, so recipes near your minimum level train fastest and recipes that never fail train almost nothing. Counted for ${rows.length} recipes you can make at level ${L}. The game does not show the exact gain of a station upgrade, which is not counted.</p>
+    <h3>Fastest to the next level</h3>${fast.length ? `<div class="facts">${fast.map(x => row(x, 'time')).join('')}</div>` : '<p class="muted">No recipes.</p>'}
+    <h3>Cheapest (or most profitable) to the next level</h3>${cheap.length ? `<div class="facts">${cheap.map(x => row(x, 'net')).join('')}</div>` : '<p class="muted">No recipes.</p>'}</div>`;
+};
+
+// --- Tenement cost calculator ---
+let tcSel = lsGet('obs-tc', {});
+EXTRA.tcalc = function () {
+  const cats = TU.cats.map((c, i) => ({ c, i, t: upBy(i).filter(u => u[1] > 0) })).filter(x => x.t.length);
+  let oc = 0, rm = 0, hrsT = 0; const mat = {}, rowsH = [];
+  for (const { c, i, t } of cats) {
+    const [a, b] = tcSel[i] || [0, 0]; const take = t.filter(u => u[1] > a && u[1] <= b);
+    const o = take.reduce((s, u) => s + u[4], 0), r = take.reduce((s, u) => s + u[5], 0), h = take.reduce((s, u) => s + (u[3] || 0), 0);
+    oc += o; rm += r; hrsT += h; take.forEach(u => u[6].forEach(x => { mat[x[0]] = (mat[x[0]] || 0) + x[1]; }));
+    const opt = (v, from) => t.map(u => `<option value="${u[1]}" ${u[1] === v ? 'selected' : ''}>${esc(u[2])} (${u[1]})</option>`).join('');
+    rowsH.push(`<tr><td>${link('upgrades', i, c[1])}${c[2] ? ' <small class="muted">raises rent</small>' : ''}</td>
+      <td><select data-tc="${i}" data-w="0" aria-label="Current tier of ${esc(c[1])}"><option value="0" ${!a ? 'selected' : ''}>none</option>${opt(a)}</select></td>
+      <td><select data-tc="${i}" data-w="1" aria-label="Target tier of ${esc(c[1])}"><option value="0" ${!b ? 'selected' : ''}>no change</option>${opt(b)}</select></td>
+      <td>${o ? coinBox(o, 'OC') : ''} ${r ? coinBox(r, 'RM') : ''}${take.length ? `<br><small class="muted">${take.length} tier${take.length > 1 ? 's' : ''}, ${bhrs(h)}</small>` : ''}</td></tr>`);
+  }
+  let matOC = 0, noShop = 0;
+  const matRows = Object.entries(mat).sort((a, b) => iname(a[0]).localeCompare(iname(b[0]))).map(([id, n]) => { const s = sellersOf(+id)[0]; if (s) matOC += s.p * n; else noShop++; return `<span>${il(+id)}</span><span>x ${num(n)}${s ? ` <small class="muted">${fmt(s.p * n)} OC at ${esc(s.v.n)}</small>` : ' <small class="muted">no shop sells it</small>'}</span>`; });
+  return `<div class="card wide"><h2>Tenement cost calculator</h2><div class="sub">What it costs to take each category from one tier to another</div>
+    <p class="muted">Pick the tier you have now and the tier you want. Costs are the game's, per tier, and materials are priced at the cheapest shop that sells them.</p>
+    <div class="tblwrap"><table class="tbl up"><thead><tr><th>Category</th><th>You have</th><th>You want</th><th>Cost</th></tr></thead><tbody>${rowsH.join('')}</tbody></table></div>
+    <h3>Total</h3><dl class="kv"><dt>Money</dt><dd>${coinBox(oc, 'OC')} ${coinBox(rm, 'RM')}</dd><dt>Build time</dt><dd>${bhrs(Math.round(hrsT)) } <small class="muted">if built one after another</small></dd>
+    <dt>Materials</dt><dd>${Object.keys(mat).length} kinds, about ${fmt(matOC)} OC to buy${noShop ? ` <small class="muted">(${noShop} not sold in shops)</small>` : ''}</dd><dt>All together</dt><dd>${coinBox(oc + matOC, 'OC')} ${rm ? coinBox(rm, 'RM') : ''}</dd></dl>
+    ${matRows.length ? `<h3>Materials</h3><div class="facts">${matRows.join('')}</div>` : ''}
+    <p><button type="button" class="dbmore" data-tcreset>Reset</button></p></div>`;
+};
+
+// --- Loot ranking: which places hold the most, from how many placed containers can drop each item ---
+let lootSc = lsGet('obs-lootsc', ''), lootBy = 'count';
+const lootTables = () => {
+  if (X.sceneTables) return X.sceneTables;
+  const m = {}; for (const [n, sc] of Object.entries(X.tableScenes)) for (const [slug, k] of sc) (m[slug] = m[slug] || []).push([n, k]);
+  return X.sceneTables = m;
+};
+const tableAvg = n => { const t = DB.loot[n]; if (!t) return 0; const ids = (t[1] || []).concat(t[2] || []).filter(i => DB.items[i]); return ids.length ? ids.reduce((s, i) => s + DB.items[i][1], 0) / ids.length : 0; };
+EXTRA.loot = function () {
+  const T = lootTables(), scenes = Object.keys(T).map(slug => { const l = T[slug]; const cnt = l.reduce((s, [, k]) => s + k, 0), val = l.reduce((s, [n, k]) => s + k * tableAvg(n), 0); return { slug, cnt, val, per: cnt ? val / cnt : 0 }; }).filter(x => x.cnt >= 3);
+  const top = [...scenes].sort((a, b) => b.val - a.val).slice(0, 15);
+  const head = `<div class="card wide"><h2>Loot ranking</h2><div class="sub">Where the most and the best loot is</div>
+    <p class="muted">Counts come from the containers placed in each scene. A scene's loot value adds up, for every container, the average base value of the items its loot table can drop. It is a guide, not a drop chance: the game's per-item weights are not in the data.</p>
+    <h3>Richest places</h3><div class="facts">${top.map(x => `<span>${mapBtn(x.slug, '', sceneName(x.slug))}</span><span>${num(x.cnt)} containers<br><small class="muted">about ${fmt(x.per)} OC each, ${num(Math.round(x.val))} OC in all</small></span>`).join('')}</div>`;
+  const opts = scenes.sort((a, b) => sceneName(a.slug).localeCompare(sceneName(b.slug)));
+  let body = '';
+  if (lootSc && T[lootSc]) {
+    const per = {}; for (const [n, k] of T[lootSc]) { const t = DB.loot[n]; if (!t) continue; for (const [i, rare] of (t[1] || []).map(i => [i, 0]).concat((t[2] || []).map(i => [i, 1]))) { if (!DB.items[i]) continue; const o = per[i] = per[i] || { c: 0, r: 0 }; o.c += k; if (rare) o.r += k; } }
+    const list = Object.entries(per).map(([i, o]) => ({ i, c: o.c, v: DB.items[i][1], rare: o.r === o.c })).sort((a, b) => lootBy === 'value' ? b.v - a.v || b.c - a.c : b.c - a.c || b.v - a.v).slice(0, 40);
+    body = `<h3>Items in ${esc(sceneName(lootSc))}</h3><p class="muted">Sorted by <select id="lootBy"><option value="count" ${lootBy === 'count' ? 'selected' : ''}>how many containers can hold it</option><option value="value" ${lootBy === 'value' ? 'selected' : ''}>its value</option></select></p>
+      <div class="facts">${list.map(x => `<span>${il(+x.i)}${x.rare ? ' <small class="muted">rare</small>' : ''}</span><span>${x.c} container${x.c > 1 ? 's' : ''}<br><small class="muted">${fmt(x.v)} OC each</small></span>`).join('')}</div>${mapBtn(lootSc, '', 'Open this place on the map')}`;
+  }
+  return head + `<h3>Look inside a place</h3><p><select id="lootSc" aria-label="Place"><option value="">Choose a place...</option>${opts.map(x => `<option value="${esc(x.slug)}" ${x.slug === lootSc ? 'selected' : ''}>${esc(sceneName(x.slug))} (${x.cnt})</option>`).join('')}</select></p>${body}</div>`;
+};
+
+// --- Power planner ---
+let pwRows = lsGet('obs-power', []);
+const wTxt = n => n >= 1000 ? +(n / 1000).toFixed(2) + ' kW' : Math.round(n) + ' W';
+const powerOf = f => (f[5] || []).filter(e => e[1] > 0 && e[6] <= 0 && !(e[1] === 30 && e[2] < 0));   // exactly 30 W with no idle value is the game's default, not a real figure
+EXTRA.power = function () {
+  const users = Object.entries(DB.furniture).filter(([, f]) => powerOf(f).length).sort((a, b) => a[1][0].localeCompare(b[1][0]));
+  const gens = Object.entries(DB.furniture).filter(([, f]) => (f[5] || []).some(e => e[6] > 0)).sort((a, b) => a[1][0].localeCompare(b[1][0]));
+  let use = 0, idle = 0, kwh = 0; const rows = pwRows.filter(p => DB.furniture[p.id]).map((p, i) => {
+    const f = DB.furniture[p.id], e = powerOf(f).filter(x => x[0] === 0)[0] || powerOf(f)[0], u = e[1] * p.q, id_ = (e[2] >= 0 ? e[2] : 0) * p.q;
+    use += u; idle += id_; kwh += (u * p.h + id_ * (24 - p.h)) / 1000;
+    return `<tr><td>${link('furniture', p.id, f[0])}<br><small class="muted">${e[0] === 0 ? 'electric' : 'power'} ${wTxt(e[1])}${e[2] >= 0 ? ', ' + wTxt(e[2]) + ' idle' : ''}</small></td>
+      <td><input type="number" min="1" max="99" value="${p.q}" data-pwq="${i}" style="width:4.5em" aria-label="How many"></td>
+      <td><input type="number" min="0" max="24" step="0.5" value="${p.h}" data-pwh="${i}" style="width:4.5em" aria-label="Hours running per day"></td>
+      <td>${wTxt(u)}</td><td><button type="button" class="dbmore" data-pwdel="${i}" aria-label="Remove">x</button></td></tr>`;
+  });
+  const gl = gens.map(([id, f]) => { const g = f[5].filter(e => e[6] > 0).reduce((s, e) => s + e[6], 0), e = f[5].find(x => x[6] > 0); return { id, f, g, e }; }).filter(x => x.g > 0);
+  const need = use;
+  const genRows = gl.map(x => `<span>${link('furniture', x.id, x.f[0])}<br><small class="muted">${KINDS[x.e[0]] || ''} - makes ${wTxt(x.g)}${x.e[3] || (x.e[4] || []).length ? ' - fuel: ' + esc((x.e[4] || []).join(', ') || 'fuel') : ''}</small></span><span>${need > 0 ? Math.ceil(need / x.g) + ' needed' : '-'}</span>`).join('');
+  return `<div class="card wide"><h2>Power planner</h2><div class="sub">How much electricity your machines draw and how many generators you need</div>
+    <p class="muted">Add the machines you plan to run. Numbers are the game's own use per machine (machines that only carry the game's default 30 W are left out); the in-game price of electricity is not in the game files, so cost is shown as energy only.</p>
+    <p><select id="pwAdd" aria-label="Add a machine"><option value="">Add a machine...</option>${users.map(([id, f]) => `<option value="${id}">${esc(f[0])} (${wTxt(powerOf(f)[0][1])})</option>`).join('')}</select></p>
+    ${rows.length ? `<div class="tblwrap"><table class="tbl"><thead><tr><th>Machine</th><th>How many</th><th>Hours a day</th><th>Draw</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+    <dl class="kv"><dt>Total draw</dt><dd><b>${wTxt(use)}</b> when everything runs</dd><dt>Idle draw</dt><dd>${wTxt(idle)} when they stand by</dd><dt>Energy per day</dt><dd>${fmt(kwh)} kWh</dd></dl>
+    <h3>Generators</h3><div class="facts">${genRows}</div><p class="muted">Counts how many of each generator it takes to cover the total draw.</p>` : '<p class="muted">Nothing added yet.</p>'}</div>`;
+};
+
+// --- Patch changes: what changed between two game versions (data/changes.json, written by tools/build_changes.py) ---
+let chData;
+EXTRA.diff = function () {
+  if (chData === undefined) { chData = null; fetch('data/changes.json?v=1').then(r => r.ok ? r.json() : null).then(j => { chData = j || {}; if (V.sec === 'diff') renderDetail(); }).catch(() => { chData = {}; if (V.sec === 'diff') renderDetail(); }); }
+  const c = chData;
+  if (!c) return '<div class="card"><h2>Patch changes</h2><p class="muted">Loading...</p></div>';
+  if (!c.to) return `<div class="card"><h2>Patch changes</h2><p>No game update has been compared yet.</p><p class="muted">When the game updates, the data is rebuilt and compared with the old version, and what was added, removed or changed (items, recipes, shop prices) is listed here.</p></div>`;
+  const sec = (title, o) => !o || !(o.added.length + o.removed.length + o.changed.length) ? '' : `<h3>${title}</h3>
+    ${o.added.length ? `<p><b>Added - ${o.added.length}</b></p><div class="tags">${o.added.map(a => `<span class="tag">${esc(a[1])}</span>`).join('')}</div>` : ''}
+    ${o.removed.length ? `<p><b>Removed - ${o.removed.length}</b></p><div class="tags">${o.removed.map(a => `<span class="tag">${esc(a[1])}</span>`).join('')}</div>` : ''}
+    ${o.changed.length ? `<p><b>Changed - ${o.changed.length}</b></p><div class="facts">${o.changed.slice(0, 200).map(x => `<span>${esc(x[1])}</span><span>${x[2].map(d => `<small class="muted">${esc(d[0])}</small> ${esc(d[1])} &rarr; ${esc(d[2])}`).join('<br>')}</span>`).join('')}</div>` : ''}`;
+  return `<div class="card wide"><h2>Patch changes</h2><div class="sub">Version ${esc(c.from.version || '?')} to ${esc(c.to.version || '?')}${c.to.updated ? ' - ' + esc(c.to.updated) : ''}</div>${sec('Items', c.items)}${sec('Recipes', c.recipes)}${sec('Furniture', c.furniture)}${sec('Shops', c.vendors)}</div>`;
+};
+// events for the new pages
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-invload]')) { const inv = parseInv(($('#invText') || {}).value); if (inv) { invData = inv; lsSet('obs-inv', inv); invMsg = 'Inventory loaded.'; } else invMsg = 'That is not an inventory from the mod.'; renderDetail(); return; }
+  if (e.target.closest('[data-invclear]')) { invData = null; invMsg = ''; try { localStorage.removeItem('obs-inv'); } catch (_) {} renderDetail(); return; }
+  if (e.target.closest('[data-tcreset]')) { tcSel = {}; lsSet('obs-tc', tcSel); renderDetail(); return; }
+  const d = e.target.closest('[data-pwdel]'); if (d) { pwRows.splice(+d.dataset.pwdel, 1); lsSet('obs-power', pwRows); renderDetail(); }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'invMine') { invOnlyMine = t.checked; renderDetail(); }
+  else if (t.id === 'lvSk') { lvSk = t.value; lsSet('obs-lvsk', lvSk); renderDetail(); }
+  else if (t.dataset && t.dataset.tc != null) { const i = t.dataset.tc, cur = tcSel[i] || [0, 0]; cur[+t.dataset.w] = +t.value; tcSel[i] = cur; lsSet('obs-tc', tcSel); renderDetail(); }
+  else if (t.id === 'lootSc') { lootSc = t.value; lsSet('obs-lootsc', lootSc); renderDetail(); }
+  else if (t.id === 'lootBy') { lootBy = t.value; renderDetail(); }
+  else if (t.id === 'pwAdd') { if (t.value) { pwRows.push({ id: t.value, q: 1, h: 8 }); lsSet('obs-power', pwRows); renderDetail(); } }
+  else if (t.dataset && t.dataset.pwq != null) { pwRows[+t.dataset.pwq].q = Math.max(1, Math.min(99, Math.round(+t.value || 1))); lsSet('obs-power', pwRows); renderDetail(); }
+  else if (t.dataset && t.dataset.pwh != null) { pwRows[+t.dataset.pwh].h = Math.max(0, Math.min(24, +t.value || 0)); lsSet('obs-power', pwRows); renderDetail(); }
+});
 
 // ---------- routing ----------
 const isDb = () => /^#\/db(\/|$)/.test(location.hash);
@@ -965,7 +1147,7 @@ async function route() {
   const [, sec, key] = (qi < 0 ? raw : raw.slice(0, qi)).split('/').map(decodeURIComponent);
   const s = SECTIONS.some(x => x[0] === sec) ? sec : 'items';
   if (!DB) { $('#dbDetail').innerHTML = '<div class="card"><p>Opening the files…</p></div>'; try { await load(); } catch (e) { $('#dbDetail').innerHTML = '<div class="card"><h2>Could not load data/db.js</h2><p class="muted">Run tools/build_db.py.</p></div>'; return; } }
-  const changed = s !== V.sec || !V.init, bare = s === 'notes' || s === 'list' || s === 'skills' || s === 'best';
+  const changed = s !== V.sec || !V.init, bare = BARE.has(s);
   V.sec = s; V.key = key ?? null;
   document.body.classList.toggle('dbpick', V.key != null || bare);   // phones: show the list or the entry, not both
   if (changed) { Object.assign(V, FRESH, SAVED[s] || {}); V.lim = 300; }
