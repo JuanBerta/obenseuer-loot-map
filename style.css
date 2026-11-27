@@ -514,3 +514,7 @@ table.tbl.up td,table.tbl.up th{text-align:left}table.tbl.up tr.grp th{backgroun
 
 .ways{margin:10px 0;padding:6px 12px 10px;border:1px solid var(--line,#444);border-radius:8px}
 .ways h3{margin:6px 0}
+
+.copypage{margin-left:auto;align-self:flex-start;font-size:.8rem;padding:3px 10px;border-radius:6px;border:1px solid var(--line,#555);background:transparent;color:inherit;cursor:pointer}
+.recent{margin:0 0 10px;font-size:.85rem}
+.recent b{margin-right:6px}

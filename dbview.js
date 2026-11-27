@@ -927,6 +927,15 @@ function bestCard() {
     <h3>Worth levelling for</h3><p class="muted">Recipes up to three levels above yours that would pay more per hour than your best now, priced at the level that unlocks them.</p>${lockRows}
     <p class="muted">Profit is after the fail chance and what shops pay for the quality your skill gives. ~ means an ingredient is not sold in any shop (its base value is used). Recipes under a minute are left out of the per-hour lists. Shops pay a fixed price, so selling many of one item at once is not modelled; check the recipe for the shops that buy it.</p></div>`;
 }
+// Recently viewed items and recipes (kept in this browser only).
+function recentList() { try { return JSON.parse(localStorage.getItem('obs-recent') || '[]').filter(x => x && x.s && x.k != null); } catch (_) { return []; } }
+function recentAdd(sec, key) {
+  if (sec !== 'items' && sec !== 'recipes') return;
+  const e = sec === 'items' ? DB.items[key] : X.R[key]; if (!e) return;
+  const l = recentList().filter(x => !(x.s === sec && String(x.k) === String(key))); l.unshift({ s: sec, k: key, n: sec === 'items' ? e[0] : e[1] });
+  try { localStorage.setItem('obs-recent', JSON.stringify(l.slice(0, 12))); } catch (_) {}
+}
+function recentRows() { const l = recentList(); return l.length ? `<div class="recent"><b>Recently viewed</b> ${l.map(x => link(x.s, x.k, x.n)).join(' \u00b7 ')}</div>` : ''; }
 const missing = () => `<div class="card"><h2>Not found</h2><p class="muted">This entry isn't in the current data.</p></div>`;
 function renderDetail() {
   const el = $('#dbDetail'), k = V.key, bare = V.sec === 'notes' || V.sec === 'list' || V.sec === 'skills' || V.sec === 'best', tbl = tableOn();
@@ -940,6 +949,8 @@ function renderDetail() {
   else if (k == null) el.innerHTML = V.sec === 'tenement' ? tenementHome() : V.sec === 'upgrades' ? upgradesHome() : V.sec === 'vendors' ? vendorsHome() : `<div class="card"><h2>${esc(SECTIONS.find(s => s[0] === V.sec)[1])}</h2><p class="muted">${rows().length} ${home[V.sec]}. Pick one on the left.</p></div>`;
   else el.innerHTML = { upgrades: upgradeCard, items: itemCard, tenement: itemCard, recipes: recipeCard, vendors: vendorCard, tenants: tenantCard, furniture: furnCard }[V.sec](k);
   if (k != null || bare) el.insertAdjacentHTML('afterbegin', back);
+  if (k != null && !bare) { recentAdd(V.sec, k); const c = el.querySelector('.card .dbhead, .card h2'); if (c) c.insertAdjacentHTML('beforeend', '<button type="button" class="copypage" data-copypage title="Copy a link to this page">Copy link</button>'); }
+  else if (k == null && !bare && (V.sec === 'items' || V.sec === 'recipes')) { const rc = recentRows(); if (rc) el.insertAdjacentHTML('afterbegin', rc); }
   const more = $('#tblMore'); if (more) more.onclick = () => { V.lim += 600; renderDetail(); };
   el.scrollTop = 0;
 }
@@ -973,6 +984,9 @@ function leave(slug, q, focus) {
 }
 document.addEventListener('click', e => {
   if (e.target.closest('[data-skillreset]')) { skillLv = {}; try { localStorage.removeItem('obs-skills'); } catch (_) {} clearRP(); renderDetail(); return; }
+  const cp = e.target.closest('[data-copypage]');
+  if (cp) { const u = location.href, done = () => { cp.textContent = 'Link copied'; setTimeout(() => { cp.textContent = 'Copy link'; }, 1800); };
+    try { navigator.clipboard.writeText(u).then(done, () => fallbackCopy(u, done)); } catch (_) { fallbackCopy(u, done); } return; }
   const cl = e.target.closest('[data-copylink]');
   if (cl) { const link = shareLink(), done = () => { cl.textContent = 'Link copied'; setTimeout(() => { cl.textContent = 'Copy share link'; }, 1800); };
     try { navigator.clipboard.writeText(link).then(done, () => fallbackCopy(link, done)); } catch (_) { fallbackCopy(link, done); } return; }
@@ -1022,3 +1036,11 @@ if (themeBtn) themeBtn.onclick = () => { const t = document.documentElement.data
 paintTheme(); setReport();
 route();
 })();
+
+// Press / to jump to the search box (like most sites), unless you are already typing.
+document.addEventListener('keydown', e => {
+  if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target; if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+  const q = (isDb() && document.getElementById('dbQ')) || document.getElementById('q'); if (!q || q.offsetParent === null) return;
+  e.preventDefault(); q.focus(); q.select();
+});
