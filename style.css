@@ -518,3 +518,10 @@ table.tbl.up td,table.tbl.up th{text-align:left}table.tbl.up tr.grp th{backgroun
 .copypage{margin-left:auto;align-self:flex-start;font-size:.8rem;padding:3px 10px;border-radius:6px;border:1px solid var(--line,#555);background:transparent;color:inherit;cursor:pointer}
 .recent{margin:0 0 10px;font-size:.85rem}
 .recent b{margin-right:6px}
+/* Phones: a long price line must not squeeze the item name into one letter per line */
+@media (max-width:820px){
+  .items li{flex-wrap:wrap}
+  .items li>span{flex:1 1 11em;min-width:0}
+  .items li>small{flex:0 1 auto;min-width:40%;white-space:normal;overflow-wrap:anywhere;text-align:right}
+  .items li>span small{white-space:normal}
+}
