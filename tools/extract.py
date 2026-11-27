@@ -59,8 +59,10 @@ def items_of(lst):
     for it in lst or []:
         if not isinstance(it,dict): continue
         iid=None
+        ref=it.get('itemReference')
+        if isinstance(ref,dict) and isinstance(ref.get('ID'),int) and ref['ID']>0: iid=ref['ID']
         for k in ('itemID','ID','id','itemId','item'):
-            if isinstance(it.get(k),int): iid=it[k]; break
+            if iid is None and isinstance(it.get(k),int) and it[k]>0: iid=it[k]; break
         if iid is None:
             for v in it.values():
                 if isinstance(v,dict):
