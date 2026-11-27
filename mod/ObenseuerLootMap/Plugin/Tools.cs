@@ -463,7 +463,7 @@ namespace ObenseuerLootMap
 
 
         // ---------------- profit finder: recipes ranked by what they earn at real shop prices ----------------
-        class TradeRow { public string key, name, skill, station; public int minLv; public float fail; public float cost, rev, profit, perHour; public bool estimated; public float liters, litersRev; public string route; public HashSet<int> ids = new HashSet<int>(); }
+        class TradeRow { public string key, name, skill, station; public int minLv; public float fail; public float cost, rev, profit, perHour; public bool estimated; public float time, failNow; public float liters, litersRev; public string route; public HashSet<int> ids = new HashSet<int>(); }
         List<TradeRow> tradeAll; bool tradeOpen; int tradeSort; List<VendorData> tradeVendors;
         readonly Dictionary<int, (float p, VendorData v)> tradeCheap = new Dictionary<int, (float p, VendorData v)>(), tradeBest = new Dictionary<int, (float p, VendorData v)>();
         static string Money(float x) => (x >= 0 ? "+" : "−") + Mathf.Abs(x).ToString("0.#");
@@ -476,6 +476,8 @@ namespace ObenseuerLootMap
         string RowLvLabel() => rowLv < 0 ? "Any level needed" : rowLv == 0 ? "No level needed" : rowLv == 11 ? "At my skill levels" : "Up to level " + rowLv;
         void NextRowSkill() { rowSkill = (rowSkill + 1) % (RowSkills().Count + 1); }
         void NextRowLv() { rowLv = rowLv >= 11 ? -1 : rowLv + 1; }
+        string ovSkill; float ovLv;   // while pricing the recipes you could unlock, one skill is treated as being at the level they need
+        float SkillLv(string sk, PlayerStats.PlayerSkillType type) { if (ovSkill != null && ovSkill == sk) return ovLv; try { return PlayerStats.instance.GetSkillWithEffects(type); } catch { return 5f; } }
         float MySkill(string sk) { if (!Enum.TryParse(sk, out PlayerStats.PlayerSkillType t)) return 5f; try { return PlayerStats.instance.GetSkillWithEffects(t); } catch { return 5f; } }
         IEnumerable<TradeRow> FilterRows(IEnumerable<TradeRow> rows)
         {
@@ -534,7 +536,7 @@ namespace ObenseuerLootMap
             if (qualityPick > 0f) return qualityPick;
             float fixedQ = r.Count > 9 ? (float)r[9] : 0f; if (fixedQ > 0f) return fixedQ;
             string sk = r.Count > 6 ? (string)r[6] : "None"; if (sk == "None" || !Enum.TryParse(sk, out PlayerStats.PlayerSkillType type)) return 1f;
-            float lvl = 5f; try { lvl = PlayerStats.instance.GetSkillWithEffects(type); } catch { }
+            float lvl = SkillLv(sk, type);
             float sf = (float)r[7], qf = (float)r[8];
             return Mathf.Clamp(lvl * 0.2f * sf * (1f - fail) * EqOf((string)r[1]) * qf, 0.05f, 2f);
         }
@@ -543,7 +545,7 @@ namespace ObenseuerLootMap
         {
             if (f >= 1f) return 1f; if (f <= 0f) return f;
             string sk = r.Count > 6 ? (string)r[6] : "None"; if (sk == "None" || !Enum.TryParse(sk, out PlayerStats.PlayerSkillType type)) return f;
-            float lv = 5f; try { lv = PlayerStats.instance.GetSkillWithEffects(type); } catch { }
+            float lv = SkillLv(sk, type);
             float mn = r.Count > 11 ? Convert.ToSingle(r[11]) : 0f, sf = Mathf.Max(0.0001f, (float)r[7]), num = Mathf.Max(0f, lv - mn), eq = EqOf((string)r[1]);
             if (mn > 0f && mn > lv) eq /= 0.5f * (mn - lv) + 1f;
             float n2 = 1f - ((1f - f / (eq > 1f ? eq : 1f)) * (eq < 1f ? eq : 1f) + 0.03f * num * sf);
@@ -574,7 +576,8 @@ namespace ObenseuerLootMap
             else if (cur < 0) cfgSaleContainer.Value = 0;
             else { int i = l.FindIndex(x => (int)x[0] == cur); cfgSaleContainer.Value = i >= 0 && i + 1 < l.Count ? (int)l[i + 1][0] : -1; }
         }
-        List<TradeRow> BuildTrade()
+        List<TradeRow> BuildTrade(bool unlock = false) { try { return BuildTradeCore(unlock); } finally { ovSkill = null; } }
+        List<TradeRow> BuildTradeCore(bool unlock)
         {
             var cont = SaleContainer(); float cf = cont != null ? (float)cont[2] : 1f;
             var vendors = tradeVendors ??= Db.scenes.Values.SelectMany(sc => sc.vendors).ToList();
@@ -598,6 +601,8 @@ namespace ObenseuerLootMap
             {
                 var r = kv.Value; if (r.Count < 6) continue;
                 var row = new TradeRow { key = kv.Key, name = (string)r[0] }; row.skill = r.Count > 6 ? (string)r[6] : "None"; row.minLv = r.Count > 11 ? Mathf.RoundToInt(Convert.ToSingle(r[11])) : 0; row.station = (string)r[1] ?? ""; row.fail = Mathf.Clamp01(Convert.ToSingle(r[3]));
+                ovSkill = null;
+                if (unlock) { if (row.skill == "None" || row.minLv <= 0) continue; float have = MySkill(row.skill); if (row.minLv <= have || row.minLv > have + 3f) continue; ovSkill = row.skill; ovLv = row.minLv; }
                 float fail = (float)r[3], time = (float)r[2]; bool bad = false; var buyAt = new List<string>(); string sellAt = null;
                 foreach (JArray x in (JArray)r[4])
                 {
@@ -613,7 +618,7 @@ namespace ObenseuerLootMap
                     if (b.v != null) { float qv = Db.ItemField(id, 3).Contains("ItemQualityData") ? QualityValue(CraftQuality(r, fail)) : 1f; bool liq = Db.IsLiquid(id); float one = Mathf.Max(1f, Mathf.Round(b.p * qv * (liq ? cf : 1f))); row.rev += one * n; if (liq) { row.liters += n; row.litersRev += one * n; } sellAt ??= b.v.n; }
                 }
                 if (sellAt == null) continue;
-                float failNow = FailNow(r, fail), failRev = 0f;
+                float failNow = FailNow(r, fail), failRev = 0f; row.failNow = failNow; row.time = time;
                 if (r.Count > 12 && r[12] is JArray fo)
                     foreach (JArray x in fo)
                     {

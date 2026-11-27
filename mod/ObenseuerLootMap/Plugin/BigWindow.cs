@@ -151,6 +151,7 @@ namespace ObenseuerLootMap
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Profit finder", bigTab == 0 ? bigTabOn : bigTabOff)) bigTab = 0;
                 if (GUILayout.Button("Item search", bigTab == 1 ? bigTabOn : bigTabOff)) bigTab = 1;
+                if (GUILayout.Button("What to craft", bigTab == 2 ? bigTabOn : bigTabOff)) bigTab = 2;
                 if (craftLastId >= 0 && GUILayout.Button("Resume: " + Db.ItemName(craftLastId), bigTabOff)) { craftId = craftLastId; craftKey = craftLastKey; craftBackTab = bigTab; craftPlanSig = null; }
                 GUILayout.FlexibleSpace();
                 if (GUILayout.Button("A-", bigTabOff, GUILayout.Width(44))) cfgBigScale.Value = Mathf.Max(0.8f, Mathf.Round((cfgBigScale.Value - 0.1f) * 10f) / 10f);
@@ -158,7 +159,7 @@ namespace ObenseuerLootMap
                 if (GUILayout.Button("Close  ·  " + cfgBigKey.Value + " / Esc", bigTabOff)) SetBig(false);
                 GUILayout.EndHorizontal();
                 GUILayout.Space(8);
-                if (bigTab == 0) BigProfit(); else BigItems();
+                if (bigTab == 0) BigProfit(); else if (bigTab == 2) BigBest(); else BigItems();
             }
             bigTyping = (GUI.GetNameOfFocusedControl() ?? "").StartsWith("lootmap_big");
             GUI.DragWindow(new Rect(0, 0, 10000, 26));
@@ -223,6 +224,73 @@ namespace ObenseuerLootMap
                 var rr = Db.trade[pickCraft.key];
                 int outId = rr[5] is JArray oa && oa.Count > 0 ? (int)((JArray)oa[0])[0] : -1;
                 if (outId >= 0) OpenCraft(outId, pickCraft.key);
+            }
+        }
+
+        // ---------------- What to craft: the best recipes for the skills you have ----------------
+        bool bestEst; List<TradeRow> bestLocked; string bestSig; TradeRow bestPick, bestPickCraft;
+        static string TimeTxt(float s) => s >= 3600f ? (s / 3600f).ToString("0.#") + " h" : s >= 60f ? Mathf.RoundToInt(s / 60f) + " min" : Mathf.RoundToInt(s) + " s";
+        string BestSigNow() { float h = 0f; foreach (var sk in RowSkills()) h = h * 1.7f + MySkill(sk); return qualityPick + "|" + cfgSaleContainer.Value + "|" + cfgShopChoice.Value + "|" + h; }
+        void BestCardRow(TradeRow r, bool hourFirst, string extra)
+        {
+            GUILayout.BeginHorizontal(bigCard);
+            GUILayout.BeginVertical();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(r.name + (r.estimated ? "  ~" : ""), bigName, GUILayout.ExpandWidth(false));
+            GUILayout.FlexibleSpace();
+            if (hourFirst) { if (r.perHour > float.MinValue) Badge(Money(r.perHour) + " /h", BigGood); Badge(Money(r.profit) + " per craft", BigInfo); }
+            else { Badge(Money(r.profit) + " OC / " + Money(r.profit * 0.1f) + " RM", BigGood); if (r.perHour > float.MinValue) Badge(Money(r.perHour) + " /h", BigInfo); }
+            GUILayout.EndHorizontal();
+            GUILayout.Label(r.station + " \u00b7 " + (r.skill != "None" ? r.skill + (r.minLv > 0 ? " lv " + r.minLv : "") + " \u00b7 " : "") + TimeTxt(r.time) + " \u00b7 " + Mathf.RoundToInt(r.failNow * 100f) + "% fail" + (extra != null ? " \u00b7 " + extra : ""), smallStyle);
+            GUILayout.EndVertical();
+            GUILayout.BeginVertical(GUILayout.Width(74));
+            if (GUILayout.Button("Craft", bigPrimary)) bestPickCraft = r;
+            if (GUILayout.Button(Loc.T("Find"), btnStyle)) bestPick = r;
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
+        }
+        void BigBest()
+        {
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Skill: " + RowSkillLabel(), bigTabOff)) NextRowSkill();
+            if (GUILayout.Button(bestEst ? "Unsold ingredients: included" : "Unsold ingredients: hidden", bigTabOff)) bestEst = !bestEst;
+            if (GUILayout.Button("Refresh", bigTabOff)) bestSig = null;
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            string sig = BestSigNow();
+            if (bestLocked == null || bestSig == null || sig != bestSig)
+            {
+                try { bigRows = BuildTrade(); bestLocked = BuildTrade(true); } catch (Exception) { bestLocked = new List<TradeRow>(); }
+                bestSig = sig;
+            }
+            string only = rowSkill <= 0 || rowSkill > RowSkills().Count ? null : RowSkills()[rowSkill - 1];
+            bool Ok(TradeRow r) => (only == null || r.skill == only) && (bestEst || !r.estimated);
+            var mine = (bigRows ?? new List<TradeRow>()).Where(r => Ok(r) && r.profit > 0f && (r.skill == "None" || r.minLv <= MySkill(r.skill))).ToList();
+            var byHour = mine.Where(r => r.perHour > 0f && r.time >= 60f).OrderByDescending(r => r.perHour).Take(10).ToList();
+            var byProfit = mine.OrderByDescending(r => r.profit).Take(10).ToList();
+            var bestNow = new Dictionary<string, float>();
+            foreach (var r in mine) if (r.perHour > 0f && r.time >= 60f && (!bestNow.TryGetValue(r.skill, out var bn) || r.perHour > bn)) bestNow[r.skill] = r.perHour;
+            var unlock = (bestLocked ?? new List<TradeRow>()).Where(r => Ok(r) && r.profit > 0f && r.perHour > 0f && r.time >= 60f && r.perHour > (bestNow.TryGetValue(r.skill, out var b2) ? b2 : 0f)).OrderByDescending(r => r.perHour).Take(8).ToList();
+            bestPick = bestPickCraft = null;
+            bigScroll = GUILayout.BeginScrollView(bigScroll);
+            GUILayout.Label("Uses your skill levels and real shop prices, with the quality and liquid container chosen on the Profit finder tab. Recipes under a minute are left out of the per-hour list. ~ = an ingredient is not sold in any shop.", smallStyle);
+            GUILayout.Label("Best profit per hour", labelStyle);
+            if (byHour.Count == 0) GUILayout.Label("Nothing profitable at your levels", smallStyle);
+            foreach (var r in byHour) BestCardRow(r, true, null);
+            GUILayout.Space(6);
+            GUILayout.Label("Best profit per craft", labelStyle);
+            foreach (var r in byProfit) BestCardRow(r, false, null);
+            GUILayout.Space(6);
+            GUILayout.Label("Worth levelling for (up to 3 levels above yours, priced at the level that unlocks them)", labelStyle);
+            if (unlock.Count == 0) GUILayout.Label("Nothing within three levels beats what you can already make", smallStyle);
+            foreach (var r in unlock) BestCardRow(r, true, "needs " + r.skill + " " + r.minLv + " (you have " + MySkill(r.skill).ToString("0.#") + ")");
+            GUILayout.EndScrollView();
+            if (bestPick != null) { SetIdSearch(new HashSet<int>(bestPick.ids), bestPick.name); SetBig(false); }
+            if (bestPickCraft != null && bestPickCraft.key != null)
+            {
+                var rr = Db.trade[bestPickCraft.key];
+                int outId = rr[5] is JArray oa && oa.Count > 0 ? (int)((JArray)oa[0])[0] : -1;
+                if (outId >= 0) OpenCraft(outId, bestPickCraft.key);
             }
         }
 

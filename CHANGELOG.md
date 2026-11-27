@@ -1,5 +1,9 @@
 # Changelog - Loot Map (in-game mod)
 
+## 0.8.2
+- New: a What to craft tab in the big window (Home key) recommends what to craft for money with the skills you have: the best recipes by profit per hour and by profit per craft at real shop prices, using your live skill levels, and a Worth levelling for list of recipes up to three levels above yours that would pay more per hour, priced at the level that unlocks them. It can be limited to one skill, hides recipes whose ingredients no shop sells unless you include them, and leaves recipes under a minute out of the per-hour list. Each entry has Craft and Find buttons.
+- Website: a new What to craft page with the same three lists, based on the levels you set on the Your skills page.
+
 ## 0.8.1
 - New: recipes (website list and the mod's profit finder) can also be sorted by skill, by station and by lowest or highest fail chance. Each entry shows the skill and level, the station or the fail chance to match the sort.
 - New: the profit finder (Home window and the big window) can be filtered by skill and by the skill level a recipe needs (any, none, up to level 1 to 10, or at your own skill levels) and sorted by the highest or lowest level needed. Each entry shows its skill and level. The website's recipe list got the same filter and sort.
