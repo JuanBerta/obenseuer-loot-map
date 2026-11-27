@@ -1041,6 +1041,6 @@ route();
 document.addEventListener('keydown', e => {
   if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
   const t = e.target; if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
-  const q = (isDb() && document.getElementById('dbQ')) || document.getElementById('q'); if (!q || q.offsetParent === null) return;
+  const q = (/^#\/db(\/|$)/.test(location.hash) && document.getElementById('dbQ')) || document.getElementById('q'); if (!q || q.offsetParent === null) return;
   e.preventDefault(); q.focus(); q.select();
 });
