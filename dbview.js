@@ -1029,29 +1029,76 @@ EXTRA.level = function () {
 };
 
 // --- Tenement cost calculator ---
+// Costs per tier from the game's data. Load your save (Globals.tnmt) to fill in what you already have; the plan is then grouped
+// by contractor with the items to bring to each one.
 let tcSel = lsGet('obs-tc', {});
+let tcSave = lsGet('obs-tcsave', null), tcMsg = '';
+const PPL = window.OBS_PEOPLE || {};
+const tcTier = (c, u) => c[3][u[1]] || u[2];
+const tcInst = (c, i) => tcSave ? (tcSave.inst[c[1]] && tcSave.inst[c[1]].length ? tcSave.inst[c[1]] : [0]) : [(tcSel[i] || [0, 0])[0] || 0];
+const tcHave = (c, i) => { const a = tcInst(c, i); if (a.length === 1) return c[3][a[0]] || ('tier ' + a[0]); const n = {}; a.forEach(t => { n[t] = (n[t] || 0) + 1; });
+  return a.length + ' places: ' + Object.keys(n).sort((x, y) => x - y).map(t => `${esc(c[3][t] || 'tier ' + t)} x${n[t]}`).join(', '); };
+function tcPlan() {
+  const steps = []; let oc = 0, rm = 0, hrs = 0; const mat = {};
+  TU.cats.forEach((c, i) => {
+    const b = (tcSel[i] || [0, 0])[1] || 0, inst = tcInst(c, i);
+    upBy(i).filter(u => u[1] > 0 && u[1] <= b).forEach(u => {
+      const n = inst.filter(a => a < u[1]).length; if (!n) return;
+      steps.push({ i, c, u, n }); oc += u[4] * n; rm += u[5] * n; hrs += (u[3] || 0) * n;
+      u[6].forEach(x => { mat[x[0]] = (mat[x[0]] || 0) + x[1] * n; });
+    });
+  });
+  // Pick one contractor per step: keep a category with the same contractor, otherwise the one who can build the most of the plan.
+  const cover = TU.con.map((_, k) => steps.filter(s => s.u[8].includes(k)).length), last = {};
+  steps.forEach(s => {
+    if (!s.u[8].length) { s.k = -1; return; }
+    s.k = s.u[8].includes(last[s.i]) ? last[s.i] : s.u[8].reduce((p, q) => cover[q] > cover[p] ? q : p, s.u[8][0]);
+    last[s.i] = s.k;
+  });
+  return { steps, oc, rm, hrs, mat };
+}
+const tcPrice = (id, n) => { const s = sellersOf(+id)[0]; return s ? ` <small class="muted">${fmt(s.p * n)} OC at ${esc(s.v.n)}</small>` : ' <small class="muted">no shop sells it</small>'; };
 EXTRA.tcalc = function () {
-  const cats = TU.cats.map((c, i) => ({ c, i, t: upBy(i).filter(u => u[1] > 0) })).filter(x => x.t.length);
-  let oc = 0, rm = 0, hrsT = 0; const mat = {}, rowsH = [];
-  for (const { c, i, t } of cats) {
-    const [a, b] = tcSel[i] || [0, 0]; const take = t.filter(u => u[1] > a && u[1] <= b);
-    const o = take.reduce((s, u) => s + u[4], 0), r = take.reduce((s, u) => s + u[5], 0), h = take.reduce((s, u) => s + (u[3] || 0), 0);
-    oc += o; rm += r; hrsT += h; take.forEach(u => u[6].forEach(x => { mat[x[0]] = (mat[x[0]] || 0) + x[1]; }));
-    const opt = (v, from) => t.map(u => `<option value="${u[1]}" ${u[1] === v ? 'selected' : ''}>${esc(u[2])} (${u[1]})</option>`).join('');
-    rowsH.push(`<tr><td>${link('upgrades', i, c[1])}${c[2] ? ' <small class="muted">raises rent</small>' : ''}</td>
-      <td><select data-tc="${i}" data-w="0" aria-label="Current tier of ${esc(c[1])}"><option value="0" ${!a ? 'selected' : ''}>none</option>${opt(a)}</select></td>
+  const P = tcPlan(), cats = TU.cats.map((c, i) => ({ c, i, t: upBy(i).filter(u => u[1] > 0) })).filter(x => x.t.length);
+  const rowsH = cats.map(({ c, i, t }) => {
+    const [a, b] = tcSel[i] || [0, 0], mine = P.steps.filter(s => s.i === i);
+    const o = mine.reduce((z, s) => z + s.u[4] * s.n, 0), r = mine.reduce((z, s) => z + s.u[5] * s.n, 0);
+    const opt = v => t.map(u => `<option value="${u[1]}" ${u[1] === v ? 'selected' : ''}>${esc(tcTier(c, u))} (${u[1]})</option>`).join('');
+    const haveCell = tcSave ? tcHave(c, i) : `<select data-tc="${i}" data-w="0" aria-label="Current tier of ${esc(c[1])}"><option value="0" ${!a ? 'selected' : ''}>none</option>${opt(a)}</select>`;
+    const who = [...new Set(mine.map(s => s.k))].map(k => k < 0 ? '<span class="failtag">nobody</span>' : esc(TU.con[k])).join(', ');
+    return `<tr><td>${link('upgrades', i, c[1])}${c[2] ? ' <small class="muted">raises rent</small>' : ''}</td><td>${haveCell}</td>
       <td><select data-tc="${i}" data-w="1" aria-label="Target tier of ${esc(c[1])}"><option value="0" ${!b ? 'selected' : ''}>no change</option>${opt(b)}</select></td>
-      <td>${o ? coinBox(o, 'OC') : ''} ${r ? coinBox(r, 'RM') : ''}${take.length ? `<br><small class="muted">${take.length} tier${take.length > 1 ? 's' : ''}, ${bhrs(h)}</small>` : ''}</td></tr>`);
-  }
-  let matOC = 0, noShop = 0;
-  const matRows = Object.entries(mat).sort((a, b) => iname(a[0]).localeCompare(iname(b[0]))).map(([id, n]) => { const s = sellersOf(+id)[0]; if (s) matOC += s.p * n; else noShop++; return `<span>${il(+id)}</span><span>x ${num(n)}${s ? ` <small class="muted">${fmt(s.p * n)} OC at ${esc(s.v.n)}</small>` : ' <small class="muted">no shop sells it</small>'}</span>`; });
-  return `<div class="card wide"><h2>Tenement cost calculator</h2><div class="sub">What it costs to take each category from one tier to another</div>
-    <p class="muted">Pick the tier you have now and the tier you want. Costs are the game's, per tier, and materials are priced at the cheapest shop that sells them.</p>
-    <div class="tblwrap"><table class="tbl up"><thead><tr><th>Category</th><th>You have</th><th>You want</th><th>Cost</th></tr></thead><tbody>${rowsH.join('')}</tbody></table></div>
-    <h3>Total</h3><dl class="kv"><dt>Money</dt><dd>${coinBox(oc, 'OC')} ${coinBox(rm, 'RM')}</dd><dt>Build time</dt><dd>${bhrs(Math.round(hrsT)) } <small class="muted">if built one after another</small></dd>
-    <dt>Materials</dt><dd>${Object.keys(mat).length} kinds, about ${fmt(matOC)} OC to buy${noShop ? ` <small class="muted">(${noShop} not sold in shops)</small>` : ''}</dd><dt>All together</dt><dd>${coinBox(oc + matOC, 'OC')} ${rm ? coinBox(rm, 'RM') : ''}</dd></dl>
-    ${matRows.length ? `<h3>Materials</h3><div class="facts">${matRows.join('')}</div>` : ''}
-    <p><button type="button" class="dbmore" data-tcreset>Reset</button></p></div>`;
+      <td>${o ? coinBox(o, 'OC') : ''} ${r ? coinBox(r, 'RM') : ''}${mine.length ? `<br><small class="muted">${mine.length} step${mine.length > 1 ? 's' : ''}${mine.some(s => s.n > 1) ? ', several places' : ''}</small>` : ''}</td><td>${who || '<span class="muted">-</span>'}</td></tr>`;
+  });
+  // one card per contractor: what they build, and the items to bring them
+  let bringOC = 0, noShop = 0, bringKinds = 0;
+  const conCards = TU.con.map((name, k) => ({ k, name, steps: P.steps.filter(s => s.k === k) })).filter(x => x.steps.length).map(x => {
+    const need = {}; x.steps.forEach(s => s.u[6].forEach(m => { need[m[0]] = (need[m[0]] || 0) + m[1] * s.n; }));
+    const have = (tcSave && tcSave.stored && tcSave.stored[x.name]) || {};
+    const rows = Object.entries(need).sort((p, q) => iname(p[0]).localeCompare(iname(q[0]))).map(([id, n]) => {
+      const h = Math.min(n, have[id] || 0), br = n - h;
+      if (br > 0) { bringKinds++; const s = sellersOf(+id)[0]; if (s) bringOC += s.p * br; else noShop++; }
+      return `<span>${il(+id)}</span><span>need ${num(n)}${tcSave ? `, they hold ${num(h)}, <b>bring ${num(br)}</b>` : ''}${br > 0 ? tcPrice(id, br) : ' <small class="muted">nothing to bring</small>'}</span>`;
+    });
+    const o = x.steps.reduce((z, s) => z + s.u[4] * s.n, 0), r = x.steps.reduce((z, s) => z + s.u[5] * s.n, 0), slug = (PPL[x.name] || [])[0];
+    return `<div class="tier"><div class="tierhead"><b>${esc(x.name)}</b> ${slug ? mapBtn(slug, '', 'Find on the map: ' + sceneName(slug)) : ''}<span class="grow"></span>${o ? coinBox(o, 'OC') : ''} ${r ? coinBox(r, 'RM') : ''}</div>
+      <div class="tiermeta">${x.steps.map(s => `${esc(s.c[1])}: ${esc(tcTier(s.c, s.u))}${s.n > 1 ? ' x' + s.n : ''} <small class="muted">(${bhrs(s.u[3])}${s.u[7].length ? ', needs ' + s.u[7].map(q => esc(reqName(q))).join(', ') : ''})</small>`).join('<br>')}</div>
+      <div class="facts">${rows.join('')}</div></div>`;
+  });
+  const orphans = P.steps.filter(s => s.k < 0);
+  const saveBox = tcSave
+    ? `<p><b>Loaded:</b> ${esc(tcSave.character)} / ${esc(tcSave.slot)}${tcSave.date ? ', saved ' + esc(new Date(tcSave.date).toLocaleString()) : ''}${tcSave.version ? ' (game ' + esc(tcSave.version) + ')' : ''}. "You have" comes from the save; apartments are counted one by one. <button type="button" class="dbmore" data-tcclear>Forget the save</button></p>`
+    : `<p>Load your save to fill in what you already have and what each contractor is holding for you. Choose <b>Globals.tnmt</b> from your save folder. The file is read in your browser and never uploaded.</p>
+       <p class="muted">Usually <code>C:\\Users\\&lt;you&gt;\\AppData\\LocalLow\\Loiste Interactive\\Obenseuer\\Saves\\&lt;character&gt;\\&lt;slot&gt;\\Globals.tnmt</code></p>`;
+  return `<div class="card wide"><h2>Tenement cost calculator</h2><div class="sub">What it costs to take each category from one tier to another, who builds it and what to bring</div>
+    <div class="tcsave">${saveBox}<p><input type="file" id="tcFile" accept=".tnmt,.json,.txt" aria-label="Load Globals.tnmt">${tcMsg ? ` <span class="muted">${esc(tcMsg)}</span>` : ''}</p></div>
+    <p class="muted">Pick the tier you want for each category. Costs are the game's, per tier, and materials are priced at the cheapest shop that sells them.</p>
+    <div class="tblwrap"><table class="tbl up"><thead><tr><th>Category</th><th>You have</th><th>You want</th><th>Cost</th><th>Contractor</th></tr></thead><tbody>${rowsH.join('')}</tbody></table></div>
+    <h3>Total</h3><dl class="kv"><dt>Money</dt><dd>${coinBox(P.oc, 'OC')} ${coinBox(P.rm, 'RM')}</dd><dt>Build time</dt><dd>${bhrs(Math.round(P.hrs))} <small class="muted">if built one after another</small></dd>
+    <dt>Items to bring</dt><dd>${bringKinds} kinds, about ${fmt(bringOC)} OC to buy${noShop ? ` <small class="muted">(${noShop} not sold in shops)</small>` : ''}</dd><dt>All together</dt><dd>${coinBox(P.oc + bringOC, 'OC')} ${P.rm ? coinBox(P.rm, 'RM') : ''}</dd></dl>
+    ${conCards.length ? `<h3>Who to go to</h3><p class="muted">Each upgrade goes to one contractor, chosen to keep the number of visits low. Bring them the items listed; the game takes the money when you start the upgrade.</p>${conCards.join('')}` : ''}
+    ${orphans.length ? `<p><span class="failtag">No contractor builds:</span> ${orphans.map(s => esc(s.c[1] + ' ' + tcTier(s.c, s.u))).join(', ')}</p>` : ''}
+    <p><button type="button" class="dbmore" data-tcmax>Set every target to the top tier</button> <button type="button" class="dbmore" data-tcreset>Reset</button></p></div>`;
 };
 
 // --- Loot ranking: which places hold the most, from how many placed containers can drop each item ---
@@ -1123,6 +1170,8 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-invload]')) { const inv = parseInv(($('#invText') || {}).value); if (inv) { invData = inv; lsSet('obs-inv', inv); invMsg = 'Inventory loaded.'; } else invMsg = 'That is not an inventory from the mod.'; renderDetail(); return; }
   if (e.target.closest('[data-invclear]')) { invData = null; invMsg = ''; try { localStorage.removeItem('obs-inv'); } catch (_) {} renderDetail(); return; }
   if (e.target.closest('[data-tcreset]')) { tcSel = {}; lsSet('obs-tc', tcSel); renderDetail(); return; }
+  if (e.target.closest('[data-tcclear]')) { tcSave = null; tcMsg = ''; try { localStorage.removeItem('obs-tcsave'); } catch (_) {} renderDetail(); return; }
+  if (e.target.closest('[data-tcmax]')) { TU.cats.forEach((c, i) => { const t = upBy(i).filter(u => u[1] > 0); if (t.length) tcSel[i] = [(tcSel[i] || [0, 0])[0], t[t.length - 1][1]]; }); lsSet('obs-tc', tcSel); renderDetail(); return; }
   const d = e.target.closest('[data-pwdel]'); if (d) { pwRows.splice(+d.dataset.pwdel, 1); lsSet('obs-power', pwRows); renderDetail(); }
 });
 document.addEventListener('change', e => {
@@ -1130,6 +1179,13 @@ document.addEventListener('change', e => {
   if (t.id === 'invMine') { invOnlyMine = t.checked; renderDetail(); }
   else if (t.id === 'lvSk') { lvSk = t.value; lsSet('obs-lvsk', lvSk); renderDetail(); }
   else if (t.dataset && t.dataset.tc != null) { const i = t.dataset.tc, cur = tcSel[i] || [0, 0]; cur[+t.dataset.w] = +t.value; tcSel[i] = cur; lsSet('obs-tc', tcSel); renderDetail(); }
+  else if (t.id === 'tcFile') {
+    const f = t.files && t.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { try { if (!window.TenSave) throw new Error('The save reader did not load. Reload the page.'); tcSave = window.TenSave.parse(rd.result); lsSet('obs-tcsave', tcSave); tcMsg = 'Save loaded.'; } catch (err) { tcMsg = 'Could not read that file: ' + (err && err.message ? err.message : err); } renderDetail(); };
+    rd.onerror = () => { tcMsg = 'Could not read that file.'; renderDetail(); };
+    rd.readAsText(f);
+  }
   else if (t.id === 'lootSc') { lootSc = t.value; lsSet('obs-lootsc', lootSc); renderDetail(); }
   else if (t.id === 'lootBy') { lootBy = t.value; renderDetail(); }
   else if (t.id === 'pwAdd') { if (t.value) { pwRows.push({ id: t.value, q: 1, h: 8 }); lsSet('obs-power', pwRows); renderDetail(); } }
