@@ -168,7 +168,7 @@ namespace ObenseuerLootMap
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label("Sort by", labelStyle, GUILayout.Width(60));
-            if (GUILayout.Button(RowSortNames[bigSort], bigTabOff)) bigSort = (bigSort + 1) % 4;
+            if (GUILayout.Button(RowSortNames[bigSort], bigTabOff)) bigSort = (bigSort + 1) % RowSortNames.Length;
             if (GUILayout.Button("Skill: " + RowSkillLabel(), bigTabOff)) NextRowSkill();
             if (GUILayout.Button("Level: " + RowLvLabel(), bigTabOff)) NextRowLv();
             if (GUILayout.Button("Refresh", bigTabOff)) { try { bigRows = BuildTrade(); } catch (Exception) { } }
@@ -208,7 +208,7 @@ namespace ObenseuerLootMap
                 Badge(Money(r.profit) + " OC / " + Money(r.profit * 0.1f) + " RM", r.profit >= 0 ? BigGood : BigBad);
                 if (r.perHour > float.MinValue) Badge(Money(r.perHour) + " /h", BigInfo);
                 GUILayout.EndHorizontal();
-                GUILayout.Label((r.minLv > 0 ? r.skill + " lv " + r.minLv + " - " : "") + r.route, smallStyle);
+                GUILayout.Label(RowTag(r, bigSort) + r.route, smallStyle);
                 GUILayout.EndVertical();
                 GUILayout.BeginVertical(GUILayout.Width(74));
                 if (GUILayout.Button("Craft", bigPrimary)) pickCraft = r;
