@@ -1029,22 +1029,34 @@ EXTRA.level = function () {
 };
 
 // --- Tenement cost calculator ---
-// Costs per tier from the game's data. Load your save (Globals.tnmt) to fill in what you already have; the plan is then grouped
-// by contractor with the items to bring to each one.
-let tcSel = lsGet('obs-tc', {});
+// Costs per tier from the game's data. Load your save (Globals.tnmt) to fill in what you already have: the building's upgrades are one
+// each, apartment upgrades are listed apartment by apartment. The plan is grouped by contractor with the items to bring to each.
+let tcSel = lsGet('obs-tc', {}), tcApt = lsGet('obs-tcapt', {});
 let tcSave = lsGet('obs-tcsave', null), tcMsg = '';
+if (tcSave && !tcSave.apts) tcSave = null;   // saved by an older version of this page: load the save again
 const PPL = window.OBS_PEOPLE || {};
 const tcTier = (c, u) => c[3][u[1]] || u[2];
-const tcInst = (c, i) => tcSave ? (tcSave.inst[c[1]] && tcSave.inst[c[1]].length ? tcSave.inst[c[1]] : [0]) : [(tcSel[i] || [0, 0])[0] || 0];
-const tcHave = (c, i) => { const a = tcInst(c, i); if (a.length === 1) return c[3][a[0]] || ('tier ' + a[0]); const n = {}; a.forEach(t => { n[t] = (n[t] || 0) + 1; });
-  return a.length + ' places: ' + Object.keys(n).sort((x, y) => x - y).map(t => `${esc(c[3][t] || 'tier ' + t)} x${n[t]}`).join(', '); };
+// Every place a category can be upgraded: one for the building, one per apartment.
+const tcInsts = (c, i) => {
+  if (!tcSave) return [{ no: null, cur: (tcSel[i] || [0, 0])[0] || 0 }];
+  if (c[0] === 'Tenement') return [{ no: null, cur: tcSave.gen[c[1]] == null ? 0 : tcSave.gen[c[1]] }];
+  return tcSave.apts.filter(x => x.t[c[1]] != null).map(x => ({ no: x.no, cur: x.t[c[1]] }));
+};
+const tcTarget = (i, x) => { const o = x.no != null ? tcApt[x.no + '|' + i] : null; return o != null ? o : ((tcSel[i] || [0, 0])[1] || 0); };
+const tcHave = (c, i) => {
+  const a = tcInsts(c, i).map(x => x.cur); if (!a.length) return '<span class="muted">none in your tenement</span>';
+  if (a.length === 1) return esc(c[3][a[0]] || 'tier ' + a[0]);
+  const n = {}; a.forEach(t => { n[t] = (n[t] || 0) + 1; });
+  return a.length + ' apartments: ' + Object.keys(n).sort((x, y) => x - y).map(t => `${esc(c[3][t] || 'tier ' + t)} x${n[t]}`).join(', ');
+};
 function tcPlan() {
   const steps = []; let oc = 0, rm = 0, hrs = 0; const mat = {};
   TU.cats.forEach((c, i) => {
-    const b = (tcSel[i] || [0, 0])[1] || 0, inst = tcInst(c, i);
-    upBy(i).filter(u => u[1] > 0 && u[1] <= b).forEach(u => {
-      const n = inst.filter(a => a < u[1]).length; if (!n) return;
-      steps.push({ i, c, u, n }); oc += u[4] * n; rm += u[5] * n; hrs += (u[3] || 0) * n;
+    const insts = tcInsts(c, i);
+    upBy(i).filter(u => u[1] > 0).forEach(u => {
+      const hit = insts.filter(x => x.cur < u[1] && u[1] <= tcTarget(i, x)); if (!hit.length) return;
+      const n = hit.length; steps.push({ i, c, u, n, nos: hit.map(x => x.no).filter(x => x != null) });
+      oc += u[4] * n; rm += u[5] * n; hrs += (u[3] || 0) * n;
       u[6].forEach(x => { mat[x[0]] = (mat[x[0]] || 0) + x[1] * n; });
     });
   });
@@ -1058,15 +1070,16 @@ function tcPlan() {
   return { steps, oc, rm, hrs, mat };
 }
 const tcPrice = (id, n) => { const s = sellersOf(+id)[0]; return s ? ` <small class="muted">${fmt(s.p * n)} OC at ${esc(s.v.n)}</small>` : ' <small class="muted">no shop sells it</small>'; };
+const tcWhere = s => s.nos.length ? ' <small class="muted">(apartment' + (s.nos.length > 1 ? 's ' : ' ') + s.nos.map(n => '#' + n).join(', ') + ')</small>' : '';
 EXTRA.tcalc = function () {
   const P = tcPlan(), cats = TU.cats.map((c, i) => ({ c, i, t: upBy(i).filter(u => u[1] > 0) })).filter(x => x.t.length);
   const rowsH = cats.map(({ c, i, t }) => {
-    const [a, b] = tcSel[i] || [0, 0], mine = P.steps.filter(s => s.i === i);
+    const [a, b] = tcSel[i] || [0, 0], mine = P.steps.filter(s => s.i === i), apt = c[0] !== 'Tenement';
     const o = mine.reduce((z, s) => z + s.u[4] * s.n, 0), r = mine.reduce((z, s) => z + s.u[5] * s.n, 0);
     const opt = v => t.map(u => `<option value="${u[1]}" ${u[1] === v ? 'selected' : ''}>${esc(tcTier(c, u))} (${u[1]})</option>`).join('');
     const haveCell = tcSave ? tcHave(c, i) : `<select data-tc="${i}" data-w="0" aria-label="Current tier of ${esc(c[1])}"><option value="0" ${!a ? 'selected' : ''}>none</option>${opt(a)}</select>`;
     const who = [...new Set(mine.map(s => s.k))].map(k => k < 0 ? '<span class="failtag">nobody</span>' : esc(TU.con[k])).join(', ');
-    return `<tr><td>${link('upgrades', i, c[1])}${c[2] ? ' <small class="muted">raises rent</small>' : ''}</td><td>${haveCell}</td>
+    return `<tr><td>${link('upgrades', i, c[1])}${c[2] ? ' <small class="muted">raises rent</small>' : ''}${tcSave && apt ? ' <small class="muted">all apartments</small>' : ''}</td><td>${haveCell}</td>
       <td><select data-tc="${i}" data-w="1" aria-label="Target tier of ${esc(c[1])}"><option value="0" ${!b ? 'selected' : ''}>no change</option>${opt(b)}</select></td>
       <td>${o ? coinBox(o, 'OC') : ''} ${r ? coinBox(r, 'RM') : ''}${mine.length ? `<br><small class="muted">${mine.length} step${mine.length > 1 ? 's' : ''}${mine.some(s => s.n > 1) ? ', several places' : ''}</small>` : ''}</td><td>${who || '<span class="muted">-</span>'}</td></tr>`;
   });
@@ -1082,18 +1095,31 @@ EXTRA.tcalc = function () {
     });
     const o = x.steps.reduce((z, s) => z + s.u[4] * s.n, 0), r = x.steps.reduce((z, s) => z + s.u[5] * s.n, 0), slug = (PPL[x.name] || [])[0];
     return `<div class="tier"><div class="tierhead"><b>${esc(x.name)}</b> ${slug ? mapBtn(slug, '', 'Find on the map: ' + sceneName(slug)) : ''}<span class="grow"></span>${o ? coinBox(o, 'OC') : ''} ${r ? coinBox(r, 'RM') : ''}</div>
-      <div class="tiermeta">${x.steps.map(s => `${esc(s.c[1])}: ${esc(tcTier(s.c, s.u))}${s.n > 1 ? ' x' + s.n : ''} <small class="muted">(${bhrs(s.u[3])}${s.u[7].length ? ', needs ' + s.u[7].map(q => esc(reqName(q))).join(', ') : ''})</small>`).join('<br>')}</div>
+      <div class="tiermeta">${x.steps.map(s => `${esc(s.c[1])}: ${esc(tcTier(s.c, s.u))}${tcWhere(s)} <small class="muted">(${bhrs(s.u[3])}${s.u[7].length ? ', needs ' + s.u[7].map(q => esc(reqName(q))).join(', ') : ''})</small>`).join('<br>')}</div>
       <div class="facts">${rows.join('')}</div></div>`;
   });
   const orphans = P.steps.filter(s => s.k < 0);
+  // apartment by apartment
+  let aptSec = '';
+  if (tcSave) {
+    const aptCats = TU.cats.map((c, i) => ({ c, i })).filter(x => x.c[0] !== 'Tenement' && upBy(x.i).some(u => u[1] > 0) && tcSave.apts.some(a => a.t[x.c[1]] != null));
+    aptSec = `<h3>Apartment by apartment</h3><p class="muted">Each cell shows what that apartment has now. "As above" follows the target you picked for the whole category in the first table; pick a tier to change only that apartment, or "no change" to leave it out.</p>
+      <div class="tblwrap"><table class="tbl up"><thead><tr><th>Apartment</th>${aptCats.map(x => `<th>${esc(x.c[1].replace(/^Apartment /, ''))}</th>`).join('')}</tr></thead><tbody>${tcSave.apts.map(a => `<tr><td><b>#${a.no}</b> <small class="muted">floor ${esc(a.floor)}${a.size ? ', ' + esc(a.size) : ''}${a.who ? ', ' + esc(a.who) : ''}</small></td>${aptCats.map(({ c, i }) => {
+        const cur = a.t[c[1]]; if (cur == null) return '<td class="muted">-</td>';
+        const key = a.no + '|' + i, ov = tcApt[key], tiers = upBy(i).filter(u => u[1] > cur);
+        if (!tiers.length) return `<td>${esc(c[3][cur] || 'tier ' + cur)}<br><small class="muted">top tier</small></td>`;
+        return `<td>${esc(c[3][cur] || 'tier ' + cur)}<br><select data-apt="${esc(key)}" aria-label="Target for ${esc(c[1])} in apartment ${esc(a.no)}"><option value="-1" ${ov == null ? 'selected' : ''}>as above</option><option value="0" ${ov === 0 ? 'selected' : ''}>no change</option>${tiers.map(u => `<option value="${u[1]}" ${ov === u[1] ? 'selected' : ''}>${esc(tcTier(c, u))}</option>`).join('')}</select></td>`;
+      }).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
   const saveBox = tcSave
-    ? `<p><b>Loaded:</b> ${esc(tcSave.character)} / ${esc(tcSave.slot)}${tcSave.date ? ', saved ' + esc(new Date(tcSave.date).toLocaleString()) : ''}${tcSave.version ? ' (game ' + esc(tcSave.version) + ')' : ''}. "You have" comes from the save; apartments are counted one by one. <button type="button" class="dbmore" data-tcclear>Forget the save</button></p>`
+    ? `<p><b>Loaded:</b> ${esc(tcSave.character)} / ${esc(tcSave.slot)}${tcSave.date ? ', saved ' + esc(new Date(tcSave.date).toLocaleString()) : ''}${tcSave.version ? ' (game ' + esc(tcSave.version) + ')' : ''}. "You have" comes from the save. <button type="button" class="dbmore" data-tcclear>Forget the save</button></p>`
     : `<p>Load your save to fill in what you already have and what each contractor is holding for you. Choose <b>Globals.tnmt</b> from your save folder. The file is read in your browser and never uploaded.</p>
        <p class="muted">Usually <code>C:\\Users\\&lt;you&gt;\\AppData\\LocalLow\\Loiste Interactive\\Obenseuer\\Saves\\&lt;character&gt;\\&lt;slot&gt;\\Globals.tnmt</code></p>`;
   return `<div class="card wide"><h2>Tenement cost calculator</h2><div class="sub">What it costs to take each category from one tier to another, who builds it and what to bring</div>
     <div class="tcsave">${saveBox}<p><input type="file" id="tcFile" accept=".tnmt,.json,.txt" aria-label="Load Globals.tnmt">${tcMsg ? ` <span class="muted">${esc(tcMsg)}</span>` : ''}</p></div>
     <p class="muted">Pick the tier you want for each category. Costs are the game's, per tier, and materials are priced at the cheapest shop that sells them.</p>
     <div class="tblwrap"><table class="tbl up"><thead><tr><th>Category</th><th>You have</th><th>You want</th><th>Cost</th><th>Contractor</th></tr></thead><tbody>${rowsH.join('')}</tbody></table></div>
+    ${aptSec}
     <h3>Total</h3><dl class="kv"><dt>Money</dt><dd>${coinBox(P.oc, 'OC')} ${coinBox(P.rm, 'RM')}</dd><dt>Build time</dt><dd>${bhrs(Math.round(P.hrs))} <small class="muted">if built one after another</small></dd>
     <dt>Items to bring</dt><dd>${bringKinds} kinds, about ${fmt(bringOC)} OC to buy${noShop ? ` <small class="muted">(${noShop} not sold in shops)</small>` : ''}</dd><dt>All together</dt><dd>${coinBox(P.oc + bringOC, 'OC')} ${P.rm ? coinBox(P.rm, 'RM') : ''}</dd></dl>
     ${conCards.length ? `<h3>Who to go to</h3><p class="muted">Each upgrade goes to one contractor, chosen to keep the number of visits low. Bring them the items listed; the game takes the money when you start the upgrade.</p>${conCards.join('')}` : ''}
@@ -1169,7 +1195,7 @@ EXTRA.diff = function () {
 document.addEventListener('click', e => {
   if (e.target.closest('[data-invload]')) { const inv = parseInv(($('#invText') || {}).value); if (inv) { invData = inv; lsSet('obs-inv', inv); invMsg = 'Inventory loaded.'; } else invMsg = 'That is not an inventory from the mod.'; renderDetail(); return; }
   if (e.target.closest('[data-invclear]')) { invData = null; invMsg = ''; try { localStorage.removeItem('obs-inv'); } catch (_) {} renderDetail(); return; }
-  if (e.target.closest('[data-tcreset]')) { tcSel = {}; lsSet('obs-tc', tcSel); renderDetail(); return; }
+  if (e.target.closest('[data-tcreset]')) { tcSel = {}; tcApt = {}; lsSet('obs-tc', tcSel); lsSet('obs-tcapt', tcApt); renderDetail(); return; }
   if (e.target.closest('[data-tcclear]')) { tcSave = null; tcMsg = ''; try { localStorage.removeItem('obs-tcsave'); } catch (_) {} renderDetail(); return; }
   if (e.target.closest('[data-tcmax]')) { TU.cats.forEach((c, i) => { const t = upBy(i).filter(u => u[1] > 0); if (t.length) tcSel[i] = [(tcSel[i] || [0, 0])[0], t[t.length - 1][1]]; }); lsSet('obs-tc', tcSel); renderDetail(); return; }
   const d = e.target.closest('[data-pwdel]'); if (d) { pwRows.splice(+d.dataset.pwdel, 1); lsSet('obs-power', pwRows); renderDetail(); }
@@ -1179,6 +1205,7 @@ document.addEventListener('change', e => {
   if (t.id === 'invMine') { invOnlyMine = t.checked; renderDetail(); }
   else if (t.id === 'lvSk') { lvSk = t.value; lsSet('obs-lvsk', lvSk); renderDetail(); }
   else if (t.dataset && t.dataset.tc != null) { const i = t.dataset.tc, cur = tcSel[i] || [0, 0]; cur[+t.dataset.w] = +t.value; tcSel[i] = cur; lsSet('obs-tc', tcSel); renderDetail(); }
+  else if (t.dataset && t.dataset.apt != null) { const v = +t.value; if (v < 0) delete tcApt[t.dataset.apt]; else tcApt[t.dataset.apt] = v; lsSet('obs-tcapt', tcApt); renderDetail(); }
   else if (t.id === 'tcFile') {
     const f = t.files && t.files[0]; if (!f) return;
     const rd = new FileReader();

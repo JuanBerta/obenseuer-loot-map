@@ -33,15 +33,22 @@
     const t = entry.Data, ids = {};
     (function walk(o) { if (o && typeof o === 'object') { if (o.$id && o.addressableAssetPath) ids[o.$id] = o; for (const k in o) walk(o[k]); } })(t);
     const upg = u => { if (u && u.$ref) u = ids[u.$ref]; return u && u.addressableAssetPath ? pathInfo(u.addressableAssetPath) : null; };
-    const inst = {};
-    const add = u => { const i = upg(u); if (i) (inst[i.cat] = inst[i.cat] || []).push(i.tier); };
+    const inst = {}, gen = {}, apts = [];
+    const add = u => { const i = upg(u); if (i) (inst[i.cat] = inst[i.cat] || []).push(i.tier); return i; };
     const g = t.general || {};
-    for (const k in g) if (/^current\w+Upgrade$/.test(k)) add(g[k]);
-    for (const a of (t.apartments || [])) for (const k in a) if (/^current\w+Upgrade$/.test(k)) add(a[k]);
+    for (const k in g) if (/^current\w+Upgrade$/.test(k)) { const i = add(g[k]); if (i) gen[i.cat] = i.tier; }
+    for (const a of (t.apartments || [])) {
+      const tiers = {};
+      for (const k in a) if (/^current\w+Upgrade$/.test(k)) { const i = add(a[k]); if (i) tiers[i.cat] = i.tier; }
+      let r = a.resident; if (r && r.$ref) r = ids[r.$ref];
+      const m = r && r.addressableAssetPath ? /([^/]+)\.asset$/.exec(r.addressableAssetPath) : null;
+      apts.push({ no: a.apartmentNumber, floor: a.apartmentFloor, size: (a.type && a.type.size) || '', who: m ? m[1] : '', t: tiers });
+    }
+    apts.sort((x, y) => x.no - y.no);
     const stored = {};
     const rs = t.resourceStorageSnapshotsByContractor || {};
     for (const c in rs) { const o = stored[niceName(c)] = {}; for (const kv of (Array.isArray(rs[c]) ? rs[c] : [])) if (kv && kv.Value > 0) o[kv.Key] = (o[kv.Key] || 0) + kv.Value; }
-    return { character: j.CharacterName || '', slot: j.SaveName || '', date: j.Date || '', version: j.ApplicationVersion || '', inst, stored, upgradesDone: t.upgradesDone | 0 };
+    return { character: j.CharacterName || '', slot: j.SaveName || '', date: j.Date || '', version: j.ApplicationVersion || '', inst, gen, apts, stored, upgradesDone: t.upgradesDone | 0 };
   }
 
   const api = { parse, pathInfo };
