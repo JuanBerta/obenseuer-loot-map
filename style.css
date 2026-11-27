@@ -511,3 +511,6 @@ table.tbl.up td,table.tbl.up th{text-align:left}table.tbl.up tr.grp th{backgroun
 .shopst select{max-width:100%}
 .stn{display:block;margin:8px 0;cursor:pointer}
 .stn input{margin-right:6px}
+
+.ways{margin:10px 0;padding:6px 12px 10px;border:1px solid var(--line,#444);border-radius:8px}
+.ways h3{margin:6px 0}

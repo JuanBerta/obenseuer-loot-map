@@ -596,6 +596,7 @@ function itemCard(id) {
   let h = `<div class="card"><div class="dbhead">${iIco(id, 1)}<div><h2>${esc(t)}</h2><div class="sub">ID ${id} · ${val} OC · stacks to ${stack}${X.craftCost[id] != null ? ' · costs ≈ ' + fmt(X.craftCost[id]) + ' OC to make' : ''}${sellersOf(+id)[0] ? ' · buy from ' + pxt(sellersOf(+id)[0].v, sellersOf(+id)[0].p, true) : ''}${buyersOf(+id)[0] ? ' · sell up to ' + pxt(buyersOf(+id)[0].v, buyersOf(+id)[0].p) : ''}</div></div></div>`;
   if (desc) h += `<p>${esc(desc)}</p>`;
   h += `<div class="tags">${cats.map(c => `<a class="tag" href="#/db/items" data-cat="${esc(c)}">${esc(c)}</a>`).join('')}${eff.map(e => `<span class="tag teal">${e[0]} ${e[1]}</span>`).join('')}${wall ? `<span class="tag">${esc(wall)}</span>` : ''}</div>`;
+  h += waysBox(id);
   const st = it[9];
   if (st) {
     const rows = STATS.filter(([k]) => st[k]).map(([k, lab, up, down]) => { const v = st[k], good = k === 'dep' || k === 'ble' ? v < 0 : k === 'tir' ? v < 0 : (k === 'nut' || k === 'thi' || k === 'hp' || k === 'hyg') ? v > 0 : null;
@@ -638,6 +639,26 @@ function itemCard(id) {
   h += `<h3>Used in · ${(X.uses[id] || []).size || 0}</h3>${ul(recipesOf(X.uses[id]))}`;
   if (via.size) h += `<h3>Used in, as part of a group · ${via.size}</h3>${ul(recipesOf(via))}`;
   return h + '</div>';
+}
+// "Every way to get this": one line per source, so you do not have to read the whole page to compare buying, crafting and looting.
+function waysBox(id) {
+  const it = DB.items[id], rows = [];
+  const sv = sellersOf(+id), mk = [...(X.makes[id] || [])];
+  if (sv.length) rows.push(['Buy', `${pxt(sv[0].v, sv[0].p, true)} at ${esc(sv[0].v.n)} - ${esc(sceneName(sv[0].v.sc))}${sv.length > 1 ? ` <small class="muted">and ${sv.length - 1} more shop${sv.length > 2 ? 's' : ''}</small>` : ''}`]);
+  if (mk.length) rows.push(['Craft', `${mk.length} recipe${mk.length > 1 ? 's' : ''}${X.craftCost[id] != null ? ', about ' + fmt(X.craftCost[id]) + ' OC of ingredients' : ''} <small class="muted">${mk.slice(0, 3).map(r => esc(X.R[r][1])).join(', ')}${mk.length > 3 ? '...' : ''}</small>`]);
+  const tabs = [...(X.inTables[id] || [])].map(x => x.split('\u0000')).filter(([n]) => X.tableCount[n]);
+  if (tabs.length) {
+    const per = {}; for (const [n] of tabs) for (const [slug, k] of X.tableScenes[n]) per[slug] = (per[slug] || 0) + k;
+    const top = Object.entries(per).sort((a, b) => b[1] - a[1])[0], total = tabs.reduce((a, [n]) => a + X.tableCount[n], 0);
+    rows.push(['Loot', `${total} container${total > 1 ? 's' : ''}, most in ${esc(sceneName(top[0]))} <small class="muted">(${top[1]})</small>`]);
+  }
+  const members = it[6] || [], baleIds = members.length ? members : [+id];
+  const bales = DB.vendors.filter(v => v.pk && baleIds.some(i => v.pk.some(tb => X.tableItems[tb] && X.tableItems[tb].has(i))));
+  if (bales.length) rows.push(['In a package', `bought from ${esc(bales[0].n)}${bales.length > 1 ? ' and ' + (bales.length - 1) + ' more' : ''}, filled at random`]);
+  if (X.fails[id]) rows.push(['Failed craft', `${X.fails[id].size} recipe${X.fails[id].size > 1 ? 's' : ''} can leave it behind when they fail`]);
+  if (X.groupsOf[id]) rows.push(['As a group item', `counts as ${X.groupsOf[id].map(g => esc(DB.items[g] ? DB.items[g][0] : g)).join(', ')}, so recipes that ask for the group accept it`]);
+  if (!rows.length) return '<div class="ways"><h3>Every way to get this</h3><p class="muted">Nothing in the game data produces it: no shop, recipe or placed container.</p></div>';
+  return `<div class="ways"><h3>Every way to get this</h3><div class="facts">${rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('')}</div></div>`;
 }
 // A recipe as a short block: name and station, what goes in, what it takes.
 function craftBlock(rid, forItem) {
