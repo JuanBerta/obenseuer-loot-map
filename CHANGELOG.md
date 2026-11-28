@@ -1,6 +1,7 @@
 # Changelog - Loot Map (in-game mod)
 
 ## 0.8.2
+- Website: the shopping list's Trade run now shows the crafting time of the whole list and the profit per hour in OC and RM (crafting time only: no walking, no waiting, no failed crafts).
 - Website: the Tenement cost calculator can now load your save (Globals.tnmt, read in the browser, never uploaded). It fills in what you already have and lists the apartments one by one, so each apartment can have its own target tier (or be left out), then groups the plan by contractor: who builds each step, where to find them on the map, and the items to bring (minus what they already hold for you).
 - New: a Copy inventory for the website button (in the shopping list panel, under Paste list from the website) copies what you carry. Paste it on the website's new What can I craft now page to see which recipes you can make right now and which are one ingredient short.
 - Website: new pages for What can I craft now, a Skill levelling guide (fastest and cheapest recipes to the next level, using the game's own skill-gain formula), a Tenement cost calculator, a Loot ranking, a Power planner and a Patch changes page.
